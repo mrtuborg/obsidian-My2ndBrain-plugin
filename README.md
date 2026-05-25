@@ -1,90 +1,103 @@
-# Obsidian Sample Plugin
+# 2ndBrain Engine Plugin
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+A TypeScript Obsidian plugin that replaces the CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+**Current status:** Phase 0 complete — scaffold, settings, and Jest wired. Phases 1–7 (component porting) not yet started.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+---
 
-## First time developing plugins?
+## This repo is also a learning project
 
-Quick starting guide for new plugin devs:
+The plugin is the **practice vehicle** for learning LLM-augmented engineering. All study materials live in `learning/`.
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+### Where to start
 
-## Releasing new releases
+**One doc drives everything: `learning/LLM-LEARNING-ROADMAP.md`**
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+The others are references it points to. You never need to open them cold.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+```
+LLM-LEARNING-ROADMAP.md        ← DRIVER. Work through this top to bottom.
+        │
+        ├── consults ──► LLM-BEST-PRACTICES.md       (open when a module says "read §X.Y")
+        ├── consults ──► LLM-ENGINEERING-STACK.md    (open when a module says "read Part X")
+        ├── deploys  ──► DRAFT-copilot-instructions-roomboard.md  (Module 1.1 action)
+        ├── explains ──► NOTE-large-file-llm-workflow.md          (Level 4 background)
+        │
+        └── READ ONCE (already done, don't re-read):
+             COPILOT-INTERACTION-ANALYSIS.md   ← your baseline is already in the Roadmap
+             COPILOT-WORKFLOW-ANALYSIS.md
+             DOCS-TRUST-AUDIT.md               ← archive, ignore
+             scripts/                          ← re-run monthly to track progress
 ```
 
-If you have multiple URLs, you can also do:
+### First 30 minutes
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+1. Open `learning/LLM-LEARNING-ROADMAP.md` — read "Your Baseline" and "Practice Vehicle" sections (~60 lines)
+2. Do **Module 1.1** — open a fresh Copilot session in this repo, type `What do you know about this project?`
+3. That's it for today. One module per session.
+
+### Daily habit
+
+```
+Open Roadmap → find first [ ] → read LEARN → do DO → run VERIFY → mark [✓] → close
 ```
 
-## API Documentation
+Don't skip ahead. Don't open reference docs without the Roadmap pointing you there.
 
-See https://docs.obsidian.md
+### Learning docs
+
+| File | Purpose | When to open |
+|------|---------|--------------|
+| `LLM-LEARNING-ROADMAP.md` | 7-level personal curriculum | Every session — it's the driver |
+| `LLM-BEST-PRACTICES.md` | Interaction patterns reference | When Roadmap points to it |
+| `LLM-ENGINEERING-STACK.md` | Tools and architecture reference | When Roadmap points to it |
+| `COPILOT-INTERACTION-ANALYSIS.md` | Personal session analysis (323 sessions) | Read once, already summarized in Roadmap |
+| `DRAFT-copilot-instructions-roomboard.md` | Ready-to-deploy context file | Module 1.1 |
+| `NOTE-large-file-llm-workflow.md` | Large data processing guide | Level 4 |
+| `scripts/` | Session analysis scripts | Re-run monthly |
+
+---
+
+## Plugin development
+
+### Commands
+
+```bash
+npm run build   # TypeScript check + esbuild bundle
+npm test        # Jest unit tests
+npm run dev     # Watch mode for development
+npm run lint    # ESLint
+```
+
+### Installing in Obsidian
+
+Copy `main.js`, `manifest.json`, `styles.css` to your vault:
+```
+VaultFolder/.obsidian/plugins/2ndbrain-engine/
+```
+Enable in Obsidian → Settings → Community Plugins.
+
+### Architecture
+
+```
+file-open event
+    └── src/main.ts (router)
+         ├── Journal/YYYY-MM-DD.md (today only) → composers/dailyNoteComposer.ts
+         └── Activities/*.md / People/*.md      → composers/activityComposer.ts
+```
+
+Full design docs: `../Engine/Plugin/` (01-goals through 06-development-plan).
+
+### Development phases
+
+| Phase | Goal | Status |
+|-------|------|--------|
+| 0 | Scaffold: build, Jest, settings | ✅ Done |
+| 1 | Block + BlockCollection + unit tests | [ ] |
+| 2 | noteBlocksParser + unit tests | [ ] |
+| 3 | fileIO, scriptsRemove, attributesProcessor | [ ] |
+| 4 | All mid-pipeline components | [ ] |
+| 5 | Composers + event router wired | [ ] |
+| 6 | Settings tab complete | [ ] |
+| 7 | Template cleanup, CustomJS disabled | [ ] |
