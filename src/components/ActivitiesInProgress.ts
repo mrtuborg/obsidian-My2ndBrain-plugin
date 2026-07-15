@@ -14,9 +14,13 @@ const TYPE_PRIORITY: Record<string, number> = {
 	inbox: 999,
 };
 const PRIORITY_ORDER: Record<string, number> = {
+	'urgent-important': 1,
+	'urgent-not-important': 2,
+	'not-urgent-important': 3,
+	'not-urgent-not-important': 4,
 	high: 1,
-	medium: 2,
-	low: 3,
+	medium: 3,
+	low: 4,
 };
 
 export class ActivitiesInProgress {
@@ -63,7 +67,7 @@ export class ActivitiesInProgress {
 
 			// Only include explicitly active activities (not planning, inbox, backlog, done, etc.)
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
-			if (stage !== 'active') continue;
+			if (stage !== 'doing') continue;
 
 			// Require a valid YYYY-MM-DD startDate — excludes template files with
 			// Templater placeholders like <% tp.date.now() %> and files with no date at all

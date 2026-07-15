@@ -4,7 +4,7 @@ const MONTH_NAMES = [
 ];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const VALID_STAGES = new Set(['active', 'done']);
+const VALID_STAGES = new Set(['doing', 'backlog', 'done']);
 
 export interface VaultFile {
 	path: string;
@@ -50,7 +50,7 @@ export class FileIO {
 
 		// Validate stage
 		if (!VALID_STAGES.has(stage)) {
-			throw new Error(`Invalid stage "${stage}". Expected "active" or "done".`);
+			throw new Error(`Invalid stage "${stage}". Expected "doing", "backlog", or "done".`);
 		}
 
 		// Normalise responsible

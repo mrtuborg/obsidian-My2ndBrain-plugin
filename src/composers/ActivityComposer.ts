@@ -44,7 +44,7 @@ export class ActivityComposer {
 		const startDate = (startDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(startDateRaw))
 			? startDateRaw
 			: this.fileIO.todayDate();
-		const stage     = this.fileIO.parseFrontmatterField(rawContent, 'stage') ?? 'active';
+		const stage     = this.fileIO.parseFrontmatterField(rawContent, 'stage') ?? 'doing';
 		const respRaw   = this.fileIO.parseFrontmatterField(rawContent, 'responsible') ?? '[Me]';
 		// responsible is stored as YAML inline sequence: "[Me]" → parse to ['Me']
 		const responsible: string[] = respRaw.startsWith('[') && respRaw.endsWith(']')

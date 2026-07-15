@@ -33,9 +33,9 @@ describe('FileIO.generateActivityHeader', () => {
 	const io = new FileIO();
 
 	it('FIO-04: generates correct output for valid input with type', () => {
-		const result = io.generateActivityHeader('2026-04-04', 'active', ['Me'], 'inbox');
+		const result = io.generateActivityHeader('2026-04-04', 'doing', ['Me'], 'inbox');
 		expect(result).toContain('startDate: 2026-04-04');
-		expect(result).toContain('stage: active');
+		expect(result).toContain('stage: doing');
 		expect(result).toContain('type: inbox');
 		expect(result).toContain('responsible: [Me]');
 		expect(result.startsWith('---')).toBe(true);
@@ -49,7 +49,7 @@ describe('FileIO.generateActivityHeader', () => {
 	});
 
 	it('FIO-06: no type line when type is null', () => {
-		const result = io.generateActivityHeader('2026-04-04', 'active', ['Me'], null);
+		const result = io.generateActivityHeader('2026-04-04', 'doing', ['Me'], null);
 		expect(result).not.toContain('type:');
 	});
 
@@ -60,12 +60,12 @@ describe('FileIO.generateActivityHeader', () => {
 
 	it('throws for invalid date format', () => {
 		expect(() =>
-			io.generateActivityHeader('not-a-date', 'active', ['Me'])
+			io.generateActivityHeader('not-a-date', 'doing', ['Me'])
 		).toThrow();
 	});
 
 	it('preserves extra fields in output', () => {
-		const result = io.generateActivityHeader('2026-04-04', 'active', ['Me'], null, {
+		const result = io.generateActivityHeader('2026-04-04', 'doing', ['Me'], null, {
 			priority: 'high',
 			wiki: '',
 		});
@@ -83,7 +83,7 @@ describe('FileIO.extractFrontmatterAndDataviewJs', () => {
 		const content = [
 			'---',
 			'startDate: 2026-04-04',
-			'stage: active',
+			'stage: doing',
 			'---',
 			'',
 			'```dataviewjs',
@@ -96,7 +96,7 @@ describe('FileIO.extractFrontmatterAndDataviewJs', () => {
 		const { frontmatter, dataviewJsBlock, pageContent } = io.extractFrontmatterAndDataviewJs(content);
 
 		expect(frontmatter).toContain('startDate: 2026-04-04');
-		expect(frontmatter).toContain('stage: active');
+		expect(frontmatter).toContain('stage: doing');
 		expect(dataviewJsBlock).toContain('```dataviewjs');
 		expect(dataviewJsBlock).toContain('const x = 1;');
 		expect(pageContent).toContain('Body content here');
@@ -125,10 +125,10 @@ describe('FileIO.extractFrontmatterAndDataviewJs', () => {
 // ── parseFrontmatterField ────────────────────────────────────────────
 describe('FileIO.parseFrontmatterField', () => {
 	const io = new FileIO();
-	const sample = '---\nstartDate: 2026-04-04\nstage: active\nproject: Projects/Foo.md\n---\nbody';
+	const sample = '---\nstartDate: 2026-04-04\nstage: doing\nproject: Projects/Foo.md\n---\nbody';
 
 	it('reads a scalar field correctly', () => {
-		expect(io.parseFrontmatterField(sample, 'stage')).toBe('active');
+		expect(io.parseFrontmatterField(sample, 'stage')).toBe('doing');
 	});
 
 	it('reads a date field correctly', () => {

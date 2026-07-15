@@ -141,7 +141,7 @@ describe('AutoActivityCreator', () => {
 
 		const content: string = createMock.mock.calls[0][1];
 		expect(content).toContain('startDate:');
-		expect(content).toContain('stage: active');
+		expect(content).toContain('stage: doing');
 		expect(content).toContain('## Description');
 		expect(content).toContain('## Journal');
 	});

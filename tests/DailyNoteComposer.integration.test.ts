@@ -63,7 +63,7 @@ function activeActivity(name: string, tasks: string[] = ['Open task']): string {
 	return [
 		'---',
 		`startDate: ${PAST}`,
-		'stage: active',
+		'stage: doing',
 		'responsible: [Me]',
 		'priority: medium',
 		'remind: daily',
@@ -162,7 +162,7 @@ describe('DailyNoteComposer.processDailyNote', () => {
 	// DNC-06: done activity excluded from today's Activities section
 	it('excludes done activities from the Activities section', async () => {
 		const composer = new DailyNoteComposer(SETTINGS);
-		const doneActivity = activeActivity('Done Thing').replace('stage: active', 'stage: done');
+		const doneActivity = activeActivity('Done Thing').replace('stage: doing', 'stage: done');
 		const app = makeApp({
 			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
 			'Activities/Done Thing.md': doneActivity,
@@ -228,7 +228,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		return [
 			'---',
 			`startDate: 2026-01-01`,
-			'stage: active',
+			'stage: doing',
 			'responsible: [Me]',
 			'priority: medium',
 			'remind: daily',
@@ -310,7 +310,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 			'Activities/Long Running.md': [
 				'---',
 				'startDate: 2026-01-01',
-				'stage: active',
+				'stage: doing',
 				'responsible: [Me]',
 				'priority: medium',
 				'remind: daily',

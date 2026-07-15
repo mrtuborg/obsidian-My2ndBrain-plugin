@@ -17,7 +17,7 @@ function makeActivityContent(opts: {
 	doneTasks?: string[];
 }): string {
 	const {
-		stage = 'active',
+		stage = 'doing',
 		startDate = '2026-01-01',
 		type,
 		remind = 'daily',
@@ -78,7 +78,7 @@ describe('ActivitiesInProgress', () => {
 	it('includes an active activity with open todos', async () => {
 		const app = makeApp([{
 			path: 'Activities/my-project.md',
-			content: makeActivityContent({ stage: 'active', startDate: PAST, journalTasks: ['Fix bug', 'Write docs'] }),
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Fix bug', 'Write docs'] }),
 		}]);
 
 		const result = await aip.run(app, '');
@@ -102,7 +102,7 @@ describe('ActivitiesInProgress', () => {
 	it('excludes activities with a future startDate', async () => {
 		const app = makeApp([{
 			path: 'Activities/future.md',
-			content: makeActivityContent({ stage: 'active', startDate: FUTURE, journalTasks: ['Task'] }),
+			content: makeActivityContent({ stage: 'doing', startDate: FUTURE, journalTasks: ['Task'] }),
 		}]);
 
 		const result = await aip.run(app, '');
@@ -113,7 +113,7 @@ describe('ActivitiesInProgress', () => {
 	it('excludes activities in Activities/Archive/', async () => {
 		const app = makeApp([{
 			path: 'Activities/Archive/old.md',
-			content: makeActivityContent({ stage: 'active', startDate: PAST, journalTasks: ['Task'] }),
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }),
 		}]);
 
 		const result = await aip.run(app, '');
@@ -125,11 +125,11 @@ describe('ActivitiesInProgress', () => {
 		const app = makeApp([
 			{
 				path: 'Activities/plan-today.md',
-				content: makeActivityContent({ stage: 'active', startDate: PAST, type: 'inbox', journalTasks: ['Inbox task'] }),
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, type: 'inbox', journalTasks: ['Inbox task'] }),
 			},
 			{
 				path: 'Activities/real-project.md',
-				content: makeActivityContent({ stage: 'active', startDate: TODAY, type: 'project', journalTasks: ['Project task'] }),
+				content: makeActivityContent({ stage: 'doing', startDate: TODAY, type: 'project', journalTasks: ['Project task'] }),
 			},
 		]);
 
@@ -146,11 +146,11 @@ describe('ActivitiesInProgress', () => {
 		const app = makeApp([
 			{
 				path: 'Activities/newer.md',
-				content: makeActivityContent({ stage: 'active', startDate: '2026-06-01', journalTasks: ['New task'] }),
+				content: makeActivityContent({ stage: 'doing', startDate: '2026-06-01', journalTasks: ['New task'] }),
 			},
 			{
 				path: 'Activities/older.md',
-				content: makeActivityContent({ stage: 'active', startDate: '2026-01-01', journalTasks: ['Old task'] }),
+				content: makeActivityContent({ stage: 'doing', startDate: '2026-01-01', journalTasks: ['Old task'] }),
 			},
 		]);
 
@@ -162,7 +162,7 @@ describe('ActivitiesInProgress', () => {
 	it('renders activity with no open todos as header + separator only', async () => {
 		const app = makeApp([{
 			path: 'Activities/all-done.md',
-			content: makeActivityContent({ stage: 'active', startDate: PAST, doneTasks: ['Finished task'] }),
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, doneTasks: ['Finished task'] }),
 		}]);
 
 		const result = await aip.run(app, '');
@@ -175,7 +175,7 @@ describe('ActivitiesInProgress', () => {
 	it('produces the correct Activities section format', async () => {
 		const app = makeApp([{
 			path: 'Activities/My Project.md',
-			content: makeActivityContent({ stage: 'active', startDate: PAST, journalTasks: ['The task'] }),
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['The task'] }),
 		}]);
 
 		const result = await aip.run(app, '');
@@ -187,7 +187,7 @@ describe('ActivitiesInProgress', () => {
 	// AIP-09: completed todo (matching [x] exists) is excluded from output
 	it('excludes todos that have a matching done entry', async () => {
 		const content = makeActivityContent({
-			stage: 'active',
+			stage: 'doing',
 			startDate: PAST,
 			journalTasks: ['Do work'],
 			doneTasks: ['Do work'],
@@ -203,7 +203,7 @@ describe('ActivitiesInProgress', () => {
 	it('does NOT use app.metadataCache to determine activity stage', async () => {
 		const app = makeApp([{
 			path: 'Activities/project.md',
-			content: makeActivityContent({ stage: 'active', startDate: PAST, journalTasks: ['Task'] }),
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }),
 		}]);
 		// Deliberately not adding metadataCache to app — should still work
 		expect(app.metadataCache).toBeUndefined();

@@ -47,7 +47,7 @@ export class TodoSyncManager {
 
 			const content = await app.vault.read(fileHandle);
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
-			if (stage !== 'active') continue;
+			if (stage !== 'doing') continue;
 			const startDate = this.fileIO.parseFrontmatterField(content, 'startDate');
 			if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) continue;
 

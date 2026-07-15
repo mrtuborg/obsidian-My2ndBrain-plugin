@@ -36,7 +36,7 @@ function activeActivity(folder = 'Activities'): string {
 	return [
 		'---',
 		`startDate: 2026-01-01`,
-		'stage: active',
+		'stage: doing',
 		'responsible: [Me]',
 		'priority: medium',
 		'remind: daily',

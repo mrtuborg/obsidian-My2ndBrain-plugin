@@ -14,7 +14,7 @@ describe('TodoSyncManager', () => {
 	}
 
 	function activeContent(startDate = '2026-01-01') {
-		return `---\nstartDate: ${startDate}\nstage: active\nremind: daily\n---\n\n## Journal\n\n- [ ] Task\n\n----`;
+		return `---\nstartDate: ${startDate}\nstage: doing\nremind: daily\n---\n\n## Journal\n\n- [ ] Task\n\n----`;
 	}
 
 	function doneContent() {

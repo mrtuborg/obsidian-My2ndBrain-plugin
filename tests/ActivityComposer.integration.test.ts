@@ -43,7 +43,7 @@ function activityContent(opts: {
 	journalBody?: string;
 }): string {
 	const {
-		stage = 'active',
+		stage = 'doing',
 		startDate = '2026-01-01',
 		priority = 'medium',
 		extraFields = '',
