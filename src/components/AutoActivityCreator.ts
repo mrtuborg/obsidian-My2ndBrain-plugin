@@ -10,7 +10,8 @@ const DATE_PATTERNS = [
 const WIKILINK_RE = /\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]/g;
 
 // Characters that indicate a bash/shell expression rather than an Obsidian wikilink.
-const SHELL_CHARS_RE = /[$"{}()\\<>;&|!`\n\t]|^[-!]|^\s*$|^=/;
+// Also includes ':' — invalid in Obsidian filenames on all platforms.
+const SHELL_CHARS_RE = /[$"{}()\\<>;&|!`\n\t:]|^[-!]|^\s*$|^=/;
 
 // Uppercase-only format placeholders like YYYY-MM-DD, DD, MMMM, etc.
 const FORMAT_PLACEHOLDER_RE = /^[A-Z][A-Z\-_]+$/;
