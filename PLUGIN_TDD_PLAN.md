@@ -1,5 +1,7 @@
 # Plugin TDD Development Plan
 
+**Status: COMPLETED 2026-07-15 — all 7 phases done, 184 tests passing, plugin deployed.**
+
 Date: 2026-07-14
 Repo: `obsidian-2ndbrain-plugin/`
 Reference: `Engine/Docs/07-test-specifications.md`, `Engine/Docs/09-functional-spec-cornerstones.md`
@@ -668,17 +670,17 @@ If anything breaks, re-enable DataviewJS + CustomJS and restore original templat
 
 ```
 Phase 0  ✅ DONE   Scaffold, settings, Jest, file-open stub
-Phase 1  ⬜ NEXT   Block + BlockCollection (10 unit tests)
-Phase 2  ⬜        noteBlocksParser (12 unit + 1 integration test)
-Phase 3  ⬜        fileIO + scriptsRemove + attributesProcessor (20 unit tests)
-Phase 4a ⬜        projectDescriptionInjector (8 unit tests)
-Phase 4b ⬜        mentionsProcessor (11 unit tests)
-Phase 4c ⬜        activitiesInProgress (13 integration tests)
-Phase 4d ⬜        todoSyncManager (3 integration tests)
-Phase 4e ⬜        autoActivityCreator (12 unit/integration tests)
-Phase 5  ⬜        Composers + event router (13 integration tests + smoke)
-Phase 6  ⬜        Settings wired through all components
-Phase 7  ⬜        Template cleanup, CustomJS/DataviewJS disabled
+Phase 1  ✅ DONE   Block + BlockCollection (10 unit tests)
+Phase 2  ✅ DONE   noteBlocksParser (12 unit + 1 integration test)
+Phase 3  ✅ DONE   fileIO + scriptsRemove + attributesProcessor (20 unit tests)
+Phase 4a ✅ DONE   projectDescriptionInjector (8 unit tests)
+Phase 4b ✅ DONE   mentionsProcessor (11 unit tests)
+Phase 4c ✅ DONE   activitiesInProgress (13 integration tests)
+Phase 4d ✅ DONE   todoSyncManager (3 integration tests)
+Phase 4e ✅ DONE   autoActivityCreator (12 unit/integration tests)
+Phase 5  ✅ DONE   Composers + event router (13 integration tests + smoke)
+Phase 6  ✅ DONE   Settings wired through all components
+Phase 7  ✅ DONE   Template cleanup, CustomJS/DataviewJS disabled
 ```
 
 Total: ~103 test cases defined in the existing spec, covering all components.

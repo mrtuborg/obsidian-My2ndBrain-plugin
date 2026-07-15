@@ -1,19 +1,40 @@
-# Obsidian community plugin
+# 2ndBrain Engine Plugin
 
-## Project overview
+## What this repo is
 
-- Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
-- Entry point: `main.ts` compiled to `main.js` and loaded by Obsidian.
-- Required release artifacts: `main.js`, `manifest.json`, and optional `styles.css`.
+A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-## Environment & tooling
+**All 7 implementation phases are complete.** 184 tests passing. Plugin is deployed and active.
 
-- Node.js: use current LTS (Node 18+ recommended).
-- **Package manager: npm** (required for this sample - `package.json` defines npm scripts and dependencies).
-- **Bundler: esbuild** (required for this sample - `esbuild.config.mjs` and build scripts depend on it). Alternative bundlers like Rollup or webpack are acceptable for other projects if they bundle all external dependencies into `main.js`.
-- Types: `obsidian` type definitions.
+## Architecture
 
-**Note**: This sample project has specific technical dependencies on npm and esbuild. If you're creating a plugin from scratch, you can choose different tools, but you'll need to replace the build configuration accordingly.
+```
+file-open event
+    └── main.ts (router)
+         ├── Journal/YYYY-MM-DD.md (any date) → DailyNoteComposer
+         │     ├── today:          full pipeline (autoCreate → sync → Activities section)
+         │     └── past + empty:   recovery from activity Journal history
+         └── Activities/*.md / People/*.md    → ActivityComposer
+              ├── projectDescriptionInjector  (## Description, replace-semantics)
+              └── mentionsProcessor           (## Journal, state-transition algorithm)
+```
+
+Components are in `src/components/`, composers in `src/composers/`, file I/O in `src/utilities/`.
+
+**Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
+
+## Current status (all phases complete)
+
+| Phase | Component(s) | Status |
+|-------|-------------|--------|
+| 0 | Scaffold: build, Jest, settings | ✅ |
+| 1 | Block, BlockCollection | ✅ |
+| 2 | NoteBlocksParser | ✅ |
+| 3 | FileIO, ScriptsRemove, AttributesProcessor | ✅ |
+| 4 | ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator | ✅ |
+| 5 | ActivityComposer, DailyNoteComposer, event router | ✅ |
+| 6 | Settings wired through all components | ✅ |
+| 7 | Template cleanup, CustomJS/Templater/DataviewJS disabled | ✅ |
 
 ### Install
 
