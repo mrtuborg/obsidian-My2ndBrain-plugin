@@ -1,12 +1,17 @@
 import { Plugin, TFile, Notice } from 'obsidian';
 import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab } from './settings';
+import { ActivityComposer } from './composers/ActivityComposer';
+import { DailyNoteComposer } from './composers/DailyNoteComposer';
 
 export default class TwoBrainPlugin extends Plugin {
 	settings: PluginSettings;
+	private activityComposer!: ActivityComposer;
+	private dailyNoteComposer!: DailyNoteComposer;
 
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new TwoBrainSettingsTab(this.app, this));
+		this.rebuildComposers();
 
 		this.registerEvent(
 			this.app.workspace.on('file-open', async (file) => {
@@ -14,6 +19,18 @@ export default class TwoBrainPlugin extends Plugin {
 				await this.routeFile(file);
 			})
 		);
+	}
+
+	private rebuildComposers() {
+		const { settings } = this;
+		const composerSettings = {
+			journalFolder: settings.journalFolder,
+			projectsFolder: settings.projectsFolder,
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
+		};
+		this.activityComposer = new ActivityComposer(composerSettings);
+		this.dailyNoteComposer = new DailyNoteComposer(composerSettings);
 	}
 
 	private async routeFile(file: TFile) {
@@ -29,12 +46,15 @@ export default class TwoBrainPlugin extends Plugin {
 		const isPeople = file.path.startsWith(settings.peopleFolder + '/');
 
 		try {
-			if (isJournal && isToday) {
-				// Phase 5: dailyNoteComposer.processDailyNote(this.app, file, settings)
-				new Notice('[2ndBrain] Daily note processing — not yet implemented');
+			if (isJournal) {
+				// Handles both today (full pipeline) and past dates (recovery/cross-refs)
+				await this.dailyNoteComposer.processDailyNote(
+					this.app as any, { path: file.path, basename: file.basename }
+				);
 			} else if (isActivity || isPeople) {
-				// Phase 5: activityComposer.processActivity(this.app, file, settings)
-				new Notice('[2ndBrain] Activity processing — not yet implemented');
+				await this.activityComposer.processActivity(
+					this.app as any, { path: file.path }
+				);
 			}
 		} catch (e) {
 			new Notice(`2ndBrain: Error processing ${file.name} — ${(e as Error).message}`);
