@@ -25,16 +25,9 @@ Components are in `src/components/`, composers in `src/composers/`, file I/O in 
 
 ## Current status (all phases complete)
 
-| Phase | Component(s) | Status |
-|-------|-------------|--------|
-| 0 | Scaffold: build, Jest, settings | ✅ |
-| 1 | Block, BlockCollection | ✅ |
-| 2 | NoteBlocksParser | ✅ |
-| 3 | FileIO, ScriptsRemove, AttributesProcessor | ✅ |
-| 4 | ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator | ✅ |
-| 5 | ActivityComposer, DailyNoteComposer, event router | ✅ |
-| 6 | Settings wired through all components | ✅ |
-| 7 | Template cleanup, CustomJS/Templater/DataviewJS disabled | ✅ |
+All 7 implementation phases done. 184 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+
+**Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 
 ### Install
 

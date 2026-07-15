@@ -46,22 +46,3 @@ file-open event
               ├── projectDescriptionInjector (## Description, replace-semantics)
               └── mentionsProcessor (## Journal, state-transition algorithm)
 ```
-
-### Development phases
-
-| Phase | Goal | Status |
-|-------|------|--------|
-| 0 | Scaffold: build, Jest, settings | ✅ Done |
-| 1 | Block + BlockCollection + unit tests | ✅ Done |
-| 2 | noteBlocksParser + unit tests | ✅ Done |
-| 3 | fileIO, scriptsRemove, attributesProcessor | ✅ Done |
-| 4 | All mid-pipeline components | ✅ Done |
-| 5 | Composers + event router wired | ✅ Done |
-| 6 | Settings wired through all components | ✅ Done |
-| 7 | Template cleanup, CustomJS/DataviewJS disabled | ✅ Done |
-
----
-
-## This repo is also a learning project
-
-All LLM engineering study materials live in `learning/`. The driver doc is `learning/LLM-LEARNING-ROADMAP.md` — start there. The plugin itself is the practice vehicle used to build the skills covered in the roadmap.
