@@ -141,7 +141,8 @@ export class ActivitiesInProgress {
 	}
 
 	private remindAllowsToday(remind: string): boolean {
-		const day = new Date().getDay(); // 0=Sun, 1=Mon … 6=Sat
+		const now = new Date();
+		const day = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
 		switch (remind) {
 			case 'weekdays': return day >= 1 && day <= 5;
 			case 'weekends': return day === 0 || day === 6;
@@ -152,7 +153,15 @@ export class ActivitiesInProgress {
 			case 'friday':   return day === 5;
 			case 'saturday': return day === 6;
 			case 'sunday':   return day === 0;
-			default:         return true; // daily or unknown
+			default: {
+				// YYYY-MM or YYYY-MM-DD — show only from that date onward
+				if (/^\d{4}-\d{2}(-\d{2})?$/.test(remind)) {
+					const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+					const threshold = remind.length === 7 ? remind + '-01' : remind;
+					return todayStr >= threshold;
+				}
+				return true; // daily or unknown
+			}
 		}
 	}
 

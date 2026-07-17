@@ -199,6 +199,52 @@ describe('ActivitiesInProgress', () => {
 		expect(result).not.toContain('- [ ] Do work');
 	});
 
+	// AIP-10: remind YYYY-MM — future month hides activity
+	it('excludes activity with remind set to a future month', async () => {
+		const app = makeApp([{
+			path: 'Activities/deferred.md',
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: '2099-09', journalTasks: ['Deferred task'] }),
+		}]);
+
+		const result = await aip.run(app, '');
+		expect(result).not.toContain('deferred');
+	});
+
+	// AIP-11: remind YYYY-MM — past month shows activity
+	it('includes activity with remind set to a past month', async () => {
+		const app = makeApp([{
+			path: 'Activities/past-month.md',
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: '2020-01', journalTasks: ['Old remind task'] }),
+		}]);
+
+		const result = await aip.run(app, '');
+		expect(result).toContain('past-month');
+		expect(result).toContain('Old remind task');
+	});
+
+	// AIP-12: remind YYYY-MM-DD — future date hides activity
+	it('excludes activity with remind set to a future date', async () => {
+		const app = makeApp([{
+			path: 'Activities/future-date.md',
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: '2099-12-31', journalTasks: ['Far future task'] }),
+		}]);
+
+		const result = await aip.run(app, '');
+		expect(result).not.toContain('future-date');
+	});
+
+	// AIP-13: remind YYYY-MM-DD — past date shows activity
+	it('includes activity with remind set to a past date', async () => {
+		const app = makeApp([{
+			path: 'Activities/past-date.md',
+			content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: '2020-06-15', journalTasks: ['Past date task'] }),
+		}]);
+
+		const result = await aip.run(app, '');
+		expect(result).toContain('past-date');
+		expect(result).toContain('Past date task');
+	});
+
 	// Frontmatter read from raw text, not metadataCache
 	it('does NOT use app.metadataCache to determine activity stage', async () => {
 		const app = makeApp([{

@@ -10,6 +10,7 @@ export interface PluginSettings {
 	dateFormat: string;
 	autoProcessOnOpen: boolean;
 	removeScriptsFromDailyNotes: boolean;
+	syncGraceSeconds: number;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	dateFormat: 'YYYY-MM-DD',
 	autoProcessOnOpen: true,
 	removeScriptsFromDailyNotes: true,
+	syncGraceSeconds: 5,
 };
 
 export class TwoBrainSettingsTab extends PluginSettingTab {
@@ -95,6 +97,18 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.autoProcessOnOpen)
 				.onChange(async (value) => {
 					this.plugin.settings.autoProcessOnOpen = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Sync grace period")
+			.setDesc("Seconds to wait before processing a fresh daily note, giving Obsidian Sync time to deliver a version from another device. Set to 0 to disable.")
+			.addText(text => text
+				.setPlaceholder("5")
+				.setValue(String(this.plugin.settings.syncGraceSeconds))
+				.onChange(async (value) => {
+					const n = parseInt(value, 10);
+					this.plugin.settings.syncGraceSeconds = isNaN(n) || n < 0 ? 0 : n;
 					await this.plugin.saveSettings();
 				}));
 

@@ -371,3 +371,82 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		}
 	});
 });
+
+// ── Sync grace period tests ─────────────────────────────────────────────
+describe('sync grace period', () => {
+	const SYNC_SETTINGS = { ...SETTINGS, syncGraceSeconds: 0.1 }; // 100ms for fast tests
+
+	it('skips processing when sync delivers processed note during grace period', async () => {
+		const path = `Journal/${TODAY}.md`;
+		const app = makeApp({ [path]: '' });
+		const vault = app.vault as MockVault;
+
+		// Simulate sync delivering processed content during the grace delay.
+		// The composer writes a placeholder (1st save), then waits, then re-reads.
+		// We intercept the re-read to return synced content.
+		const originalRead = vault.read.bind(vault);
+		let readCount = 0;
+		vault.read = async (file: { path: string }) => {
+			readCount++;
+			if (readCount >= 3 && file.path === path) {
+				// 3rd read (1st = initial load, 2nd = placeholder verify, 3rd = after grace)
+				return '---\n---\n### 16 [[2026-07|July]] [[2026]]\n#### Week: [[2026-W29|29]]\n\n### Activities:\n----\n##### [[Activities/Test.md|Test]]\n- [ ] some task';
+			}
+			return originalRead(file);
+		};
+
+		const composer = new DailyNoteComposer(SYNC_SETTINGS);
+		await composer.processDailyNote(app as any, { path, basename: TODAY });
+
+		// The placeholder was written (instant feedback), but the heavy pipeline
+		// was skipped because sync delivered the processed version.
+		const saved = vault.saves.get(path);
+		expect(saved).toBeDefined();
+		// Should contain only the placeholder, NOT the full Activities section
+		expect(saved).toContain('⏳');
+		expect(saved).not.toContain('### Activities:');
+	});
+
+	it('proceeds normally when sync does not deliver during grace period', async () => {
+		const path = `Journal/${TODAY}.md`;
+		const app = makeApp({
+			[path]: '',
+			'Activities/Test.md': '---\nstartDate: 2026-01-01\nstage: doing\nresponsible: [me]\n---\n## Description\nTest\n## Journal\n- [ ] task',
+		});
+
+		const composer = new DailyNoteComposer(SYNC_SETTINGS);
+		await composer.processDailyNote(app as any, { path, basename: TODAY });
+
+		const saved = (app.vault as MockVault).saves.get(path);
+		expect(saved).toBeDefined();
+		expect(saved).toContain('---\n---');
+	});
+
+	it('skips grace period when syncGraceSeconds is 0', async () => {
+		const path = `Journal/${TODAY}.md`;
+		const app = makeApp({ [path]: '' });
+
+		const noSyncSettings = { ...SETTINGS, syncGraceSeconds: 0 };
+		const composer = new DailyNoteComposer(noSyncSettings);
+
+		const start = Date.now();
+		await composer.processDailyNote(app as any, { path, basename: TODAY });
+		const elapsed = Date.now() - start;
+
+		expect(elapsed).toBeLessThan(100);
+	});
+
+	it('skips grace period for already-processed notes', async () => {
+		const path = `Journal/${TODAY}.md`;
+		const processedContent = '---\n---\n### 16 [[2026-07|July]]\n\n### Activities:\n----';
+		const app = makeApp({ [path]: processedContent });
+
+		const composer = new DailyNoteComposer(SYNC_SETTINGS);
+
+		const start = Date.now();
+		await composer.processDailyNote(app as any, { path, basename: TODAY });
+		const elapsed = Date.now() - start;
+
+		expect(elapsed).toBeLessThan(200);
+	});
+});

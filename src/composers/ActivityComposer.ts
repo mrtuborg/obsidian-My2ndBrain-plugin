@@ -10,6 +10,7 @@ export interface ComposerSettings {
 	projectsFolder: string;
 	activitiesFolder: string;
 	archiveFolder: string;
+	syncGraceSeconds?: number;
 }
 
 const STANDARD_FIELDS = new Set(['startDate', 'stage', 'responsible', 'type', 'project']);
@@ -39,11 +40,16 @@ export class ActivityComposer {
 
 		// 2. Parse Standard fields from raw text (never from metadataCache — invariant A.3.1)
 		const startDateRaw = this.fileIO.parseFrontmatterField(rawContent, 'startDate');
-		// Guard: Templater placeholders like <% tp.date.now() %> are not valid dates.
-		// Fall back to today so generateActivityHeader never throws.
-		const startDate = (startDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(startDateRaw))
-			? startDateRaw
-			: this.fileIO.todayDate();
+		// Validation: startDate must exist and be YYYY-MM-DD format.
+		// Never fall back to today — that overwrites history and breaks migration tracking.
+		// If Templater placeholder found, throw error so user fixes it manually.
+		if (!startDateRaw) {
+			throw new Error(`Activity ${rawContent.split('\n')[0]}: startDate is required in frontmatter`);
+		}
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateRaw)) {
+			throw new Error(`Activity ${rawContent.split('\n')[0]}: startDate must be YYYY-MM-DD format (found: "${startDateRaw}")`);
+		}
+		const startDate = startDateRaw;
 		const stage     = this.fileIO.parseFrontmatterField(rawContent, 'stage') ?? 'doing';
 		const respRaw   = this.fileIO.parseFrontmatterField(rawContent, 'responsible') ?? '[Me]';
 		// responsible is stored as YAML inline sequence: "[Me]" → parse to ['Me']

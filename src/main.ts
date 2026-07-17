@@ -28,6 +28,7 @@ export default class TwoBrainPlugin extends Plugin {
 			projectsFolder: settings.projectsFolder,
 			activitiesFolder: settings.activitiesFolder,
 			archiveFolder: settings.archiveFolder,
+			syncGraceSeconds: settings.syncGraceSeconds,
 		};
 		this.activityComposer = new ActivityComposer(composerSettings);
 		this.dailyNoteComposer = new DailyNoteComposer(composerSettings);

@@ -34,7 +34,7 @@ export class DailyNoteComposer {
 		const pageIsToday = file.basename === today;
 
 		// Load current content
-		const rawContent = await this.fileIO.loadFile(app, file.path);
+		let rawContent = await this.fileIO.loadFile(app, file.path);
 		if (rawContent === null) return;
 
 		const header = this.fileIO.generateDailyNoteHeader(file.basename);
@@ -47,13 +47,14 @@ export class DailyNoteComposer {
 			return;
 		}
 
-		// Write header + "building" placeholder immediately so the note is never blank.
-		// For today's note, also show a progress indicator while the pipeline runs.
-		// For a fresh past note (deleted and recreated), show a recovery indicator.
-		// A "fresh past note" is one that was just created (deleted and recreated).
-		// Distinguish from old notes with DataviewJS template content by checking
-		// that the file has minimal content (< 20 chars = just a newline or truly empty).
+		// Detect whether this is a freshly created note (empty or no frontmatter).
+		// Used both for placeholder logic and sync grace period.
+		const isFreshToday = pageIsToday && (existing.length < 20 || !existing.startsWith('---'));
 		const isFreshPastNote = !pageIsToday && existing.length < 20;
+
+		// Write header + "building" placeholder immediately so the note is never blank.
+		// The placeholder is deterministic (same on all devices), so even if two
+		// devices write it before sync merges, the content is identical — no conflict.
 		if (!existing || !existing.startsWith('---')) {
 			const placeholder = pageIsToday
 				? header + '\n\n> ⏳ Building Activities section…'
@@ -61,6 +62,28 @@ export class DailyNoteComposer {
 					? header + '\n\n> ⏳ Recovering from activity history…'
 					: header;
 			await this.fileIO.saveFile(app, file.path, placeholder);
+		}
+
+		// ── Sync grace period ────────────────────────────────────────────
+		// For a freshly created today's note, wait briefly for Obsidian Sync
+		// to deliver a fully-processed version from another device. This runs
+		// AFTER the placeholder write (so the user sees instant feedback) but
+		// BEFORE the heavy pipeline (which produces device-specific content
+		// that would cause a sync conflict).
+		const graceSeconds = this.settings.syncGraceSeconds ?? 0;
+		if (isFreshToday && graceSeconds > 0) {
+			console.log(`[2ndBrain] Fresh daily note, waiting ${graceSeconds}s for sync…`);
+			await this.delay(graceSeconds * 1000);
+
+			// Re-read — sync may have delivered the processed version
+			const syncedContent = await this.fileIO.loadFile(app, file.path);
+			if (syncedContent === null) return;
+
+			if (syncedContent.includes('### Activities:')) {
+				console.log('[2ndBrain] Sync delivered processed daily note, skipping local build.');
+				return;
+			}
+			rawContent = syncedContent;
 		}
 
 		// Strip raw Templater preamble <%* ... %> if Templater didn't fire
@@ -154,6 +177,10 @@ export class DailyNoteComposer {
 	}
 
 	// ── Private ──────────────────────────────────────────────────────────────
+
+	private delay(ms: number): Promise<void> {
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
 
 	/**
 	 * Reconstruct what a past daily note should show by scanning ALL activity
