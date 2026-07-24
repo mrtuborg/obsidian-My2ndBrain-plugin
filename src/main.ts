@@ -2,6 +2,7 @@ import { Plugin, TFile, Notice } from 'obsidian';
 import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab } from './settings';
 import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
+import { cleanupStaleAutoCreatedStubs } from './utilities/StaleStubCleanup';
 
 export default class TwoBrainPlugin extends Plugin {
 	settings: PluginSettings;
@@ -19,6 +20,21 @@ export default class TwoBrainPlugin extends Plugin {
 				await this.routeFile(file);
 			})
 		);
+
+		// TEMPORARY one-time cleanup command — remove after use. Deletes the
+		// empty Activity stubs left by the now-fixed AutoActivityCreator
+		// project-wide sweep bug, via the real vault API so the deletion
+		// propagates through Obsidian Sync to other devices.
+		this.addCommand({
+			id: 'cleanup-stale-auto-created-stubs',
+			name: 'Clean up stale auto-created activity stubs (one-time)',
+			callback: async () => {
+				const result = await cleanupStaleAutoCreatedStubs(this.app as any, this.settings.activitiesFolder);
+				new Notice(`2ndBrain cleanup: deleted ${result.deleted.length} stale stub(s)` +
+					(result.failed.length ? `, ${result.failed.length} failed (see console)` : ''));
+				if (result.failed.length) console.error('[2ndBrain] cleanup failures:', result.failed);
+			},
+		});
 	}
 
 	private rebuildComposers() {
