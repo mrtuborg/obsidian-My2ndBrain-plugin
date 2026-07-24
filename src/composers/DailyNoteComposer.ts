@@ -92,6 +92,12 @@ export class DailyNoteComposer {
 			cleanedContent = cleanedContent.replace(/<%\*[\s\S]*?%>\s*/g, '').trim();
 		}
 
+		// Strip our own transient "building…" placeholder if it's still there. It's
+		// re-read as real content when the sync-grace re-read (line ~79) finds no
+		// synced version yet — without this it leaks into the final saved note as
+		// a stray trailing line (e.g. "> ⏳ Building Activities section…").
+		cleanedContent = cleanedContent.replace(/^> ⏳ .*$\n?/gm, '').trim();
+
 		// Strip header from content so it's re-added cleanly at the end
 		let pageContent = cleanedContent.replace(header, '').trim();
 		const { dataviewJsBlock, pageContent: bodyContent } = this.fileIO.extractFrontmatterAndDataviewJs(pageContent);
