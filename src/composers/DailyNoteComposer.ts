@@ -343,22 +343,16 @@ export class DailyNoteComposer {
 	}
 
 	private async runAutoCreator(app: AppLike, today: string): Promise<void> {
-		// Scan previous journal entry
+		// Only scan what the user actually wrote in yesterday's journal entry.
+		// We intentionally do NOT sweep every file under Projects/ here: project
+		// docs are full of internal cross-references to other documentation
+		// notes (e.g. "[[Security Considerations]]", "[[OpenVPN Setup...]]")
+		// that were never meant to become tracked Activities. Doing so once
+		// created 133 permanent empty "backlog" stub activities from a single
+		// run across ~1,100 project files.
 		const prevJournal = await this.findPreviousJournalContent(app, today);
 		if (prevJournal) {
 			await this.autoCreator.createMissingFromContent(app as any, prevJournal, today, 'inbox');
-		}
-
-		// Scan all project files
-		const projectFiles = app.vault.getFiles().filter((f: { path: string }) =>
-			f.path.startsWith(this.settings.projectsFolder + '/') &&
-			f.path.endsWith('.md')
-		);
-		for (const pf of projectFiles) {
-			const handle = app.vault.getAbstractFileByPath(pf.path);
-			if (!handle) continue;
-			const content = await app.vault.read(handle);
-			await this.autoCreator.createMissingFromContent(app as any, content, today, pf.path);
 		}
 	}
 
