@@ -21,13 +21,15 @@ export default class TwoBrainPlugin extends Plugin {
 			})
 		);
 
-		// TEMPORARY one-time cleanup command — remove after use. Deletes the
-		// empty Activity stubs left by the now-fixed AutoActivityCreator
-		// project-wide sweep bug, via the real vault API so the deletion
-		// propagates through Obsidian Sync to other devices.
+		// Cleanup command kept as a permanent, safe-to-rerun utility. It only
+		// ever matches the exact frontmatter signature left by the (now-fixed)
+		// AutoActivityCreator project-wide sweep bug, and deletes via the real
+		// vault API so deletions propagate through Obsidian Sync to other
+		// devices — unlike a raw filesystem delete, which Sync can silently
+		// undo by restoring the file from another device or the sync server.
 		this.addCommand({
 			id: 'cleanup-stale-auto-created-stubs',
-			name: 'Clean up stale auto-created activity stubs (one-time)',
+			name: 'Clean up stale auto-created activity stubs',
 			callback: async () => {
 				const result = await cleanupStaleAutoCreatedStubs(this.app as any, this.settings.activitiesFolder);
 				new Notice(`2ndBrain cleanup: deleted ${result.deleted.length} stale stub(s)` +

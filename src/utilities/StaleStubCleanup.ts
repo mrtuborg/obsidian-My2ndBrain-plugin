@@ -1,11 +1,13 @@
 /**
- * One-time cleanup for the "AutoActivityCreator project-wide sweep" bug
+ * Safe-to-rerun cleanup for the "AutoActivityCreator project-wide sweep" bug
  * (fixed in DailyNoteComposer.runAutoCreator — see commit history).
  *
  * That bug created empty Activity stubs for every unresolved [[link]] found
  * anywhere under Projects/, not just links the user actually wrote. All
  * such stubs share one exact, distinctive frontmatter signature and were
- * never touched afterward (empty ## Journal section).
+ * never touched afterward (empty ## Journal section). Kept as a permanent
+ * command since multiple devices syncing to the same vault can each surface
+ * their own leftover copies over time (e.g. after a delayed sync).
  *
  * This must run through app.vault.delete() (the real Obsidian API), not a
  * raw filesystem delete — only vault.delete() records a proper tombstone
