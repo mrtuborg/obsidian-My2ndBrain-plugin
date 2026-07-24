@@ -222,6 +222,10 @@ export class DailyNoteComposer {
 			const handle = app.vault.getAbstractFileByPath(file.path);
 			if (!handle) continue;
 			const content = await app.vault.read(handle);
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity in past-note recovery: ${file.path}`);
+				continue;
+			}
 			if (!content.includes(datePattern)) continue;
 
 			const journalLines = this.extractJournalLines(content);
@@ -250,6 +254,10 @@ export class DailyNoteComposer {
 			const handle = app.vault.getAbstractFileByPath(file.path);
 			if (!handle) continue;
 			const content = await app.vault.read(handle);
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity in past-note recovery: ${file.path}`);
+				continue;
+			}
 
 			// Only activities actively "doing" as of the target date — matches the
 			// normal (non-recovery) build's filter. Without this, every activity

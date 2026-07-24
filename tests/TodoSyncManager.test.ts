@@ -79,4 +79,25 @@ describe('TodoSyncManager', () => {
 		await tsm.run(app);
 		expect(mockProcessActivity).toHaveBeenCalledTimes(2);
 	});
+
+	// Size safety guard: oversized activities must be skipped, not handed to
+	// processActivity (which would throw and abort the whole sync loop).
+	it('skips an oversized activity without calling processActivity or aborting the loop', async () => {
+		const mockProcessActivity = jest.fn().mockResolvedValue(undefined);
+		const tsm = new TodoSyncManager(mockProcessActivity);
+
+		const oversized = activeContent() + '\n' + 'x'.repeat(800 * 1024); // 800KB > 720KB cap
+		const app = makeApp([
+			{ path: 'Activities/huge.md', content: oversized },
+			{ path: 'Activities/normal.md', content: activeContent() },
+		]);
+
+		await tsm.run(app);
+		expect(mockProcessActivity).toHaveBeenCalledTimes(1);
+		expect(mockProcessActivity).toHaveBeenCalledWith(
+			app,
+			expect.objectContaining({ path: 'Activities/normal.md' }),
+			undefined
+		);
+	});
 });

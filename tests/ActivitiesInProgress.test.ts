@@ -319,4 +319,21 @@ describe('ActivitiesInProgress', () => {
 			expect(result).toContain('bad-snooze');
 		});
 	});
+
+	// Size safety guard: an oversized activity must be skipped, not read into
+	// the daily note or crash the whole build.
+	describe('size guard', () => {
+		it('skips an oversized activity but still shows others', async () => {
+			const oversized = makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Huge task'] })
+				+ '\n' + 'x'.repeat(800 * 1024); // 800KB > 720KB cap
+			const app = makeApp([
+				{ path: 'Activities/huge.md', content: oversized },
+				{ path: 'Activities/normal.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Normal task'] }) },
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).not.toContain('huge');
+			expect(result).toContain('normal');
+		});
+	});
 });

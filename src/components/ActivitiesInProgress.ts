@@ -65,6 +65,13 @@ export class ActivitiesInProgress {
 			// Critical: read from raw file content, NOT metadataCache (invariant B.2.5)
 			const content = await app.vault.read(fileHandle);
 
+			// Skip oversized activities — reading/rendering their bulk into every
+			// daily note isn't worth the memory/perf cost. See MAX_MANAGED_FILE_BYTES.
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity from daily note: ${file.path}`);
+				continue;
+			}
+
 			// Only include explicitly active activities (not planning, inbox, backlog, done, etc.)
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
 			if (stage !== 'doing') continue;
