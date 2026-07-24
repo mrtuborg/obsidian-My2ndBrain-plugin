@@ -78,6 +78,12 @@ export class ActivitiesInProgress {
 			const remind = this.fileIO.parseFrontmatterField(content, 'remind') ?? 'daily';
 			if (!this.remindAllowsToday(remind)) continue;
 
+			// snoozeUntil: YYYY-MM-DD — independent, temporary hide, e.g. for vacation.
+			// Unlike `remind`, this doesn't change the activity's normal schedule;
+			// it just suppresses it until the given date, then resumes as before.
+			const snoozeUntil = this.fileIO.parseFrontmatterField(content, 'snoozeUntil');
+			if (snoozeUntil && /^\d{4}-\d{2}-\d{2}$/.test(snoozeUntil) && today < snoozeUntil) continue;
+
 			const openTodos = this.extractOpenTodos(content);
 			results.push({ file, content, openTodos });
 		}
