@@ -251,6 +251,13 @@ export class DailyNoteComposer {
 			if (!handle) continue;
 			const content = await app.vault.read(handle);
 
+			// Only activities actively "doing" as of the target date — matches the
+			// normal (non-recovery) build's filter. Without this, every activity
+			// with a qualifying startDate leaks in regardless of stage, flooding
+			// recovered past notes with backlog/done/inbox items too.
+			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
+			if (stage !== 'doing') continue;
+
 			const startDate = this.fileIO.parseFrontmatterField(content, 'startDate');
 			if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) continue;
 			if (startDate > targetDate) continue;  // Started after the target date

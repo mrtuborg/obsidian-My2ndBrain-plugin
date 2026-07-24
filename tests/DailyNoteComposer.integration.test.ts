@@ -342,6 +342,48 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		expect(saved).toContain('- [ ] Long running task');
 	});
 
+	// Regression: fallback recovery must respect stage, same as the normal build.
+	// Without this, every activity with a qualifying startDate leaked in
+	// regardless of stage (backlog/done/inbox), flooding recovered past notes.
+	it('excludes non-doing activities from startDate-based fallback recovery', async () => {
+		const pastDate = '2026-04-06';
+		const app = makeApp({
+			[`Journal/${pastDate}.md`]: '',
+			'Activities/Long Running.md': [
+				'---',
+				'startDate: 2026-01-01',
+				'stage: doing',
+				'---',
+				'',
+				'## Journal',
+				'',
+				'[[2026-01-01]]',
+				'- [ ] Long running task',
+				'',
+				'----',
+			].join('\n'),
+			'Activities/Backlog Item.md': [
+				'---',
+				'startDate: 2026-01-01',
+				'stage: backlog',
+				'---',
+				'',
+				'## Journal',
+				'',
+				'[[2026-01-01]]',
+				'- [ ] Someday task',
+				'',
+				'----',
+			].join('\n'),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${pastDate}.md`, basename: pastDate });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`)!;
+		expect(saved).toContain('Long Running');
+		expect(saved).not.toContain('Backlog Item');
+	});
+
 	it('does NOT run recovery on a past note that already has content', async () => {
 		const pastDate = '2026-03-10';
 		const existingContent = [
