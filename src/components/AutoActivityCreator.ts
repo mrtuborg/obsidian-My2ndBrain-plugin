@@ -88,12 +88,27 @@ export class AutoActivityCreator {
 		return missing;
 	}
 
+	// Top-level vault folders where a "/" in a wikilink target genuinely means
+	// a folder separator. Any other slash (e.g. a pasted Confluence/Notion
+	// breadcrumb title like "Evaluation of new CPUs / SOMs") is not a real
+	// vault path and must not be used to create folders at the vault root.
+	private static readonly KNOWN_FOLDER_PREFIXES = ['Activities/', 'People/'];
+
 	private resolveActivityPath(raw: string): string {
 		// Strip a trailing #heading or #^block reference — [[Note#Section]] refers
 		// to Note.md, not a literal file named "Note#Section.md".
 		const hashIndex = raw.indexOf('#');
 		let path = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
 		path = path.endsWith('.md') ? path.slice(0, -3) : path;
+
+		const isKnownFolder = AutoActivityCreator.KNOWN_FOLDER_PREFIXES.some(p => path.startsWith(p));
+		if (path.includes('/') && !isKnownFolder) {
+			// Flatten to the last segment — treat the rest as part of a pasted
+			// title, not a folder path, so we never create bogus folders at
+			// the vault root.
+			path = path.slice(path.lastIndexOf('/') + 1).trim();
+		}
+
 		if (!path.includes('/')) path = 'Activities/' + path;
 		return path + '.md';
 	}

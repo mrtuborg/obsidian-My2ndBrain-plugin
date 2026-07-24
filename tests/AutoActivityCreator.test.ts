@@ -103,6 +103,25 @@ describe('AutoActivityCreator', () => {
 		expect(createMock).toHaveBeenCalledWith('Activities/Fix WiFi driver.md', expect.any(String));
 	});
 
+	// AAC-XX: a pasted breadcrumb-style link (e.g. from Confluence/Notion export)
+	// containing a "/" that is NOT a real vault folder must be flattened to its
+	// last segment under Activities/, not used to create a bogus root folder.
+	it('flattens a pasted breadcrumb-style link with a slash instead of creating a bogus folder', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const createFolderMock = jest.fn().mockResolvedValue(undefined);
+		const app = makeApp({ createMock, createFolderMock });
+
+		await creator.createMissingFromContent(
+			app,
+			'[[Evaluation of new CPUs / SOMs|Evaluation of new CPUs / SOMs - RoomMate Development - Confluence]]',
+			TODAY,
+			'inbox'
+		);
+
+		expect(createMock).toHaveBeenCalledWith('Activities/SOMs.md', expect.any(String));
+		expect(createFolderMock).not.toHaveBeenCalledWith('Evaluation of new CPUs ');
+	});
+
 	// AAC-07: [[Projects/Something]] → skipped
 	it('skips links targeting Projects/ folder', async () => {
 		const createMock = jest.fn().mockResolvedValue({});
