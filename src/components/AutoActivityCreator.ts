@@ -80,7 +80,7 @@ export class AutoActivityCreator {
 			if (seen.has(path)) continue;
 			seen.add(path);
 
-			if (!app.vault.getAbstractFileByPath(path)) {
+			if (!this.fileExistsAnywhere(app, path)) {
 				missing.push(path);
 			}
 		}
@@ -89,9 +89,25 @@ export class AutoActivityCreator {
 	}
 
 	private resolveActivityPath(raw: string): string {
-		let path = raw.endsWith('.md') ? raw.slice(0, -3) : raw;
+		// Strip a trailing #heading or #^block reference — [[Note#Section]] refers
+		// to Note.md, not a literal file named "Note#Section.md".
+		const hashIndex = raw.indexOf('#');
+		let path = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
+		path = path.endsWith('.md') ? path.slice(0, -3) : path;
 		if (!path.includes('/')) path = 'Activities/' + path;
 		return path + '.md';
+	}
+
+	/**
+	 * Checks whether a note with this basename already exists anywhere in the
+	 * vault (e.g. it was archived to Archived/YYYY/), not just at the exact
+	 * Activities/ path. Prevents re-creating a blank stub for an already-archived
+	 * activity when an old mention of it is reprocessed.
+	 */
+	private fileExistsAnywhere(app: AppLike, path: string): boolean {
+		if (app.vault.getAbstractFileByPath(path)) return true;
+		const basename = path.slice(path.lastIndexOf('/') + 1);
+		return app.vault.getFiles().some(f => f.name === basename);
 	}
 
 	private async createActivityFile(

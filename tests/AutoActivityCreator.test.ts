@@ -4,16 +4,23 @@ const TODAY = new Date().toISOString().slice(0, 10);
 
 function makeApp(opts: {
 	existingPaths?: string[];
+	otherVaultPaths?: string[]; // files that exist elsewhere in the vault (e.g. Archived/), not at the exact checked path
 	createMock?: jest.Mock;
 	createFolderMock?: jest.Mock;
 }) {
 	const existing = new Set(opts.existingPaths ?? []);
+	const allPaths = [...existing, ...(opts.otherVaultPaths ?? [])];
 	const create = opts.createMock ?? jest.fn().mockResolvedValue({});
 	const createFolder = opts.createFolderMock ?? jest.fn().mockResolvedValue(undefined);
 
 	return {
 		vault: {
 			getAbstractFileByPath: jest.fn((path: string) => existing.has(path) ? { path } : null),
+			getFiles: jest.fn(() => allPaths.map(path => ({
+				path,
+				name: path.slice(path.lastIndexOf('/') + 1),
+				basename: path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, ''),
+			}))),
 			create,
 			createFolder,
 		},
@@ -189,5 +196,53 @@ describe('AutoActivityCreator', () => {
 		await creator.createMissingFromContent(app, content, TODAY, 'inbox');
 
 		expect(createMock).toHaveBeenCalledTimes(1);
+	});
+
+	// Regression: [[Note#Heading]] must resolve to Note.md, not a literal "Note#Heading.md" file
+	it('strips a #heading fragment from the link target', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ createMock });
+
+		await creator.createMissingFromContent(app, '[[MyObsidian#Artifacts|Roadmap]]', TODAY, 'inbox');
+
+		expect(createMock).toHaveBeenCalledWith('Activities/MyObsidian.md', expect.any(String));
+	});
+
+	// Regression: even malformed links with a literal ".md" before the heading fragment
+	// must not produce a "Name.md#Heading.md" file.
+	it('strips a #heading fragment even when the target also contains a literal .md', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ createMock });
+
+		await creator.createMissingFromContent(
+			app, '[[Activities/MyObsidian.md#Artifacts|Roadmap]]', TODAY, 'inbox'
+		);
+
+		expect(createMock).toHaveBeenCalledWith('Activities/MyObsidian.md', expect.any(String));
+	});
+
+	// Regression: heading link is skipped when the target note already exists
+	it('skips a #heading link when the target file already exists', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ existingPaths: ['Activities/MyObsidian.md'], createMock });
+
+		await creator.createMissingFromContent(app, '[[MyObsidian#Artifacts|Roadmap]]', TODAY, 'inbox');
+
+		expect(createMock).not.toHaveBeenCalled();
+	});
+
+	// Regression: don't recreate a stub for an activity that was archived elsewhere in the vault
+	it('does not recreate an activity already archived under a different folder', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({
+			otherVaultPaths: ['Archived/2026/Roommate threat model.md'],
+			createMock,
+		});
+
+		await creator.createMissingFromContent(
+			app, '[[Roommate threat model]]', TODAY, 'inbox'
+		);
+
+		expect(createMock).not.toHaveBeenCalled();
 	});
 });
