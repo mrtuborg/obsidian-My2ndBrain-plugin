@@ -87,10 +87,22 @@ export class ProjectDescriptionInjector {
 		const journalStart = lines.findIndex(l => /^## Journal\s*$/.test(l));
 
 		if (descStart !== -1) {
-			// Find where ## Description ends
+			// Find where ## Description ends. Only the note's own structural
+			// markers count as a boundary — NOT any "## " line, because injected
+			// project description content frequently contains its own embedded
+			// headings (e.g. pasted runbooks/docs with "## Starting the server").
+			// Matching on any "## " here truncated the old description after its
+			// first embedded heading and left the remainder as orphaned body
+			// content, which then got a fresh copy prepended on every re-run —
+			// causing unbounded duplication (see Activities/monitor.md, which
+			// grew to 2.48MB in 8 days from this bug).
 			let descEnd = lines.length;
 			for (let i = descStart + 1; i < lines.length; i++) {
-				if (/^## /.test(lines[i]!) || /^----\s*$/.test(lines[i]!)) {
+				if (
+					/^----\s*$/.test(lines[i]!) ||
+					/^## Journal\s*$/.test(lines[i]!) ||
+					/^## Artifacts\s*$/.test(lines[i]!)
+				) {
 					descEnd = i;
 					break;
 				}
