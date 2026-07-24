@@ -11,7 +11,6 @@ export interface PluginSettings {
 	autoProcessOnOpen: boolean;
 	removeScriptsFromDailyNotes: boolean;
 	syncGraceSeconds: number;
-	vacationMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -24,7 +23,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	autoProcessOnOpen: true,
 	removeScriptsFromDailyNotes: true,
 	syncGraceSeconds: 5,
-	vacationMode: false,
 };
 
 export class TwoBrainSettingsTab extends PluginSettingTab {
@@ -121,16 +119,6 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.removeScriptsFromDailyNotes)
 				.onChange(async (value) => {
 					this.plugin.settings.removeScriptsFromDailyNotes = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName("Vacation mode")
-			.setDesc("Hide Activities tagged `context: work` in their frontmatter from the daily note's Activities section. Personal activities keep showing up. Toggle off when you're back. Also available as the \"2ndBrain: Toggle vacation mode\" command.")
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.vacationMode)
-				.onChange(async (value) => {
-					this.plugin.settings.vacationMode = value;
 					await this.plugin.saveSettings();
 				}));
 	}

@@ -13,7 +13,6 @@ function makeActivityContent(opts: {
 	type?: string;
 	remind?: string;
 	priority?: string;
-	context?: string;
 	journalTasks?: string[];
 	doneTasks?: string[];
 }): string {
@@ -23,7 +22,6 @@ function makeActivityContent(opts: {
 		type,
 		remind = 'daily',
 		priority = 'medium',
-		context,
 		journalTasks = [],
 		doneTasks = [],
 	} = opts;
@@ -35,7 +33,6 @@ function makeActivityContent(opts: {
 		...(type ? [`type: ${type}`] : []),
 		`remind: ${remind}`,
 		`priority: ${priority}`,
-		...(context ? [`context: ${context}`] : []),
 		'---',
 		'',
 		'## Description',
@@ -258,64 +255,5 @@ describe('ActivitiesInProgress', () => {
 		expect(app.metadataCache).toBeUndefined();
 		const result = await aip.run(app, '');
 		expect(result).toContain('Task');
-	});
-
-	// Vacation mode: work activities hidden, personal ones still shown
-	describe('vacation mode', () => {
-		it('shows work-context activities when vacation mode is off (default)', async () => {
-			const aipDefault = new ActivitiesInProgress();
-			const app = makeApp([{
-				path: 'Activities/work-thing.md',
-				content: makeActivityContent({ stage: 'doing', startDate: PAST, context: 'work', journalTasks: ['Ship feature'] }),
-			}]);
-
-			const result = await aipDefault.run(app, '');
-			expect(result).toContain('work-thing');
-		});
-
-		it('hides work-context activities when vacation mode is on', async () => {
-			const aipVacation = new ActivitiesInProgress({
-				activitiesFolder: 'Activities',
-				archiveFolder: 'Activities/Archive',
-				vacationMode: true,
-			});
-			const app = makeApp([{
-				path: 'Activities/work-thing.md',
-				content: makeActivityContent({ stage: 'doing', startDate: PAST, context: 'work', journalTasks: ['Ship feature'] }),
-			}]);
-
-			const result = await aipVacation.run(app, '');
-			expect(result).not.toContain('work-thing');
-		});
-
-		it('still shows personal (no context) activities when vacation mode is on', async () => {
-			const aipVacation = new ActivitiesInProgress({
-				activitiesFolder: 'Activities',
-				archiveFolder: 'Activities/Archive',
-				vacationMode: true,
-			});
-			const app = makeApp([{
-				path: 'Activities/personal-thing.md',
-				content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Buy groceries'] }),
-			}]);
-
-			const result = await aipVacation.run(app, '');
-			expect(result).toContain('personal-thing');
-		});
-
-		it('is case-insensitive when matching the work context', async () => {
-			const aipVacation = new ActivitiesInProgress({
-				activitiesFolder: 'Activities',
-				archiveFolder: 'Activities/Archive',
-				vacationMode: true,
-			});
-			const app = makeApp([{
-				path: 'Activities/work-thing.md',
-				content: makeActivityContent({ stage: 'doing', startDate: PAST, context: 'Work', journalTasks: ['Ship feature'] }),
-			}]);
-
-			const result = await aipVacation.run(app, '');
-			expect(result).not.toContain('work-thing');
-		});
 	});
 });

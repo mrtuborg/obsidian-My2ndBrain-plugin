@@ -13,20 +13,6 @@ export default class TwoBrainPlugin extends Plugin {
 		this.addSettingTab(new TwoBrainSettingsTab(this.app, this));
 		this.rebuildComposers();
 
-		this.addCommand({
-			id: 'toggle-vacation-mode',
-			name: 'Toggle vacation mode',
-			callback: async () => {
-				this.settings.vacationMode = !this.settings.vacationMode;
-				await this.saveSettings();
-				new Notice(
-					this.settings.vacationMode
-						? '2ndBrain: Vacation mode ON — work activities hidden from daily notes'
-						: '2ndBrain: Vacation mode OFF — all activities visible again'
-				);
-			},
-		});
-
 		this.registerEvent(
 			this.app.workspace.on('file-open', async (file) => {
 				if (!file) return;
@@ -43,7 +29,6 @@ export default class TwoBrainPlugin extends Plugin {
 			activitiesFolder: settings.activitiesFolder,
 			archiveFolder: settings.archiveFolder,
 			syncGraceSeconds: settings.syncGraceSeconds,
-			vacationMode: settings.vacationMode,
 		};
 		this.activityComposer = new ActivityComposer(composerSettings);
 		this.dailyNoteComposer = new DailyNoteComposer(composerSettings);
@@ -84,6 +69,5 @@ export default class TwoBrainPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		this.rebuildComposers();
 	}
 }

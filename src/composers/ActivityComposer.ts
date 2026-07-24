@@ -11,9 +11,6 @@ export interface ComposerSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
 	syncGraceSeconds?: number;
-	// When true, Activities with `context: work` in frontmatter are hidden
-	// from the daily note's Activities section (e.g. during vacation).
-	vacationMode?: boolean;
 }
 
 const STANDARD_FIELDS = new Set(['startDate', 'stage', 'responsible', 'type', 'project']);
