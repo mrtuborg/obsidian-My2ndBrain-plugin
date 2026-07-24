@@ -342,6 +342,68 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		expect(saved).toContain('- [ ] Long running task');
 	});
 
+	// Regression: fallback recovery must respect stage, same as the normal build.
+	// Without this, every activity with a qualifying startDate leaked in
+	// regardless of stage (backlog/done/inbox), flooding recovered past notes.
+	it('excludes non-doing activities from startDate-based fallback recovery', async () => {
+		const pastDate = '2026-04-06';
+		const app = makeApp({
+			[`Journal/${pastDate}.md`]: '',
+			'Activities/Long Running.md': [
+				'---',
+				'startDate: 2026-01-01',
+				'stage: doing',
+				'---',
+				'',
+				'## Journal',
+				'',
+				'[[2026-01-01]]',
+				'- [ ] Long running task',
+				'',
+				'----',
+			].join('\n'),
+			'Activities/Backlog Item.md': [
+				'---',
+				'startDate: 2026-01-01',
+				'stage: backlog',
+				'---',
+				'',
+				'## Journal',
+				'',
+				'[[2026-01-01]]',
+				'- [ ] Someday task',
+				'',
+				'----',
+			].join('\n'),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${pastDate}.md`, basename: pastDate });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`)!;
+		expect(saved).toContain('Long Running');
+		expect(saved).not.toContain('Backlog Item');
+	});
+
+	// Size safety guard: an oversized activity file (accumulated pasted content,
+	// no archiving) must be skipped rather than fully read+scanned during
+	// recovery, which reads every activity file in the vault.
+	it('skips an oversized activity during past-note recovery but still recovers others', async () => {
+		const pastDate = '2026-04-06';
+		const oversizedContent = activityWithJournalEntry(pastDate, ['- [ ] Huge task'])
+			+ '\n' + 'x'.repeat(800 * 1024); // 800KB > 720KB cap
+		const app = makeApp({
+			[`Journal/${pastDate}.md`]: '',
+			'Activities/Huge.md': oversizedContent,
+			'Activities/Normal.md': activityWithJournalEntry(pastDate, ['- [ ] Normal task']),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${pastDate}.md`, basename: pastDate });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`)!;
+		expect(saved).not.toContain('Huge task');
+		expect(saved).toContain('Normal task');
+	});
+
 	it('does NOT run recovery on a past note that already has content', async () => {
 		const pastDate = '2026-03-10';
 		const existingContent = [
@@ -388,8 +450,9 @@ describe('sync grace period', () => {
 		let readCount = 0;
 		vault.read = async (file: { path: string }) => {
 			readCount++;
-			if (readCount >= 3 && file.path === path) {
-				// 3rd read (1st = initial load, 2nd = placeholder verify, 3rd = after grace)
+			if (readCount >= 2 && file.path === path) {
+				// 2nd read (1st = initial load, 2nd = the grace-period re-read).
+				// saveFile() itself never calls read(), so the re-read is #2, not #3.
 				return '---\n---\n### 16 [[2026-07|July]] [[2026]]\n#### Week: [[2026-W29|29]]\n\n### Activities:\n----\n##### [[Activities/Test.md|Test]]\n- [ ] some task';
 			}
 			return originalRead(file);
@@ -420,6 +483,34 @@ describe('sync grace period', () => {
 		const saved = (app.vault as MockVault).saves.get(path);
 		expect(saved).toBeDefined();
 		expect(saved).toContain('---\n---');
+	});
+
+	// Regression: the placeholder written before the grace delay gets re-read
+	// (nothing else delivers real content), and must not leak into the final
+	// saved note as a stray trailing "> ⏳ ..." line.
+	it('does not leave the "Building Activities section" placeholder in the final note', async () => {
+		const path = `Journal/${TODAY}.md`;
+		const app = makeApp({ [path]: '' });
+
+		const composer = new DailyNoteComposer(SYNC_SETTINGS);
+		await composer.processDailyNote(app as any, { path, basename: TODAY });
+
+		const saved = (app.vault as MockVault).saves.get(path)!;
+		expect(saved).not.toContain('⏳');
+		expect(saved).not.toContain('Building Activities section');
+	});
+
+	// Same leak, but for the past-note recovery placeholder.
+	it('does not leave the "Recovering from activity history" placeholder in the final note', async () => {
+		const path = `Journal/${YESTERDAY}.md`;
+		const app = makeApp({ [path]: '' });
+
+		const composer = new DailyNoteComposer(SYNC_SETTINGS);
+		await composer.processDailyNote(app as any, { path, basename: YESTERDAY });
+
+		const saved = (app.vault as MockVault).saves.get(path)!;
+		expect(saved).not.toContain('⏳');
+		expect(saved).not.toContain('Recovering from activity history');
 	});
 
 	it('skips grace period when syncGraceSeconds is 0', async () => {

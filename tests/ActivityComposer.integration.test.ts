@@ -280,3 +280,32 @@ describe('ActivityComposer.processActivity', () => {
 		expect(saves.has('Projects/Platform.md')).toBe(false);
 	});
 });
+
+// ── Size safety guard ────────────────────────────────────────────────
+// An activity file that has accumulated too much pasted content (test logs,
+// specs, etc. with no archiving) makes the vault-wide journal/project
+// reparse below expensive enough to crash Obsidian's renderer. processActivity
+// must bail out before doing any of that work.
+describe('ActivityComposer.processActivity — size guard', () => {
+	it('throws and does not save when the activity file is over the size limit', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const oversizedBody = 'x'.repeat(800 * 1024); // 800KB > 720KB cap
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({ journalBody: oversizedBody }),
+		});
+
+		await expect(composer.processActivity(app, { path: ACTIVITY_PATH })).rejects.toThrow(/too large/);
+
+		const saves = (app.vault as MockVault).saves;
+		expect(saves.has(ACTIVITY_PATH)).toBe(false);
+	});
+
+	it('processes normally when the activity file is under the size limit', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({ journalBody: 'Some normal-sized content' }),
+		});
+
+		await expect(composer.processActivity(app, { path: ACTIVITY_PATH })).resolves.not.toThrow();
+	});
+});

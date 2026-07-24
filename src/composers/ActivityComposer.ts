@@ -38,6 +38,17 @@ export class ActivityComposer {
 		const rawContent = await this.fileIO.loadFile(app, file.path);
 		if (rawContent === null) return;
 
+		// Bail out before the expensive vault-wide journal/project parse below —
+		// an oversized activity (accumulated pasted content, no archiving) makes
+		// that full reparse+rewrite costly enough to crash Obsidian's renderer.
+		if (this.fileIO.exceedsSizeLimit(rawContent)) {
+			throw new Error(
+				`Activity ${file.path} is too large to auto-process (` +
+				`${(this.fileIO.byteLength(rawContent) / 1024).toFixed(0)}KB). ` +
+				`Split it into smaller activities or archive old content manually.`
+			);
+		}
+
 		// 2. Parse Standard fields from raw text (never from metadataCache — invariant A.3.1)
 		const startDateRaw = this.fileIO.parseFrontmatterField(rawContent, 'startDate');
 		// Validation: startDate must exist and be YYYY-MM-DD format.

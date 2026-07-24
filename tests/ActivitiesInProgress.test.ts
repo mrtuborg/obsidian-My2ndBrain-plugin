@@ -13,6 +13,7 @@ function makeActivityContent(opts: {
 	type?: string;
 	remind?: string;
 	priority?: string;
+	snoozeUntil?: string;
 	journalTasks?: string[];
 	doneTasks?: string[];
 }): string {
@@ -22,6 +23,7 @@ function makeActivityContent(opts: {
 		type,
 		remind = 'daily',
 		priority = 'medium',
+		snoozeUntil,
 		journalTasks = [],
 		doneTasks = [],
 	} = opts;
@@ -33,6 +35,7 @@ function makeActivityContent(opts: {
 		...(type ? [`type: ${type}`] : []),
 		`remind: ${remind}`,
 		`priority: ${priority}`,
+		...(snoozeUntil ? [`snoozeUntil: ${snoozeUntil}`] : []),
 		'---',
 		'',
 		'## Description',
@@ -255,5 +258,82 @@ describe('ActivitiesInProgress', () => {
 		expect(app.metadataCache).toBeUndefined();
 		const result = await aip.run(app, '');
 		expect(result).toContain('Task');
+	});
+
+	// snoozeUntil: temporary hide independent of `remind` (e.g. for vacation)
+	describe('snoozeUntil', () => {
+		it('hides an activity while today is before snoozeUntil', async () => {
+			const app = makeApp([{
+				path: 'Activities/on-vacation.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, snoozeUntil: FUTURE, journalTasks: ['Ship feature'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).not.toContain('on-vacation');
+		});
+
+		it('shows the activity again once today reaches snoozeUntil', async () => {
+			const app = makeApp([{
+				path: 'Activities/back-from-vacation.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, snoozeUntil: PAST, journalTasks: ['Ship feature'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('back-from-vacation');
+		});
+
+		it('shows the activity normally when snoozeUntil is absent', async () => {
+			const app = makeApp([{
+				path: 'Activities/no-snooze.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('no-snooze');
+		});
+
+		it('does not alter or interact with an independently-set remind value', async () => {
+			const app = makeApp([{
+				path: 'Activities/weekday-task.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: 'weekdays', snoozeUntil: PAST, journalTasks: ['Task'] }),
+			}]);
+
+			// snoozeUntil has passed, so remind's own logic (weekdays) is what still applies
+			const result = await aip.run(app, '');
+			const day = new Date().getDay();
+			const isWeekday = day >= 1 && day <= 5;
+			if (isWeekday) {
+				expect(result).toContain('weekday-task');
+			} else {
+				expect(result).not.toContain('weekday-task');
+			}
+		});
+
+		it('ignores a malformed snoozeUntil value and shows the activity', async () => {
+			const app = makeApp([{
+				path: 'Activities/bad-snooze.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, snoozeUntil: 'not-a-date', journalTasks: ['Task'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('bad-snooze');
+		});
+	});
+
+	// Size safety guard: an oversized activity must be skipped, not read into
+	// the daily note or crash the whole build.
+	describe('size guard', () => {
+		it('skips an oversized activity but still shows others', async () => {
+			const oversized = makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Huge task'] })
+				+ '\n' + 'x'.repeat(800 * 1024); // 800KB > 720KB cap
+			const app = makeApp([
+				{ path: 'Activities/huge.md', content: oversized },
+				{ path: 'Activities/normal.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Normal task'] }) },
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).not.toContain('huge');
+			expect(result).toContain('normal');
+		});
 	});
 });

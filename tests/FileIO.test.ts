@@ -270,4 +270,38 @@ describe('FileIO.saveFile', () => {
 		await io.saveFile(app, 'test.md', '   ');
 		expect(mockModify).not.toHaveBeenCalled();
 	});
+
+	it('refuses to write content over the size safety limit', async () => {
+		const io = new FileIO();
+		const mockModify = jest.fn();
+		const app = {
+			vault: {
+				getAbstractFileByPath: jest.fn().mockReturnValue({ path: 'Activities/huge.md' }),
+				modify: mockModify,
+			},
+			metadataCache: { getFileCache: jest.fn() },
+		} as any;
+
+		const oversized = 'x'.repeat(800 * 1024); // 800KB > 720KB cap
+		await expect(io.saveFile(app, 'Activities/huge.md', oversized)).rejects.toThrow(/safety limit/);
+		expect(mockModify).not.toHaveBeenCalled();
+	});
+});
+
+describe('FileIO.exceedsSizeLimit', () => {
+	it('returns false for content under the default cap', () => {
+		const io = new FileIO();
+		expect(io.exceedsSizeLimit('short content')).toBe(false);
+	});
+
+	it('returns true for content over the default cap', () => {
+		const io = new FileIO();
+		expect(io.exceedsSizeLimit('x'.repeat(800 * 1024))).toBe(true);
+	});
+
+	it('respects a custom limit', () => {
+		const io = new FileIO();
+		expect(io.exceedsSizeLimit('x'.repeat(100), 50)).toBe(true);
+		expect(io.exceedsSizeLimit('x'.repeat(10), 50)).toBe(false);
+	});
 });

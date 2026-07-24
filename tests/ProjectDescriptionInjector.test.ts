@@ -170,6 +170,51 @@ describe('ProjectDescriptionInjector.run', () => {
 		expect(result).toContain('New goal');
 	});
 
+	// PDI-09: regression — old description containing its own embedded "## "
+	// heading (e.g. a pasted runbook) must be fully replaced, not just
+	// truncated at the first embedded heading. Previously this caused the
+	// leftover tail to be preserved as orphaned body content, and every
+	// re-run prepended another fresh copy — unbounded duplication over time
+	// (see Activities/monitor.md, which grew to 2.48MB in 8 days).
+	it('fully replaces old description content that contains its own embedded ## heading', async () => {
+		const activityBody = [
+			'## Description',
+			'',
+			'Old goal text',
+			'',
+			'## Starting the server',
+			'',
+			'Some pasted runbook step that happens to use a level-2 heading',
+			'',
+			'----',
+			'',
+			'## Journal',
+			'',
+			'[[2026-04-04]]',
+			'- [ ] Some task',
+			'',
+			'----',
+		].join('\n');
+
+		const projectContent = [
+			'##### [[Activities/My Project.md|My Project]]',
+			'**New goal**',
+		].join('\n');
+
+		const blocks = makeProjectBlocks('Projects/Platform.md', projectContent);
+		const result = await pdi.run(activityBody, blocks, 'My Project');
+
+		expect(result).toContain('New goal');
+		expect(result).not.toContain('Old goal text');
+		expect(result).not.toContain('Starting the server');
+		expect(result).not.toContain('pasted runbook step');
+		// Description block should appear exactly once, not duplicated
+		expect(result.match(/^## Description\s*$/gm)?.length).toBe(1);
+		// Journal section must be preserved
+		expect(result).toContain('## Journal');
+		expect(result).toContain('- [ ] Some task');
+	});
+
 	// Invariant: ## Journal section is not touched
 	it('preserves ## Journal section unchanged', async () => {
 		const projectContent = [

@@ -46,6 +46,12 @@ export class TodoSyncManager {
 			if (!fileHandle) continue;
 
 			const content = await app.vault.read(fileHandle);
+			// Skip oversized activities here too — don't even hand them to
+			// processActivity (which would throw and abort this whole sync loop).
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity in sync: ${file.path}`);
+				continue;
+			}
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
 			if (stage !== 'doing') continue;
 			const startDate = this.fileIO.parseFrontmatterField(content, 'startDate');

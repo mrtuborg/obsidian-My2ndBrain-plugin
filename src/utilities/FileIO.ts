@@ -6,6 +6,13 @@ const MONTH_NAMES = [
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_STAGES = new Set(['doing', 'backlog', 'done']);
 
+// Safety cap on any file the plugin writes or fully reprocesses. Activity
+// files accumulate pasted content (test logs, specs, etc.) forever with no
+// built-in archiving — past ~1MB, the vault-wide read/parse/rewrite this
+// plugin does on every open becomes expensive enough to crash Obsidian's
+// renderer. 720KB is a soft ceiling well below that danger zone.
+export const MAX_MANAGED_FILE_BYTES = 720 * 1024;
+
 export interface VaultFile {
 	path: string;
 	name: string;
@@ -208,6 +215,18 @@ export class FileIO {
 		return result;
 	}
 
+	/** UTF-8 byte length (not JS string.length) — matters for Cyrillic/emoji-heavy vault content. */
+	byteLength(content: string): number {
+		return typeof Buffer !== 'undefined'
+			? Buffer.byteLength(content, 'utf8')
+			: new TextEncoder().encode(content).length;
+	}
+
+	/** True if content is over the safety ceiling for automated read/rewrite. */
+	exceedsSizeLimit(content: string, limitBytes: number = MAX_MANAGED_FILE_BYTES): boolean {
+		return this.byteLength(content) > limitBytes;
+	}
+
 	async loadFile(app: AppLike, filename: string): Promise<string | null> {
 		const file = app.vault.getAbstractFileByPath(filename);
 		if (!file) {
@@ -219,6 +238,15 @@ export class FileIO {
 
 	async saveFile(app: AppLike, filename: string, content: string): Promise<void> {
 		if (!content || content.trim().length === 0) return;
+
+		// Last-resort guard: never let the plugin itself grow a file past the
+		// safety ceiling, even if an earlier per-composer check was missed.
+		if (this.exceedsSizeLimit(content)) {
+			throw new Error(
+				`Refusing to write ${filename}: content is ${(this.byteLength(content) / 1024).toFixed(0)}KB, ` +
+				`over the ${MAX_MANAGED_FILE_BYTES / 1024}KB safety limit. Split or archive it manually.`
+			);
+		}
 
 		const file = app.vault.getAbstractFileByPath(filename);
 		if (!file) {

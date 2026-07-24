@@ -65,6 +65,13 @@ export class ActivitiesInProgress {
 			// Critical: read from raw file content, NOT metadataCache (invariant B.2.5)
 			const content = await app.vault.read(fileHandle);
 
+			// Skip oversized activities — reading/rendering their bulk into every
+			// daily note isn't worth the memory/perf cost. See MAX_MANAGED_FILE_BYTES.
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity from daily note: ${file.path}`);
+				continue;
+			}
+
 			// Only include explicitly active activities (not planning, inbox, backlog, done, etc.)
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
 			if (stage !== 'doing') continue;
@@ -77,6 +84,12 @@ export class ActivitiesInProgress {
 
 			const remind = this.fileIO.parseFrontmatterField(content, 'remind') ?? 'daily';
 			if (!this.remindAllowsToday(remind)) continue;
+
+			// snoozeUntil: YYYY-MM-DD — independent, temporary hide, e.g. for vacation.
+			// Unlike `remind`, this doesn't change the activity's normal schedule;
+			// it just suppresses it until the given date, then resumes as before.
+			const snoozeUntil = this.fileIO.parseFrontmatterField(content, 'snoozeUntil');
+			if (snoozeUntil && /^\d{4}-\d{2}-\d{2}$/.test(snoozeUntil) && today < snoozeUntil) continue;
 
 			const openTodos = this.extractOpenTodos(content);
 			results.push({ file, content, openTodos });

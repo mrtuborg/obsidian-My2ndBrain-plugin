@@ -92,6 +92,12 @@ export class DailyNoteComposer {
 			cleanedContent = cleanedContent.replace(/<%\*[\s\S]*?%>\s*/g, '').trim();
 		}
 
+		// Strip our own transient "building…" placeholder if it's still there. It's
+		// re-read as real content when the sync-grace re-read (line ~79) finds no
+		// synced version yet — without this it leaks into the final saved note as
+		// a stray trailing line (e.g. "> ⏳ Building Activities section…").
+		cleanedContent = cleanedContent.replace(/^> ⏳ .*$\n?/gm, '').trim();
+
 		// Strip header from content so it's re-added cleanly at the end
 		let pageContent = cleanedContent.replace(header, '').trim();
 		const { dataviewJsBlock, pageContent: bodyContent } = this.fileIO.extractFrontmatterAndDataviewJs(pageContent);
@@ -216,6 +222,10 @@ export class DailyNoteComposer {
 			const handle = app.vault.getAbstractFileByPath(file.path);
 			if (!handle) continue;
 			const content = await app.vault.read(handle);
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity in past-note recovery: ${file.path}`);
+				continue;
+			}
 			if (!content.includes(datePattern)) continue;
 
 			const journalLines = this.extractJournalLines(content);
@@ -244,6 +254,17 @@ export class DailyNoteComposer {
 			const handle = app.vault.getAbstractFileByPath(file.path);
 			if (!handle) continue;
 			const content = await app.vault.read(handle);
+			if (this.fileIO.exceedsSizeLimit(content)) {
+				console.warn(`[2ndBrain] Skipping oversized activity in past-note recovery: ${file.path}`);
+				continue;
+			}
+
+			// Only activities actively "doing" as of the target date — matches the
+			// normal (non-recovery) build's filter. Without this, every activity
+			// with a qualifying startDate leaks in regardless of stage, flooding
+			// recovered past notes with backlog/done/inbox items too.
+			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
+			if (stage !== 'doing') continue;
 
 			const startDate = this.fileIO.parseFrontmatterField(content, 'startDate');
 			if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) continue;
@@ -322,22 +343,16 @@ export class DailyNoteComposer {
 	}
 
 	private async runAutoCreator(app: AppLike, today: string): Promise<void> {
-		// Scan previous journal entry
+		// Only scan what the user actually wrote in yesterday's journal entry.
+		// We intentionally do NOT sweep every file under Projects/ here: project
+		// docs are full of internal cross-references to other documentation
+		// notes (e.g. "[[Security Considerations]]", "[[OpenVPN Setup...]]")
+		// that were never meant to become tracked Activities. Doing so once
+		// created 133 permanent empty "backlog" stub activities from a single
+		// run across ~1,100 project files.
 		const prevJournal = await this.findPreviousJournalContent(app, today);
 		if (prevJournal) {
 			await this.autoCreator.createMissingFromContent(app as any, prevJournal, today, 'inbox');
-		}
-
-		// Scan all project files
-		const projectFiles = app.vault.getFiles().filter((f: { path: string }) =>
-			f.path.startsWith(this.settings.projectsFolder + '/') &&
-			f.path.endsWith('.md')
-		);
-		for (const pf of projectFiles) {
-			const handle = app.vault.getAbstractFileByPath(pf.path);
-			if (!handle) continue;
-			const content = await app.vault.read(handle);
-			await this.autoCreator.createMissingFromContent(app as any, content, today, pf.path);
 		}
 	}
 
