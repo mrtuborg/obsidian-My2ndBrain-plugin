@@ -7,6 +7,9 @@ const ARCHIVE_FOLDER = 'Activities/Archive';
 export interface ActivitiesSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
+	// When true, Activities with `context: work` in frontmatter are hidden
+	// from the Activities section (e.g. during vacation).
+	vacationMode?: boolean;
 }
 
 const TYPE_PRIORITY: Record<string, number> = {
@@ -28,10 +31,12 @@ export class ActivitiesInProgress {
 	private parser = new NoteBlocksParser();
 	private activitiesFolder: string;
 	private archiveFolder: string;
+	private vacationMode: boolean;
 
 	constructor(settings?: ActivitiesSettings) {
 		this.activitiesFolder = settings?.activitiesFolder ?? ACTIVITIES_FOLDER;
 		this.archiveFolder = settings?.archiveFolder ?? ARCHIVE_FOLDER;
+		this.vacationMode = settings?.vacationMode ?? false;
 	}
 
 	async run(app: AppLike, _existingPageContent: string): Promise<string> {
@@ -77,6 +82,12 @@ export class ActivitiesInProgress {
 
 			const remind = this.fileIO.parseFrontmatterField(content, 'remind') ?? 'daily';
 			if (!this.remindAllowsToday(remind)) continue;
+
+			// Vacation mode: hide work activities so personal ones still surface
+			if (this.vacationMode) {
+				const context = this.fileIO.parseFrontmatterField(content, 'context');
+				if (context?.toLowerCase() === 'work') continue;
+			}
 
 			const openTodos = this.extractOpenTodos(content);
 			results.push({ file, content, openTodos });
