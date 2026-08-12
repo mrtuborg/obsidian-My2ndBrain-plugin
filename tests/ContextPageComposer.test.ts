@@ -1,0 +1,198 @@
+import { ContextPageComposer } from '../src/composers/ContextPageComposer';
+
+class MockVault {
+	private files: Map<string, string>;
+	saves: Map<string, string> = new Map();
+
+	constructor(files: Record<string, string>) {
+		this.files = new Map(Object.entries(files));
+	}
+
+	getAbstractFileByPath(path: string) {
+		return this.files.has(path) ? { path } : null;
+	}
+	async read(file: { path: string }) { return this.files.get(file.path) ?? ''; }
+	async modify(file: { path: string }, content: string) {
+		this.saves.set(file.path, content);
+		this.files.set(file.path, content);
+	}
+	async create(path: string, content: string) {
+		this.files.set(path, content);
+		return { path };
+	}
+	async createFolder(_path: string) {}
+	getFiles() {
+		return [...this.files.keys()].map(p => ({
+			path: p,
+			name: p.split('/').pop()!,
+			basename: p.split('/').pop()!.replace('.md', ''),
+		}));
+	}
+}
+
+function makeApp(files: Record<string, string>) {
+	return { vault: new MockVault(files) as any };
+}
+
+const TODAY = new Date().toISOString().slice(0, 10);
+const PAST = '2026-01-01';
+
+const SETTINGS = {
+	journalFolder: 'Journal',
+	projectsFolder: 'Projects',
+	activitiesFolder: 'Activities',
+	archiveFolder: 'Activities/Archive',
+};
+
+function activeActivity(tasks: string[] = ['Open task']): string {
+	return [
+		'---',
+		`startDate: ${PAST}`,
+		'stage: doing',
+		'responsible: [Me]',
+		'priority: medium',
+		'remind: daily',
+		'project: inbox',
+		'---',
+		'',
+		'## Description',
+		'',
+		'----',
+		'',
+		'## Journal',
+		'',
+		...tasks.map(t => `- [ ] ${t}`),
+		'',
+		'----',
+	].join('\n');
+}
+
+function engineerProject(tagId: string): string {
+	return [
+		'---',
+		'role: Engineer',
+		'---',
+		`##### [[Activities/${tagId}.md|${tagId}]]`,
+		'Some description',
+	].join('\n');
+}
+
+describe('ContextPageComposer.processContextPage', () => {
+	it('scaffolds a blank context page with an Activities section', async () => {
+		const composer = new ContextPageComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/Contexts/Engineer/${TODAY}.md`]: '',
+			'Activities/My Project.md': activeActivity(['Fix bug']),
+			'Projects/Widget.md': engineerProject('My Project'),
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/Engineer/${TODAY}.md`, basename: TODAY }, 'Engineer');
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/Contexts/Engineer/${TODAY}.md`)!;
+		expect(saved).toContain('## Activities');
+		expect(saved).toContain('## Notes');
+		expect(saved).toContain('My Project');
+		expect(saved).toContain('Fix bug');
+	});
+
+	it('only includes activities linked to a project with the matching role', async () => {
+		const composer = new ContextPageComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/Contexts/Engineer/${TODAY}.md`]: '',
+			'Activities/Engineer Task.md': activeActivity(['Deploy']),
+			'Projects/Eng Widget.md': engineerProject('Engineer Task'),
+			'Activities/Family Task.md': activeActivity(['Plan trip']),
+			'Projects/Family Widget.md': [
+				'---',
+				'role: Family',
+				'---',
+				'##### [[Activities/Family Task.md|Family Task]]',
+				'desc',
+			].join('\n'),
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/Engineer/${TODAY}.md`, basename: TODAY }, 'Engineer');
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/Contexts/Engineer/${TODAY}.md`)!;
+		expect(saved).toContain('Engineer Task');
+		expect(saved).not.toContain('Family Task');
+	});
+
+	it('preserves freeform ## Notes content across regeneration', async () => {
+		const composer = new ContextPageComposer(SETTINGS);
+		const existing = [
+			'# Engineer — ' + TODAY,
+			'',
+			'## Activities',
+			'',
+			'(stale content)',
+			'',
+			'## Notes',
+			'',
+			'My private musings that must never be touched.',
+		].join('\n');
+
+		const app = makeApp({
+			[`Journal/Contexts/Engineer/${TODAY}.md`]: existing,
+			'Activities/My Project.md': activeActivity(['Fix bug']),
+			'Projects/Widget.md': engineerProject('My Project'),
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/Engineer/${TODAY}.md`, basename: TODAY }, 'Engineer');
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/Contexts/Engineer/${TODAY}.md`)!;
+		expect(saved).not.toContain('(stale content)');
+		expect(saved).toContain('My private musings that must never be touched.');
+		expect(saved).toContain('Fix bug');
+	});
+
+	it('does not regenerate a past context page', async () => {
+		const composer = new ContextPageComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/Contexts/Engineer/${PAST}.md`]: '# Engineer — ' + PAST + '\n\n## Activities\n\nfrozen\n\n## Notes\n',
+			'Activities/My Project.md': activeActivity(['Fix bug']),
+			'Projects/Widget.md': engineerProject('My Project'),
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/Engineer/${PAST}.md`, basename: PAST }, 'Engineer');
+
+		expect((app.vault as MockVault).saves.has(`Journal/Contexts/Engineer/${PAST}.md`)).toBe(false);
+	});
+
+	it('syncs a newly-typed todo into the activity file before regenerating', async () => {
+		const composer = new ContextPageComposer(SETTINGS);
+		const existing = [
+			'# Engineer — ' + TODAY,
+			'',
+			'## Activities',
+			'',
+			'----',
+			'',
+			'### Activities:',
+			'----',
+			'##### [[Activities/My Project.md|My Project]]',
+			'- [ ] Existing task',
+			'----',
+			'',
+			'## Notes',
+			'',
+			'##### [[Activities/My Project.md|My Project]]',
+			'- [ ] Brand new todo typed here today',
+		].join('\n');
+
+		const app = makeApp({
+			[`Journal/Contexts/Engineer/${TODAY}.md`]: existing,
+			'Activities/My Project.md': activeActivity(['Existing task']),
+			'Projects/Widget.md': engineerProject('My Project'),
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/Engineer/${TODAY}.md`, basename: TODAY }, 'Engineer');
+
+		const activitySaved = (app.vault as MockVault).saves.get('Activities/My Project.md')!;
+		expect(activitySaved).toContain('Brand new todo typed here today');
+
+		const pageSaved = (app.vault as MockVault).saves.get(`Journal/Contexts/Engineer/${TODAY}.md`)!;
+		// The freshly-generated Activities section should now reflect the synced todo too
+		expect(pageSaved).toContain('Brand new todo typed here today');
+	});
+});

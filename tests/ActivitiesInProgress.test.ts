@@ -336,4 +336,119 @@ describe('ActivitiesInProgress', () => {
 			expect(result).toContain('normal');
 		});
 	});
+
+	// Role/context split — an activity's role comes from the Project(s) that
+	// reference it via a header block, mirroring ProjectDescriptionInjector's
+	// linkage. run() (daily note) always shows only unrolled activities;
+	// runForRole() (Contexts/<Role>/YYYY-MM-DD.md) shows only that role's.
+	describe('role/context split', () => {
+		function projectFile(path: string, role: string | null, tagId: string): { path: string; content: string } {
+			const lines = ['---'];
+			if (role) lines.push(`role: ${role}`);
+			lines.push('---', `##### [[Activities/${tagId}.md|${tagId}]]`, 'Some description');
+			return { path, content: lines.join('\n') };
+		}
+
+		it('run() hides an activity whose linked project has a role', async () => {
+			const app = makeApp([
+				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', 'Engineer', 'my-project'),
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).toBe('');
+		});
+
+		it('run() always shows an activity with no linked project', async () => {
+			const app = makeApp([
+				{ path: 'Activities/unlinked.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('unlinked');
+		});
+
+		it('run() always shows an activity whose linked project has no role set', async () => {
+			const app = makeApp([
+				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', null, 'my-project'),
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('my-project');
+		});
+
+		it('runForRole() shows an activity whose linked project matches the role', async () => {
+			const app = makeApp([
+				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', 'Engineer', 'my-project'),
+			]);
+
+			const result = await aip.runForRole(app, 'Engineer');
+			expect(result).toContain('my-project');
+		});
+
+		it('runForRole() hides an activity whose linked project has a different role', async () => {
+			const app = makeApp([
+				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', 'Family', 'my-project'),
+			]);
+
+			const result = await aip.runForRole(app, 'Engineer');
+			expect(result).toBe('');
+		});
+
+		it('runForRole() hides an unrolled activity (it belongs in the daily note instead)', async () => {
+			const app = makeApp([
+				{ path: 'Activities/unlinked.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+			]);
+
+			const result = await aip.runForRole(app, 'Engineer');
+			expect(result).toBe('');
+		});
+
+		it('runForRole() omits the redundant "### Activities:" sub-header', async () => {
+			const app = makeApp([
+				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', 'Engineer', 'my-project'),
+			]);
+
+			const result = await aip.runForRole(app, 'Engineer');
+			expect(result).not.toContain('### Activities:');
+			expect(result).toContain('##### [[Activities/my-project.md|my-project]]');
+		});
+
+		it('run() always shows a type:inbox catch-all activity, even if its linked project has a role', async () => {
+			const app = makeApp([
+				{ path: 'Activities/Plan for Today.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, type: 'inbox', journalTasks: ['Task'] }) },
+				projectFile('Projects/2ndbrain-system.md', 'Selfcare', 'Plan for Today'),
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('Plan for Today');
+		});
+
+		it('runForRole() never shows a type:inbox catch-all activity, regardless of its project role', async () => {
+			const app = makeApp([
+				{ path: 'Activities/Plan for Today.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, type: 'inbox', journalTasks: ['Task'] }) },
+				projectFile('Projects/2ndbrain-system.md', 'Selfcare', 'Plan for Today'),
+			]);
+
+			const result = await aip.runForRole(app, 'Selfcare');
+			expect(result).toBe('');
+		});
+
+		it('rolesWithActivities() returns the set of roles that have qualifying activities today', async () => {
+			const app = makeApp([
+				{ path: 'Activities/eng-task.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', 'Engineer', 'eng-task'),
+				{ path: 'Activities/family-task.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+				projectFile('Projects/Home.md', 'Family', 'family-task'),
+				{ path: 'Activities/unlinked.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
+			]);
+
+			const roles = await aip.rolesWithActivities(app);
+			expect(roles).toEqual(new Set(['Engineer', 'Family']));
+		});
+	});
 });

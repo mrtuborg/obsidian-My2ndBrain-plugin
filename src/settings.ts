@@ -1,5 +1,10 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import TwoBrainPlugin from './main';
+import { ROLES, Role } from './roles';
+
+export { ROLES };
+export type { Role };
+
 
 export interface PluginSettings {
 	journalFolder: string;
@@ -11,6 +16,8 @@ export interface PluginSettings {
 	autoProcessOnOpen: boolean;
 	removeScriptsFromDailyNotes: boolean;
 	syncGraceSeconds: number;
+	// Last role picked from the status bar — used only to preselect the picker.
+	currentRole: Role | null;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -23,6 +30,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	autoProcessOnOpen: true,
 	removeScriptsFromDailyNotes: true,
 	syncGraceSeconds: 5,
+	currentRole: null,
 };
 
 export class TwoBrainSettingsTab extends PluginSettingTab {
@@ -40,7 +48,7 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Journal folder")
-			.setDesc("Folder containing daily notes (YYYY-MM-DD.md)")
+			.setDesc("Folder containing daily notes (YYYY-MM-DD.md). Contexts pages (per-role dated pages) always live in a \"Contexts\" subfolder right next to it.")
 			.addText(text => text
 				.setPlaceholder("Journal")
 				.setValue(this.plugin.settings.journalFolder)

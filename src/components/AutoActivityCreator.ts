@@ -55,6 +55,30 @@ export class AutoActivityCreator {
 		}
 	}
 
+	/**
+	 * Populates a blank note (e.g. one Obsidian just created from clicking an
+	 * unresolved wikilink outside the AutoActivityCreator scan path — a link
+	 * typed directly into an Activity/People note, or clicked before the
+	 * Journal pipeline re-ran) with the same default frontmatter used for
+	 * links discovered via createMissingFromContent. No-ops if the file
+	 * already has any content, so it never clobbers real notes.
+	 */
+	async initializeIfEmpty(
+		app: AppLike,
+		path: string,
+		today: string,
+		projectRef: string
+	): Promise<boolean> {
+		const file = app.vault.getAbstractFileByPath(path);
+		if (!file) return false;
+
+		const content = await app.vault.read(file);
+		if (content.trim().length > 0) return false;
+
+		await app.vault.modify(file, this.generateDefaultContent(today, projectRef));
+		return true;
+	}
+
 	// ── Private ──────────────────────────────────────────────────────────────
 
 	private extractMissingPaths(app: AppLike, content: string): string[] {

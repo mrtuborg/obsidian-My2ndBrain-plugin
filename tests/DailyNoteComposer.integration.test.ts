@@ -541,3 +541,54 @@ describe('sync grace period', () => {
 		expect(elapsed).toBeLessThan(200);
 	});
 });
+
+describe('DailyNoteComposer — context page links', () => {
+	it("links today's existing context pages from the daily note on build", async () => {
+		const composer = new DailyNoteComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+			'Activities/My Project.md': activeActivity('My Project', ['Fix crash']),
+			[`Journal/Contexts/Engineer/${TODAY}.md`]: '# Engineer\n\n## Activities\n\n## Notes\n',
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
+		expect(saved).toContain(`[[Journal/Contexts/Engineer/${TODAY}|Engineer]]`);
+	});
+
+	it('does not add a context link line when no context pages exist', async () => {
+		const composer = new DailyNoteComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+			'Activities/My Project.md': activeActivity('My Project', ['Fix crash']),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
+		expect(saved).not.toContain('🧭 Contexts:');
+	});
+
+	it('ensureContextLink adds a link even after the note is already frozen', async () => {
+		const composer = new DailyNoteComposer(SETTINGS);
+		const header = '---\n---\n### 16 [[2026-07|July]]\n#### Week: [[2026-W29|29]]';
+		const frozen = header + '\n\n### Activities:\n----\n';
+		const app = makeApp({
+			[`Journal/${TODAY}.md`]: frozen,
+			[`Journal/Contexts/Family/${TODAY}.md`]: '# Family\n\n## Activities\n\n## Notes\n',
+		});
+
+		// Simulate the real header for TODAY by regenerating via the composer's own FileIO
+		const { FileIO } = require('../src/utilities/FileIO');
+		const realHeader = new FileIO().generateDailyNoteHeader(TODAY);
+		const realFrozen = realHeader + '\n\n### Activities:\n----\n';
+		(app.vault as MockVault as any).files.set(`Journal/${TODAY}.md`, realFrozen);
+
+		await composer.ensureContextLink(app, { path: `Journal/${TODAY}.md`, basename: TODAY }, 'Family');
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
+		expect(saved).toContain(`[[Journal/Contexts/Family/${TODAY}|Family]]`);
+		expect(saved).toContain('### Activities:'); // untouched
+	});
+});

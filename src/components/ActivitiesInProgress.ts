@@ -3,10 +3,12 @@ import { NoteBlocksParser } from './NoteBlocksParser';
 
 const ACTIVITIES_FOLDER = 'Activities';
 const ARCHIVE_FOLDER = 'Activities/Archive';
+const PROJECTS_FOLDER = 'Projects';
 
 export interface ActivitiesSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
+	projectsFolder?: string;
 }
 
 const TYPE_PRIORITY: Record<string, number> = {
@@ -28,28 +30,141 @@ export class ActivitiesInProgress {
 	private parser = new NoteBlocksParser();
 	private activitiesFolder: string;
 	private archiveFolder: string;
+	private projectsFolder: string;
 
 	constructor(settings?: ActivitiesSettings) {
 		this.activitiesFolder = settings?.activitiesFolder ?? ACTIVITIES_FOLDER;
 		this.archiveFolder = settings?.archiveFolder ?? ARCHIVE_FOLDER;
+		this.projectsFolder = settings?.projectsFolder ?? PROJECTS_FOLDER;
 	}
 
+	/**
+	 * Builds the daily note's Activities section: only activities with no
+	 * linked project, or whose linked project has no `role:` set. Role-tagged
+	 * activities live in their Contexts/<Role>/YYYY-MM-DD.md page instead —
+	 * see runForRole().
+	 */
 	async run(app: AppLike, _existingPageContent: string): Promise<string> {
 		const today = this.fileIO.todayDate();
+		const activities = await this.loadEligibleActivities(app, today);
+		if (activities.length === 0) return '';
+
+		const roleByActivity = await this.computeRoles(app, activities);
+		const unrolled = activities.filter(({ file }) => (roleByActivity.get(file.path) ?? []).length === 0);
+		if (unrolled.length === 0) return '';
+
+		return this.renderSection(unrolled);
+	}
+
+	/**
+	 * Builds the Activities section for a single role's Contexts page: only
+	 * activities linked to a Project whose `role:` matches. Used by
+	 * ContextPageComposer to regenerate Contexts/<Role>/YYYY-MM-DD.md. Omits
+	 * the "### Activities:" sub-header — the page's own "## Activities"
+	 * heading already provides that context, so repeating it is redundant.
+	 */
+	async runForRole(app: AppLike, role: string): Promise<string> {
+		const today = this.fileIO.todayDate();
+		const activities = await this.loadEligibleActivities(app, today);
+		if (activities.length === 0) return '';
+
+		const roleByActivity = await this.computeRoles(app, activities);
+		const matched = activities.filter(({ file }) => (roleByActivity.get(file.path) ?? []).includes(role));
+		if (matched.length === 0) return '';
+
+		return this.renderSection(matched, { includeHeader: false });
+	}
+
+	/**
+	 * Returns which roles currently have at least one qualifying activity for
+	 * today. Used to proactively create/refresh only the Contexts pages that
+	 * will actually have content, alongside the daily note build, instead of
+	 * lazily on first visit.
+	 */
+	async rolesWithActivities(app: AppLike): Promise<Set<string>> {
+		const today = this.fileIO.todayDate();
+		const activities = await this.loadEligibleActivities(app, today);
+		if (activities.length === 0) return new Set();
+
+		const roleByActivity = await this.computeRoles(app, activities);
+		const roles = new Set<string>();
+		for (const list of roleByActivity.values()) {
+			for (const role of list) roles.add(role);
+		}
+		return roles;
+	}
+
+	// ── Private ──────────────────────────────────────────────────────────────
+
+	private async loadEligibleActivities(
+		app: AppLike,
+		today: string
+	): Promise<Array<{ file: VaultFile; content: string; openTodos: string[] }>> {
 		const files = app.vault.getFiles().filter(f =>
 			f.path.startsWith(this.activitiesFolder + '/') &&
 			!f.path.startsWith(this.archiveFolder + '/') &&
 			!f.path.startsWith(this.activitiesFolder + '/Workflow/') &&
 			f.path.endsWith('.md')
 		);
-
-		const activities = await this.filterActivities(app, files, today);
-		if (activities.length === 0) return '';
-
-		return this.renderSection(activities);
+		return this.filterActivities(app, files, today);
 	}
 
-	// ── Private ──────────────────────────────────────────────────────────────
+	/**
+	 * Maps each activity's file path to the role(s) of Project(s) that link to
+	 * it (via a Project header block referencing the activity's filename — the
+	 * same linkage ProjectDescriptionInjector uses). An empty array means the
+	 * activity has no linked project, its linked project(s) have no role set,
+	 * or the activity is a generic catch-all bucket (`type: inbox`, e.g.
+	 * "Plan for Today") — those always stay in the daily note regardless of
+	 * any role their container project happens to carry.
+	 */
+	private async computeRoles(
+		app: AppLike,
+		activities: Array<{ file: VaultFile; content: string; openTodos: string[] }>
+	): Promise<Map<string, string[]>> {
+		const projectFiles = app.vault.getFiles().filter(f =>
+			f.path.startsWith(this.projectsFolder + '/') &&
+			f.path.endsWith('.md')
+		);
+
+		const projectBlocks = await this.parser.run(
+			app,
+			projectFiles.map(f => ({ file: f })),
+			null
+		);
+
+		const roleByProject = new Map<string, string>();
+		for (const f of projectFiles) {
+			const handle = app.vault.getAbstractFileByPath(f.path);
+			if (!handle) continue;
+			const content = await app.vault.read(handle);
+			const role = this.fileIO.parseFrontmatterField(content, 'role');
+			if (role) roleByProject.set(f.path, role);
+		}
+
+		const result = new Map<string, string[]>();
+		for (const { file, content } of activities) {
+			const type = this.fileIO.parseFrontmatterField(content, 'type') ?? 'project';
+			if (type === 'inbox') {
+				result.set(file.path, []);
+				continue;
+			}
+
+			const tagId = file.basename;
+			const linkedProjects = new Set<string>();
+			for (const block of projectBlocks.blocks) {
+				if (block.getAttribute('type') === 'header' && block.content.includes(tagId)) {
+					linkedProjects.add(block.page);
+				}
+			}
+
+			const roles = [...linkedProjects]
+				.map(p => roleByProject.get(p))
+				.filter((r): r is string => Boolean(r));
+			result.set(file.path, roles);
+		}
+		return result;
+	}
 
 	private async filterActivities(
 		app: AppLike,
@@ -179,9 +294,13 @@ export class ActivitiesInProgress {
 	}
 
 	private renderSection(
-		activities: Array<{ file: VaultFile; openTodos: string[] }>
+		activities: Array<{ file: VaultFile; openTodos: string[] }>,
+		opts?: { includeHeader?: boolean }
 	): string {
-		const lines: string[] = ['----', '', '### Activities:', '----'];
+		const includeHeader = opts?.includeHeader ?? true;
+		const lines: string[] = includeHeader
+			? ['----', '', '### Activities:', '----']
+			: ['----'];
 
 		for (const { file, openTodos } of activities) {
 			const displayName = file.basename;

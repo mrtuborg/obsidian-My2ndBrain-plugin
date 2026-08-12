@@ -6,6 +6,9 @@ import { AutoActivityCreator } from '../components/AutoActivityCreator';
 import { ScriptsRemove } from '../utilities/ScriptsRemove';
 import { TodoSyncManager } from '../components/TodoSyncManager';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
+import { buildContextLinksLine, upsertContextLinksLine } from '../utilities/ContextLinks';
+import { contextsFolderForNote, matchContextPagePath } from '../utilities/ContextPaths';
+import { ROLES } from '../roles';
 
 export class DailyNoteComposer {
 	private fileIO = new FileIO();
@@ -25,6 +28,7 @@ export class DailyNoteComposer {
 			settings
 		);
 	}
+
 
 	async processDailyNote(
 		app: AppLike,
@@ -106,12 +110,20 @@ export class DailyNoteComposer {
 		// ── Parse journal + project files ONCE ───────────────────────────────
 		// These BlockCollections are shared across todoSyncManager (per-activity processing)
 		// and the daily note's own mentionsProcessor — eliminating O(n_activities) re-parsing.
-		const journalFilePages = app.vault.getFiles()
-			.filter((f: { path: string }) =>
-				f.path.startsWith(this.settings.journalFolder + '/') &&
-				f.path !== file.path
-			)
-			.map((f: { path: string; name: string }) => ({ file: f }));
+		// Contexts pages are included alongside real journal files (deduped by path)
+		// so a todo typed under an activity heading there syncs into that activity too.
+		// Detected structurally (any ".../Contexts/<Role>/YYYY-MM-DD.md" inside the
+		// journal tree) since each daily note's own Contexts folder can sit at a
+		// different depth (e.g. a new dated month folder).
+		const journalFileSet = new Map<string, { path: string; name: string }>();
+		for (const f of app.vault.getFiles()) {
+			const isRealJournalFile = f.path.startsWith(this.settings.journalFolder + '/') && f.path !== file.path;
+			const isContextPage = !!matchContextPagePath(f.path, this.settings.journalFolder, ROLES);
+			if (isRealJournalFile || isContextPage) {
+				journalFileSet.set(f.path, f);
+			}
+		}
+		const journalFilePages = [...journalFileSet.values()].map(f => ({ file: f }));
 
 		const projectFilePages = app.vault.getFiles()
 			.filter((f: { path: string }) =>
@@ -149,6 +161,20 @@ export class DailyNoteComposer {
 			} catch (e) {
 				console.error('[2ndBrain] activitiesInProgress failed:', e);
 			}
+
+			// B.2.5b: link to any context pages that already exist for today —
+			// idempotent, so re-running (or a later manual upsert when a context
+			// page is created after this note was already built) never duplicates.
+			try {
+				const contextsFolder = contextsFolderForNote(file.path);
+				const existingRoles = ROLES.filter(role =>
+					app.vault.getAbstractFileByPath(`${contextsFolder}/${role}/${today}.md`)
+				);
+				const line = buildContextLinksLine(contextsFolder, today, existingRoles);
+				pageContent = upsertContextLinksLine(pageContent, line);
+			} catch (e) {
+				console.error('[2ndBrain] context links failed:', e);
+			}
 		} else if (isFreshPastNote) {
 			// ── Past note recovery ────────────────────────────────────────────
 			// The note was deleted and recreated. Reconstruct what happened on
@@ -180,6 +206,49 @@ export class DailyNoteComposer {
 
 		const combined = parts.join('\n');
 		await this.fileIO.saveFile(app, file.path, combined);
+	}
+
+	/**
+	 * Idempotently adds/updates the "🧭 Contexts:" link line in today's daily
+	 * note for a context page created AFTER the note was already built and
+	 * frozen (see the early-return guard above). Bypasses the freeze
+	 * intentionally — this only ever touches that one line, never the
+	 * Activities section or anything else, so it carries none of the
+	 * data-loss risk a full rebuild would.
+	 */
+	async ensureContextLink(
+		app: AppLike,
+		journalFile: { path: string; basename: string },
+		role: string
+	): Promise<void> {
+		const raw = await this.fileIO.loadFile(app, journalFile.path);
+		if (raw === null) return;
+
+		const header = this.fileIO.generateDailyNoteHeader(journalFile.basename);
+		if (!raw.includes(header)) return; // not yet fully built — next open will pick up the link
+
+		const today = this.fileIO.todayDate();
+		const contextsFolder = contextsFolderForNote(journalFile.path);
+		const rolesPresent = new Set<string>(
+			ROLES.filter(r => !!app.vault.getAbstractFileByPath(`${contextsFolder}/${r}/${today}.md`))
+		);
+		rolesPresent.add(role);
+
+		const line = buildContextLinksLine(contextsFolder, today, [...rolesPresent]);
+		const body = raw.replace(header, '').trim();
+		const updatedBody = upsertContextLinksLine(body, line);
+		if (updatedBody === body) return;
+
+		await this.fileIO.saveFile(app, journalFile.path, [header, updatedBody].join('\n'));
+	}
+
+	/**
+	 * Which roles have at least one qualifying activity today — used by the
+	 * plugin router to proactively create/refresh only the Contexts pages
+	 * that will have content, right after building the daily note.
+	 */
+	async rolesToPrebuild(app: AppLike): Promise<Set<string>> {
+		return this.activitiesIP.rolesWithActivities(app);
 	}
 
 	// ── Private ──────────────────────────────────────────────────────────────
