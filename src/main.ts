@@ -4,7 +4,7 @@ import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
 import { AutoActivityCreator } from './components/AutoActivityCreator';
-import { contextsFolderForNote, matchContextPagePath } from './utilities/ContextPaths';
+import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
 
 const DAILY_NOTE_ITEM = '📓 Daily Note' as const;
 type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
@@ -115,16 +115,16 @@ export default class TwoBrainPlugin extends Plugin {
 	}
 
 	/**
-	 * Creates <today's-daily-note-dir>/Contexts/<role>/<today>.md (and its
-	 * folder) if it doesn't exist yet, and returns the file handle. Shared by
-	 * openTodaysContextPage() (interactive) and the automatic
+	 * Creates <today's-daily-note-dir>/Contexts/<today>-<role>.md (and its
+	 * Contexts folder) if it doesn't exist yet, and returns the file handle.
+	 * Shared by openTodaysContextPage() (interactive) and the automatic
 	 * post-daily-note prebuild step. `dailyNote` anchors where the sibling
 	 * Contexts folder is created — always right next to that specific note.
 	 */
 	private async ensureContextPageFile(role: Role, dailyNote: TFile): Promise<TFile | null> {
 		const today = new Date().toISOString().slice(0, 10);
-		const folderPath = `${contextsFolderForNote(dailyNote.path)}/${role}`;
-		const path = `${folderPath}/${today}.md`;
+		const folderPath = contextsFolderForNote(dailyNote.path);
+		const path = contextPagePath(folderPath, today, role);
 
 		try {
 			if (!this.app.vault.getAbstractFileByPath(folderPath)) {
@@ -161,7 +161,6 @@ export default class TwoBrainPlugin extends Plugin {
 	 * directory anchors where the sibling Contexts folder is created.
 	 */
 	private async prebuildContextPages(dailyNote: TFile): Promise<void> {
-		const today = new Date().toISOString().slice(0, 10);
 		let roles: Set<string>;
 		try {
 			roles = await this.dailyNoteComposer.rolesToPrebuild(this.app as any);
@@ -176,7 +175,7 @@ export default class TwoBrainPlugin extends Plugin {
 				const file = await this.ensureContextPageFile(role as Role, dailyNote);
 				if (!file) continue;
 				await this.contextPageComposer.processContextPage(
-					this.app as any, { path: file.path, basename: today }, role
+					this.app as any, { path: file.path }, role
 				);
 			} catch (e) {
 				console.error(`[2ndBrain] prebuild context page failed for ${role}:`, e);
@@ -230,7 +229,7 @@ export default class TwoBrainPlugin extends Plugin {
 		try {
 			if (contextRole) {
 				await this.contextPageComposer.processContextPage(
-					this.app as any, { path: file.path, basename: file.basename }, contextRole
+					this.app as any, { path: file.path }, contextRole
 				);
 			} else if (isJournal) {
 				// Prebuild context pages first so the daily note's link-line

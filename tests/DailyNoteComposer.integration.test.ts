@@ -548,13 +548,13 @@ describe('DailyNoteComposer — context page links', () => {
 		const app = makeApp({
 			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
 			'Activities/My Project.md': activeActivity('My Project', ['Fix crash']),
-			[`Journal/Contexts/Engineer/${TODAY}.md`]: '# Engineer\n\n## Activities\n\n## Notes\n',
+			[`Journal/Contexts/${TODAY}-Engineer.md`]: '# Engineer\n\n## Activities\n\n## Notes\n',
 		});
 
 		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
-		expect(saved).toContain(`[[Journal/Contexts/Engineer/${TODAY}|Engineer]]`);
+		expect(saved).toContain(`[[Journal/Contexts/${TODAY}-Engineer|Engineer]]`);
 	});
 
 	it("does not echo a context page's own '← Daily Note' backlink back into the daily note", async () => {
@@ -566,9 +566,9 @@ describe('DailyNoteComposer — context page links', () => {
 		const app = makeApp({
 			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
 			'Activities/My Project.md': activeActivity('My Project', ['Fix crash']),
-			[`Journal/Contexts/Engineer/${TODAY}.md`]:
+			[`Journal/Contexts/${TODAY}-Engineer.md`]:
 				`# Engineer — ${TODAY}\n\n[[Journal/${TODAY}|← Daily Note]]\n\n## Activities\n\n## Notes\n`,
-			[`Journal/Contexts/Family/${TODAY}.md`]:
+			[`Journal/Contexts/${TODAY}-Family.md`]:
 				`# Family — ${TODAY}\n\n[[Journal/${TODAY}|← Daily Note]]\n\n## Activities\n\n## Notes\n`,
 		});
 
@@ -597,7 +597,7 @@ describe('DailyNoteComposer — context page links', () => {
 		const frozen = header + '\n\n### Activities:\n----\n';
 		const app = makeApp({
 			[`Journal/${TODAY}.md`]: frozen,
-			[`Journal/Contexts/Family/${TODAY}.md`]: '# Family\n\n## Activities\n\n## Notes\n',
+			[`Journal/Contexts/${TODAY}-Family.md`]: '# Family\n\n## Activities\n\n## Notes\n',
 		});
 
 		// Simulate the real header for TODAY by regenerating via the composer's own FileIO
@@ -609,7 +609,7 @@ describe('DailyNoteComposer — context page links', () => {
 		await composer.ensureContextLink(app, { path: `Journal/${TODAY}.md`, basename: TODAY }, 'Family');
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
-		expect(saved).toContain(`[[Journal/Contexts/Family/${TODAY}|Family]]`);
+		expect(saved).toContain(`[[Journal/Contexts/${TODAY}-Family|Family]]`);
 		expect(saved).toContain('### Activities:'); // untouched
 	});
 });

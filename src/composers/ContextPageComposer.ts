@@ -3,11 +3,11 @@ import { NoteBlocksParser } from '../components/NoteBlocksParser';
 import { ActivitiesInProgress } from '../components/ActivitiesInProgress';
 import { TodoSyncManager } from '../components/TodoSyncManager';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
-import { dirOf, matchContextPagePath } from '../utilities/ContextPaths';
+import { dirOf, matchContextPagePath, parseContextPageFilename } from '../utilities/ContextPaths';
 import { ROLES } from '../roles';
 
 /**
- * Builds/refreshes a Contexts/<Role>/YYYY-MM-DD.md page: a dated, per-role
+ * Builds/refreshes a Contexts/YYYY-MM-DD-<Role>.md page: a dated, per-role
  * satellite of the daily note, living right next to it — wherever that
  * daily note actually is (its own Contexts subfolder, at whatever nesting
  * depth). It holds only that role's active Activities (## Activities,
@@ -16,9 +16,11 @@ import { ROLES } from '../roles';
  * headings) plus a freeform "## Notes" area the user can write into, which
  * is never touched.
  *
- * Because the filename is a plain YYYY-MM-DD (role lives in the folder, not
- * the name), NoteBlocksParser/MentionsProcessor's existing date handling
- * picks it up unmodified — new todos typed here under an existing
+ * The filename bakes the role in alongside the date (not a bare YYYY-MM-DD,
+ * which calendar-style plugins scan for as "today's daily note" from
+ * anywhere in the vault) — see ContextPaths.ts. NoteBlocksParser still
+ * assigns it the 'YYYY-MM-DD' tag (extracted from the filename, not the
+ * whole basename), so new todos typed here under an existing
  * "##### [[Activities/X.md|X]]" heading sync into X's own Journal exactly
  * like they do from the daily note.
  */
@@ -40,13 +42,18 @@ export class ContextPageComposer {
 
 	async processContextPage(
 		app: AppLike,
-		file: { path: string; basename: string },
+		file: { path: string },
 		role: string
 	): Promise<void> {
+		const filename = file.path.split('/').pop()!;
+		const parsed = parseContextPageFilename(filename, ROLES);
+		if (!parsed) return;
+		const { date } = parsed;
+
 		const today = this.fileIO.todayDate();
 		// Only regenerate today's own page — past context pages are a frozen
 		// historical record, same principle as past daily notes.
-		if (file.basename !== today) return;
+		if (date !== today) return;
 
 		// Read BEFORE anything is written, so the journal-blocks scan below
 		// (which may re-read this very file from disk) sees the user's real
@@ -54,17 +61,17 @@ export class ContextPageComposer {
 		let raw = await this.fileIO.loadFile(app, file.path);
 		if (raw === null) return;
 
-		// file.path = "<dailyNoteDir>/Contexts/<Role>/<date>.md"
-		const contextsFolder = dirOf(dirOf(file.path));
+		// file.path = "<dailyNoteDir>/Contexts/<date>-<Role>.md"
+		const contextsFolder = dirOf(file.path);
 		const dailyNoteDir = dirOf(contextsFolder);
-		const dailyNotePath = `${dailyNoteDir}/${file.basename}.md`;
+		const dailyNotePath = `${dailyNoteDir}/${date}.md`;
 
 		if (raw.trim().length === 0) {
-			raw = this.defaultTemplate(role, file.basename, dailyNotePath);
+			raw = this.defaultTemplate(role, date, dailyNotePath);
 		}
 
 		// ── Parse journal-like sources ONCE ──────────────────────────────────
-		// Includes real Journal/YYYY-MM-DD.md files AND every Contexts/*/YYYY-MM-DD.md
+		// Includes real Journal/YYYY-MM-DD.md files AND every Contexts/YYYY-MM-DD-*.md
 		// page (any role, any day it exists, at any nesting depth) — so a todo
 		// typed today under an activity heading here, or in another role's
 		// context page, or in the daily note, all sync into that activity's own

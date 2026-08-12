@@ -8,13 +8,13 @@ describe('ContextLinks', () => {
 
 		it('builds a single wikilink for one role', () => {
 			const line = buildContextLinksLine('Journal/Contexts', '2026-08-12', ['Engineer']);
-			expect(line).toBe('🧭 Contexts: [[Journal/Contexts/Engineer/2026-08-12|Engineer]]');
+			expect(line).toBe('🧭 Contexts: [[Journal/Contexts/2026-08-12-Engineer|Engineer]]');
 		});
 
 		it('joins multiple roles with a middle dot', () => {
 			const line = buildContextLinksLine('Journal/Contexts', '2026-08-12', ['Engineer', 'Family']);
 			expect(line).toBe(
-				'🧭 Contexts: [[Journal/Contexts/Engineer/2026-08-12|Engineer]] · [[Journal/Contexts/Family/2026-08-12|Family]]'
+				'🧭 Contexts: [[Journal/Contexts/2026-08-12-Engineer|Engineer]] · [[Journal/Contexts/2026-08-12-Family|Family]]'
 			);
 		});
 	});

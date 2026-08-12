@@ -229,7 +229,13 @@ export class MentionsProcessor {
 
 	private extractDateKey(page: string): string {
 		const m = page.match(DATE_FILE_RE);
-		return m ? m[1]! : page.replace(/^.*\//, '').replace(/\.md$/, '');
+		if (m) return m[1]!;
+		const basename = page.replace(/^.*\//, '').replace(/\.md$/, '');
+		// A Contexts page's basename is "YYYY-MM-DD-<Role>" (date-prefixed, not
+		// a bare date) — take just the date portion so it groups with the same
+		// day's entries from the real daily note and other journal-like files.
+		const dateMatch = /^(\d{4}-\d{2}-\d{2})/.exec(basename);
+		return dateMatch ? dateMatch[1]! : basename;
 	}
 
 	private parseExistingSections(content: string): Set<string> {

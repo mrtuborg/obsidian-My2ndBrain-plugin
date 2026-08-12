@@ -7,7 +7,7 @@ import { ScriptsRemove } from '../utilities/ScriptsRemove';
 import { TodoSyncManager } from '../components/TodoSyncManager';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
 import { buildContextLinksLine, upsertContextLinksLine } from '../utilities/ContextLinks';
-import { contextsFolderForNote, matchContextPagePath } from '../utilities/ContextPaths';
+import { contextsFolderForNote, matchContextPagePath, contextPagePath } from '../utilities/ContextPaths';
 import { ROLES } from '../roles';
 
 export class DailyNoteComposer {
@@ -183,7 +183,7 @@ export class DailyNoteComposer {
 			try {
 				const contextsFolder = contextsFolderForNote(file.path);
 				const existingRoles = ROLES.filter(role =>
-					app.vault.getAbstractFileByPath(`${contextsFolder}/${role}/${today}.md`)
+					app.vault.getAbstractFileByPath(contextPagePath(contextsFolder, today, role))
 				);
 				const line = buildContextLinksLine(contextsFolder, today, existingRoles);
 				pageContent = upsertContextLinksLine(pageContent, line);
@@ -246,7 +246,7 @@ export class DailyNoteComposer {
 		const today = this.fileIO.todayDate();
 		const contextsFolder = contextsFolderForNote(journalFile.path);
 		const rolesPresent = new Set<string>(
-			ROLES.filter(r => !!app.vault.getAbstractFileByPath(`${contextsFolder}/${r}/${today}.md`))
+			ROLES.filter(r => !!app.vault.getAbstractFileByPath(contextPagePath(contextsFolder, today, r)))
 		);
 		rolesPresent.add(role);
 

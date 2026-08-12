@@ -2,12 +2,12 @@ const MARKER_PREFIX = '🧭 Contexts:';
 
 /**
  * Builds the daily note's "🧭 Contexts:" link line for whichever roles
- * already have a Contexts/<Role>/<date>.md page today. Returns '' if none
+ * already have a Contexts/<date>-<Role>.md page today. Returns '' if none
  * exist yet — callers should treat that as "remove the line if present".
  */
 export function buildContextLinksLine(contextsFolder: string, date: string, roles: string[]): string {
 	if (roles.length === 0) return '';
-	const links = roles.map(role => `[[${contextsFolder}/${role}/${date}|${role}]]`);
+	const links = roles.map(role => `[[${contextsFolder}/${date}-${role}|${role}]]`);
 	return `${MARKER_PREFIX} ${links.join(' · ')}`;
 }
 
