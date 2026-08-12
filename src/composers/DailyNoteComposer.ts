@@ -115,15 +115,19 @@ export class DailyNoteComposer {
 		// Detected structurally (any ".../Contexts/<Role>/YYYY-MM-DD.md" inside the
 		// journal tree) since each daily note's own Contexts folder can sit at a
 		// different depth (e.g. a new dated month folder).
-		const journalFileSet = new Map<string, { path: string; name: string }>();
+		const realJournalFileSet = new Map<string, { path: string; name: string }>();
+		const contextPageFileSet = new Map<string, { path: string; name: string }>();
 		for (const f of app.vault.getFiles()) {
 			const isRealJournalFile = f.path.startsWith(this.settings.journalFolder + '/') && f.path !== file.path;
 			const isContextPage = !!matchContextPagePath(f.path, this.settings.journalFolder, ROLES);
-			if (isRealJournalFile || isContextPage) {
-				journalFileSet.set(f.path, f);
+			if (isContextPage) {
+				contextPageFileSet.set(f.path, f);
+			} else if (isRealJournalFile) {
+				realJournalFileSet.set(f.path, f);
 			}
 		}
-		const journalFilePages = [...journalFileSet.values()].map(f => ({ file: f }));
+		const journalFilePages = [...realJournalFileSet.values(), ...contextPageFileSet.values()]
+			.map(f => ({ file: f }));
 
 		const projectFilePages = app.vault.getFiles()
 			.filter((f: { path: string }) =>
@@ -138,6 +142,17 @@ export class DailyNoteComposer {
 		]);
 
 		const prebuilt: PrebuiltBlocks = { journalBlocks, projectBlocks };
+
+		// A separate parse of ONLY real journal files (no Contexts pages), used
+		// below for the "cross-references from other journal entries" step.
+		// Contexts pages are satellites OF this very daily note (their nav
+		// "← Daily Note" backlink literally embeds today's date), so feeding
+		// them into that scan would echo the backlink straight back into the
+		// note it links from — a self-referential duplicate, not a real
+		// external mention. todoSyncManager/activity parsing above still see
+		// them (journalBlocks, unfiltered) so typed todos still sync.
+		const realJournalOnlyPages = [...realJournalFileSet.values()].map(f => ({ file: f }));
+		const journalOnlyBlocksForMentions = await this.parser.run(app, realJournalOnlyPages, 'YYYY-MM-DD');
 
 		// ── Today-only steps ─────────────────────────────────────────────────
 		if (pageIsToday) {
@@ -189,8 +204,9 @@ export class DailyNoteComposer {
 			}
 		}
 
-		// B.2.6: cross-references from other journal entries (reuse pre-built blocks)
-		const mentions = await this.mentionsProc.run(pageContent, journalBlocks, file.basename);
+		// B.2.6: cross-references from other journal entries. Deliberately
+		// excludes Contexts pages (journalOnlyBlocksForMentions) — see above.
+		const mentions = await this.mentionsProc.run(pageContent, journalOnlyBlocksForMentions, file.basename);
 		if (mentions && mentions.trim().length > 0) pageContent = mentions;
 
 		// B.2.7: remove script block (today only — freeze to static)

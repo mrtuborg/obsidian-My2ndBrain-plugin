@@ -557,6 +557,27 @@ describe('DailyNoteComposer — context page links', () => {
 		expect(saved).toContain(`[[Journal/Contexts/Engineer/${TODAY}|Engineer]]`);
 	});
 
+	it("does not echo a context page's own '← Daily Note' backlink back into the daily note", async () => {
+		// Regression test: a context page's backlink literally embeds today's
+		// date (e.g. "[[Journal/{TODAY}|← Daily Note]]"), which the mentions
+		// cross-ref scan (keyed on today's date) would otherwise mistake for
+		// an external "mention" of today and duplicate straight back in.
+		const composer = new DailyNoteComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+			'Activities/My Project.md': activeActivity('My Project', ['Fix crash']),
+			[`Journal/Contexts/Engineer/${TODAY}.md`]:
+				`# Engineer — ${TODAY}\n\n[[Journal/${TODAY}|← Daily Note]]\n\n## Activities\n\n## Notes\n`,
+			[`Journal/Contexts/Family/${TODAY}.md`]:
+				`# Family — ${TODAY}\n\n[[Journal/${TODAY}|← Daily Note]]\n\n## Activities\n\n## Notes\n`,
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
+		expect(saved).not.toContain('← Daily Note');
+	});
+
 	it('does not add a context link line when no context pages exist', async () => {
 		const composer = new DailyNoteComposer(SETTINGS);
 		const app = makeApp({
