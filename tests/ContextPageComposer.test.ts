@@ -195,4 +195,39 @@ describe('ContextPageComposer.processContextPage', () => {
 		// The freshly-generated Activities section should now reflect the synced todo too
 		expect(pageSaved).toContain('Brand new todo typed here today');
 	});
+
+	it('merges todos from the real daily note and a Context page into the activity, sorted chronologically', async () => {
+		// Regression test for the flat Contexts/YYYY-MM-DD-<Role>.md rename:
+		// extractDateKey() must still pull a clean date out of both a real
+		// daily note's basename ("2026-01-05") and a Context page's
+		// date-prefixed basename ("2026-08-12-Engineer"), so todos typed in
+		// either source land in the activity's Journal on the right date and
+		// in the right chronological order.
+		const composer = new ContextPageComposer(SETTINGS);
+		const EARLIER = '2026-01-05';
+
+		const app = makeApp({
+			[`Journal/${EARLIER}.md`]:
+				'##### [[Activities/My Project.md|My Project]]\n- [ ] Older task from the real daily note',
+			[`Journal/Contexts/${TODAY}-Engineer.md`]:
+				'# Engineer — ' + TODAY + '\n\n## Activities\n\n## Notes\n\n' +
+				'##### [[Activities/My Project.md|My Project]]\n- [ ] Newer task typed in the context page',
+			'Activities/My Project.md': activeActivity([]),
+			'Projects/Widget.md': engineerProject('My Project'),
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/${TODAY}-Engineer.md` }, 'Engineer');
+
+		const activitySaved = (app.vault as MockVault).saves.get('Activities/My Project.md')!;
+		expect(activitySaved).toContain('Older task from the real daily note');
+		expect(activitySaved).toContain('Newer task typed in the context page');
+
+		// Chronological order: the earlier real-daily-note date must appear
+		// (and its todo) before the later context-page date in the Journal.
+		const earlierIdx = activitySaved.indexOf(`[[${EARLIER}]]`);
+		const todayIdx = activitySaved.indexOf(`[[${TODAY}]]`);
+		expect(earlierIdx).toBeGreaterThan(-1);
+		expect(todayIdx).toBeGreaterThan(-1);
+		expect(earlierIdx).toBeLessThan(todayIdx);
+	});
 });
