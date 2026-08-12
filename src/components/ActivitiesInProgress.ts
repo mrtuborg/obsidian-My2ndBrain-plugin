@@ -1,5 +1,6 @@
 import { FileIO, AppLike, VaultFile } from '../utilities/FileIO';
 import { NoteBlocksParser } from './NoteBlocksParser';
+import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
 
 const ACTIVITIES_FOLDER = 'Activities';
 const ARCHIVE_FOLDER = 'Activities/Archive';
@@ -59,9 +60,10 @@ export class ActivitiesInProgress {
 	/**
 	 * Builds the Activities section for a single role's Contexts page: only
 	 * activities linked to a Project whose `role:` matches. Used by
-	 * ContextPageComposer to regenerate Contexts/<Role>/YYYY-MM-DD.md. Omits
-	 * the "### Activities:" sub-header — the page's own "## Activities"
-	 * heading already provides that context, so repeating it is redundant.
+	 * ContextPageComposer to regenerate Contexts/YYYY-MM-DD-<Role>.md. Omits
+	 * the hidden ACTIVITIES_BUILT_MARKER — the page's own "## Activities"
+	 * heading already provides that context, and the marker is only needed
+	 * as a freeze sentinel on the daily note itself.
 	 */
 	async runForRole(app: AppLike, role: string): Promise<string> {
 		const today = this.fileIO.todayDate();
@@ -299,7 +301,7 @@ export class ActivitiesInProgress {
 	): string {
 		const includeHeader = opts?.includeHeader ?? true;
 		const lines: string[] = includeHeader
-			? ['----', '', '### Activities:', '----']
+			? ['----', '', ACTIVITIES_BUILT_MARKER, '----']
 			: ['----'];
 
 		for (const { file, openTodos } of activities) {

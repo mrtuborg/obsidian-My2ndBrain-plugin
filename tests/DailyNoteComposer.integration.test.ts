@@ -1,4 +1,5 @@
 import { DailyNoteComposer } from '../src/composers/DailyNoteComposer';
+import { ACTIVITIES_BUILT_MARKER } from '../src/utilities/ActivitiesMarker';
 
 class MockVault {
 	private files: Map<string, string>;
@@ -97,7 +98,7 @@ describe('DailyNoteComposer.processDailyNote', () => {
 		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
-		expect(saved).toContain('### Activities:');
+		expect(saved).toContain(ACTIVITIES_BUILT_MARKER);
 		expect(saved).toContain('My Project');
 		expect(saved).toContain('- [ ] Fix crash');
 	});
@@ -126,7 +127,7 @@ describe('DailyNoteComposer.processDailyNote', () => {
 		await composer.processDailyNote(app, { path: `Journal/${PAST}.md`, basename: PAST });
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${PAST}.md`)!;
-		expect(saved ?? '').not.toContain('### Activities:');
+		expect(saved ?? '').not.toContain(ACTIVITIES_BUILT_MARKER);
 	});
 
 	// DNC-04: standard header is present
@@ -200,7 +201,8 @@ describe('DailyNoteComposer.processDailyNote', () => {
 		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
 		// Second run on the saved content (which is now static — no dataviewjs)
 		// Note: after first run, dataviewjs is removed so it won't reprocess as "today"
-		const count = ((app.vault as MockVault).saves.get(`Journal/${TODAY}.md`) ?? '').match(/### Activities:/g)?.length ?? 0;
+		const savedTwice = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`) ?? '';
+		const count = savedTwice.split(ACTIVITIES_BUILT_MARKER).length - 1;
 		expect(count).toBe(1);
 	});
 
@@ -264,7 +266,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		await composer.processDailyNote(app, { path: `Journal/${pastDate}.md`, basename: pastDate });
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`)!;
-		expect(saved).toContain('### Activities:');
+		expect(saved).toContain(ACTIVITIES_BUILT_MARKER);
 		expect(saved).toContain('My Project');
 		expect(saved).toContain('- [ ] Fix the WiFi driver');
 		expect(saved).toContain('- [x] Write test plan');
@@ -298,7 +300,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`)!;
 		expect(saved).toContain('---\n---\n###');  // canonical header present
 		// Falls back: My Project startDate=2026-01-01 > pastDate=2025-01-01, so excluded
-		expect(saved).not.toContain('### Activities:');
+		expect(saved).not.toContain(ACTIVITIES_BUILT_MARKER);
 	});
 
 	it('falls back to startDate-based recovery when no state-change entries exist for that date', async () => {
@@ -337,7 +339,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`)!;
 		// Fallback: shows activity because startDate (2026-01-01) ≤ targetDate (2026-04-06)
-		expect(saved).toContain('### Activities:');
+		expect(saved).toContain(ACTIVITIES_BUILT_MARKER);
 		expect(saved).toContain('Long Running');
 		expect(saved).toContain('- [ ] Long running task');
 	});
@@ -411,7 +413,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 			'### 10 [[2026-03|March]] [[2026]]',
 			'#### Week: [[2026-W11|11]]',
 			'----',
-			'### Activities:',
+			ACTIVITIES_BUILT_MARKER,
 			'----',
 			'##### [[Activities/Something.md|Something]]',
 			'----',
@@ -428,7 +430,7 @@ describe('DailyNoteComposer — past note recovery (deleted and recreated)', () 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${pastDate}.md`);
 		// Either not saved at all or saved with same structure (not double-injected)
 		if (saved) {
-			const count = (saved.match(/### Activities:/g) ?? []).length;
+			const count = saved.split(ACTIVITIES_BUILT_MARKER).length - 1;
 			expect(count).toBe(1);
 		}
 	});
@@ -453,7 +455,7 @@ describe('sync grace period', () => {
 			if (readCount >= 2 && file.path === path) {
 				// 2nd read (1st = initial load, 2nd = the grace-period re-read).
 				// saveFile() itself never calls read(), so the re-read is #2, not #3.
-				return '---\n---\n### 16 [[2026-07|July]] [[2026]]\n#### Week: [[2026-W29|29]]\n\n### Activities:\n----\n##### [[Activities/Test.md|Test]]\n- [ ] some task';
+				return `---\n---\n### 16 [[2026-07|July]] [[2026]]\n#### Week: [[2026-W29|29]]\n\n${ACTIVITIES_BUILT_MARKER}\n----\n##### [[Activities/Test.md|Test]]\n- [ ] some task`;
 			}
 			return originalRead(file);
 		};
@@ -467,7 +469,7 @@ describe('sync grace period', () => {
 		expect(saved).toBeDefined();
 		// Should contain only the placeholder, NOT the full Activities section
 		expect(saved).toContain('⏳');
-		expect(saved).not.toContain('### Activities:');
+		expect(saved).not.toContain(ACTIVITIES_BUILT_MARKER);
 	});
 
 	it('proceeds normally when sync does not deliver during grace period', async () => {
@@ -529,7 +531,7 @@ describe('sync grace period', () => {
 
 	it('skips grace period for already-processed notes', async () => {
 		const path = `Journal/${TODAY}.md`;
-		const processedContent = '---\n---\n### 16 [[2026-07|July]]\n\n### Activities:\n----';
+		const processedContent = `---\n---\n### 16 [[2026-07|July]]\n\n${ACTIVITIES_BUILT_MARKER}\n----`;
 		const app = makeApp({ [path]: processedContent });
 
 		const composer = new DailyNoteComposer(SYNC_SETTINGS);
@@ -594,7 +596,7 @@ describe('DailyNoteComposer — context page links', () => {
 	it('ensureContextLink adds a link even after the note is already frozen', async () => {
 		const composer = new DailyNoteComposer(SETTINGS);
 		const header = '---\n---\n### 16 [[2026-07|July]]\n#### Week: [[2026-W29|29]]';
-		const frozen = header + '\n\n### Activities:\n----\n';
+		const frozen = header + '\n\n' + ACTIVITIES_BUILT_MARKER + '\n----\n';
 		const app = makeApp({
 			[`Journal/${TODAY}.md`]: frozen,
 			[`Journal/Contexts/${TODAY}-Family.md`]: '# Family\n\n## Activities\n\n## Notes\n',
@@ -603,13 +605,13 @@ describe('DailyNoteComposer — context page links', () => {
 		// Simulate the real header for TODAY by regenerating via the composer's own FileIO
 		const { FileIO } = require('../src/utilities/FileIO');
 		const realHeader = new FileIO().generateDailyNoteHeader(TODAY);
-		const realFrozen = realHeader + '\n\n### Activities:\n----\n';
+		const realFrozen = realHeader + '\n\n' + ACTIVITIES_BUILT_MARKER + '\n----\n';
 		(app.vault as MockVault as any).files.set(`Journal/${TODAY}.md`, realFrozen);
 
 		await composer.ensureContextLink(app, { path: `Journal/${TODAY}.md`, basename: TODAY }, 'Family');
 
 		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
 		expect(saved).toContain(`[[Journal/Contexts/${TODAY}-Family|Family]]`);
-		expect(saved).toContain('### Activities:'); // untouched
+		expect(saved).toContain(ACTIVITIES_BUILT_MARKER); // untouched
 	});
 });

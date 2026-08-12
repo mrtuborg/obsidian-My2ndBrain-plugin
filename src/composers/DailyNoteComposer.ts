@@ -8,6 +8,7 @@ import { TodoSyncManager } from '../components/TodoSyncManager';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
 import { buildContextLinksLine, upsertContextLinksLine } from '../utilities/ContextLinks';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from '../utilities/ContextPaths';
+import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
 import { ROLES } from '../roles';
 
 export class DailyNoteComposer {
@@ -47,7 +48,7 @@ export class DailyNoteComposer {
 		// If today's note was already fully processed (has Activities section),
 		// treat it as a static frozen record — do not reprocess.
 		// The user can delete the Activities section to force a refresh.
-		if (pageIsToday && existing.includes('### Activities:')) {
+		if (pageIsToday && existing.includes(ACTIVITIES_BUILT_MARKER)) {
 			return;
 		}
 
@@ -83,7 +84,7 @@ export class DailyNoteComposer {
 			const syncedContent = await this.fileIO.loadFile(app, file.path);
 			if (syncedContent === null) return;
 
-			if (syncedContent.includes('### Activities:')) {
+			if (syncedContent.includes(ACTIVITIES_BUILT_MARKER)) {
 				console.log('[2ndBrain] Sync delivered processed daily note, skipping local build.');
 				return;
 			}
@@ -300,7 +301,7 @@ export class DailyNoteComposer {
 		);
 
 		// ── Strategy 1: precise — find state-change entries for targetDate ────
-		const preciseBlocks: string[] = ['----', '', '### Activities:', '----'];
+		const preciseBlocks: string[] = ['----', '', ACTIVITIES_BUILT_MARKER, '----'];
 		let preciseFound = false;
 
 		for (const file of activityFiles) {
@@ -329,7 +330,7 @@ export class DailyNoteComposer {
 		// ── Strategy 2: fallback — show activities active as of targetDate ────
 		// Useful when Journal compaction removed carry-forward entries.
 		// Uses startDate ≤ targetDate as the "was active then" criterion.
-		const fallbackBlocks: string[] = ['----', '', '### Activities:', '----'];
+		const fallbackBlocks: string[] = ['----', '', ACTIVITIES_BUILT_MARKER, '----'];
 		let fallbackFound = false;
 
 		for (const file of activityFiles) {

@@ -8,6 +8,7 @@
 import { ActivitiesInProgress } from '../src/components/ActivitiesInProgress';
 import { TodoSyncManager } from '../src/components/TodoSyncManager';
 import { DailyNoteComposer } from '../src/composers/DailyNoteComposer';
+import { ACTIVITIES_BUILT_MARKER } from '../src/utilities/ActivitiesMarker';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -140,7 +141,7 @@ describe('Settings: DailyNoteComposer passes folder settings to sub-components',
 		await composer.processDailyNote(app, { path: `Notes/${TODAY}.md`, basename: TODAY });
 
 		const saved = app._saves.get(`Notes/${TODAY}.md`)!;
-		expect(saved).toContain('### Activities:');
+		expect(saved).toContain(ACTIVITIES_BUILT_MARKER);
 		expect(saved).toContain('Tasks/my-task.md');
 	});
 

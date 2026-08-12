@@ -1,4 +1,5 @@
 import { ActivitiesInProgress } from '../src/components/ActivitiesInProgress';
+import { ACTIVITIES_BUILT_MARKER } from '../src/utilities/ActivitiesMarker';
 
 // Helper: build a mock vault file object
 function makeFile(path: string): { path: string; name: string; basename: string } {
@@ -182,7 +183,7 @@ describe('ActivitiesInProgress', () => {
 		}]);
 
 		const result = await aip.run(app, '');
-		expect(result).toContain('### Activities:');
+		expect(result).toContain(ACTIVITIES_BUILT_MARKER);
 		expect(result).toContain('##### [[Activities/My Project.md|My Project]]');
 		expect(result).toContain('- [ ] The task');
 	});
@@ -407,14 +408,14 @@ describe('ActivitiesInProgress', () => {
 			expect(result).toBe('');
 		});
 
-		it('runForRole() omits the redundant "### Activities:" sub-header', async () => {
+		it('runForRole() omits the redundant activities-built marker', async () => {
 			const app = makeApp([
 				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Task'] }) },
 				projectFile('Projects/Widget.md', 'Engineer', 'my-project'),
 			]);
 
 			const result = await aip.runForRole(app, 'Engineer');
-			expect(result).not.toContain('### Activities:');
+			expect(result).not.toContain(ACTIVITIES_BUILT_MARKER);
 			expect(result).toContain('##### [[Activities/my-project.md|my-project]]');
 		});
 
