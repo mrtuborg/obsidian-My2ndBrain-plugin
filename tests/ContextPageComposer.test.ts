@@ -230,4 +230,31 @@ describe('ContextPageComposer.processContextPage', () => {
 		expect(todayIdx).toBeGreaterThan(-1);
 		expect(earlierIdx).toBeLessThan(todayIdx);
 	});
+
+	it('auto-creates a brand-new activity typed in the Notes section with this page\'s role pre-filled', async () => {
+		const composer = new ContextPageComposer(SETTINGS);
+		const content = [
+			'# Engineer — ' + TODAY,
+			'',
+			'## Activities',
+			'',
+			'## Notes',
+			'',
+			'##### [[Activities/Brand New Task.md|Brand New Task]]',
+			'- [ ] First todo under it',
+		].join('\n');
+
+		const app = makeApp({
+			[`Journal/Contexts/${TODAY}-Engineer.md`]: content,
+		});
+
+		await composer.processContextPage(app, { path: `Journal/Contexts/${TODAY}-Engineer.md` }, 'Engineer');
+
+		const created = (app.vault as MockVault).saves.get('Activities/Brand New Task.md')
+			?? await (app.vault as any).read({ path: 'Activities/Brand New Task.md' });
+		expect(created).toContain('role: Engineer');
+
+		// It syncs on this same pass too, not needing a second open.
+		expect(created).toContain('First todo under it');
+	});
 });

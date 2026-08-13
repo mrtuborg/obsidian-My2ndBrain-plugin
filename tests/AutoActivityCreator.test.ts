@@ -178,6 +178,30 @@ describe('AutoActivityCreator', () => {
 		expect(content).toContain('## Journal');
 	});
 
+	// Role: created from the plain daily note (no role given) → blank role
+	// field, still present and visible so the user can click in and fill it.
+	it('writes a blank role field when no role is given', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ createMock });
+
+		await creator.createMissingFromContent(app, '[[Activities/New.md]]', TODAY, 'inbox');
+
+		const content: string = createMock.mock.calls[0][1];
+		expect(content).toContain('role: \n');
+	});
+
+	// Role: created from a Contexts/YYYY-MM-DD-<Role>.md page → role
+	// pre-filled with that page's role.
+	it('pre-fills the role field when created from a Context page', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ createMock });
+
+		await creator.createMissingFromContent(app, '[[Activities/New.md]]', TODAY, 'inbox', 'Engineer');
+
+		const content: string = createMock.mock.calls[0][1];
+		expect(content).toContain('role: Engineer');
+	});
+
 	// AAC-11: parent folder created if missing
 	it('creates parent folder before creating the file', async () => {
 		const createMock = jest.fn().mockResolvedValue({});
@@ -324,6 +348,22 @@ describe('AutoActivityCreator', () => {
 
 			expect(result).toBe(false);
 			expect(modifyMock).not.toHaveBeenCalled();
+		});
+
+		// Populating from a Context page link click carries the role through.
+		it('pre-fills role when a role is passed', async () => {
+			const readMock = jest.fn().mockResolvedValue('');
+			const modifyMock = jest.fn().mockResolvedValue(undefined);
+			const app = makeApp({
+				existingPaths: ['Activities/New.md'],
+				readMock,
+				modifyMock,
+			});
+
+			await creator.initializeIfEmpty(app, 'Activities/New.md', TODAY, 'inbox', 'Family');
+
+			const [, content] = modifyMock.mock.calls[0];
+			expect(content).toContain('role: Family');
 		});
 
 		// Missing file entirely → no-op, nothing to initialize.

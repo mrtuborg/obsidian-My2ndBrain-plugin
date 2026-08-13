@@ -15,6 +15,7 @@ function makeActivityContent(opts: {
 	remind?: string;
 	priority?: string;
 	snoozeUntil?: string;
+	role?: string;
 	journalTasks?: string[];
 	doneTasks?: string[];
 }): string {
@@ -25,6 +26,7 @@ function makeActivityContent(opts: {
 		remind = 'daily',
 		priority = 'medium',
 		snoozeUntil,
+		role,
 		journalTasks = [],
 		doneTasks = [],
 	} = opts;
@@ -37,6 +39,7 @@ function makeActivityContent(opts: {
 		`remind: ${remind}`,
 		`priority: ${priority}`,
 		...(snoozeUntil ? [`snoozeUntil: ${snoozeUntil}`] : []),
+		...(role ? [`role: ${role}`] : []),
 		'---',
 		'',
 		'## Description',
@@ -450,6 +453,41 @@ describe('ActivitiesInProgress', () => {
 
 			const roles = await aip.rolesWithActivities(app);
 			expect(roles).toEqual(new Set(['Engineer', 'Family']));
+		});
+
+		it("runForRole() shows an activity using its own role field, with no linked project at all", async () => {
+			const app = makeApp([
+				{ path: 'Activities/solo-task.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, role: 'Family', journalTasks: ['Task'] }) },
+			]);
+
+			const result = await aip.runForRole(app, 'Family');
+			expect(result).toContain('solo-task');
+		});
+
+		it("an activity's own role field takes precedence over its linked project's role", async () => {
+			const app = makeApp([
+				{ path: 'Activities/my-project.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, role: 'Selfcare', journalTasks: ['Task'] }) },
+				projectFile('Projects/Widget.md', 'Engineer', 'my-project'),
+			]);
+
+			// Shows under its own role, not the project's role.
+			const selfcare = await aip.runForRole(app, 'Selfcare');
+			expect(selfcare).toContain('my-project');
+
+			const engineer = await aip.runForRole(app, 'Engineer');
+			expect(engineer).toBe('');
+		});
+
+		it('type: inbox activities stay in the daily note even with their own role field set', async () => {
+			const app = makeApp([
+				{ path: 'Activities/Plan for Today.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, type: 'inbox', role: 'Selfcare', journalTasks: ['Task'] }) },
+			]);
+
+			const result = await aip.runForRole(app, 'Selfcare');
+			expect(result).toBe('');
+
+			const daily = await aip.run(app, '');
+			expect(daily).toContain('Plan for Today');
 		});
 	});
 });

@@ -2,6 +2,7 @@ import { FileIO, AppLike } from '../utilities/FileIO';
 import { NoteBlocksParser } from '../components/NoteBlocksParser';
 import { ActivitiesInProgress } from '../components/ActivitiesInProgress';
 import { TodoSyncManager } from '../components/TodoSyncManager';
+import { AutoActivityCreator } from '../components/AutoActivityCreator';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
 import { dirOf, matchContextPagePath, parseContextPageFilename } from '../utilities/ContextPaths';
 import { ROLES } from '../roles';
@@ -30,6 +31,7 @@ export class ContextPageComposer {
 	private activitiesIP: ActivitiesInProgress;
 	private activityComposer: ActivityComposer;
 	private todoSyncManager: TodoSyncManager;
+	private autoCreator = new AutoActivityCreator();
 
 	constructor(private settings: ComposerSettings) {
 		this.activitiesIP = new ActivitiesInProgress(settings);
@@ -68,6 +70,19 @@ export class ContextPageComposer {
 
 		if (raw.trim().length === 0) {
 			raw = this.defaultTemplate(role, date, dailyNotePath);
+		}
+
+		// Auto-create any Activity a brand-new wikilink here points to, tagged
+		// with THIS page's role — before todoSyncManager runs, so a todo typed
+		// right under it in the same edit syncs in on this very pass instead
+		// of needing a second open. Unlike the daily note's own scan (which
+		// has no role to offer and leaves `role:` blank for the user to fill
+		// in), a Context page IS a role — so the new Activity starts already
+		// correctly bucketed.
+		try {
+			await this.autoCreator.createMissingFromContent(app, raw, today, 'inbox', role);
+		} catch (e) {
+			console.error('[2ndBrain] contextPage autoActivityCreator failed:', e);
 		}
 
 		// ── Parse journal-like sources ONCE ──────────────────────────────────

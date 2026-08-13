@@ -112,13 +112,22 @@ export class ActivitiesInProgress {
 	}
 
 	/**
-	 * Maps each activity's file path to the role(s) of Project(s) that link to
-	 * it (via a Project header block referencing the activity's filename — the
-	 * same linkage ProjectDescriptionInjector uses). An empty array means the
-	 * activity has no linked project, its linked project(s) have no role set,
-	 * or the activity is a generic catch-all bucket (`type: inbox`, e.g.
-	 * "Plan for Today") — those always stay in the daily note regardless of
-	 * any role their container project happens to carry.
+	 * Maps each activity's file path to its role(s). An activity's own
+	 * `role:` frontmatter field is now the source of truth — set directly on
+	 * new activities (AutoActivityCreator scaffolds it blank from the daily
+	 * note, or pre-filled when created from a Contexts/YYYY-MM-DD-<Role>.md
+	 * page). Falls back to the role of a linked Project (via a Project header
+	 * block referencing the activity's filename — the same linkage
+	 * ProjectDescriptionInjector uses) only for older activities that predate
+	 * this field and were never tagged directly — so existing role-tagged
+	 * projects keep working without a manual migration. A Project can span
+	 * many roles across its own activities, so this fallback is necessarily
+	 * a single value per project, while the activity's own field can hold
+	 * whichever role actually applies to that one activity.
+	 *
+	 * An empty array means no role could be determined, or the activity is a
+	 * generic catch-all bucket (`type: inbox`, e.g. "Plan for Today") — those
+	 * always stay in the daily note regardless of any role otherwise implied.
 	 */
 	private async computeRoles(
 		app: AppLike,
@@ -152,6 +161,14 @@ export class ActivitiesInProgress {
 				continue;
 			}
 
+			// 1. The activity's own role, if set — the primary source now.
+			const ownRole = this.fileIO.parseFrontmatterField(content, 'role');
+			if (ownRole) {
+				result.set(file.path, [ownRole]);
+				continue;
+			}
+
+			// 2. Fall back to a linked Project's role (legacy behavior).
 			const tagId = file.basename;
 			const linkedProjects = new Set<string>();
 			for (const block of projectBlocks.blocks) {

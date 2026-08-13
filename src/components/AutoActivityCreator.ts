@@ -42,16 +42,22 @@ export class AutoActivityCreator {
 	/**
 	 * Scans `content` for unresolved wikilinks and creates Activity files for each.
 	 * @param projectRef - "inbox" or "Projects/Name.md" — written into the created file's frontmatter
+	 * @param role - pre-fills the created file's `role:` field (e.g. when the
+	 *   scan runs against a Contexts/YYYY-MM-DD-<Role>.md page, so a brand
+	 *   new activity typed there is already tagged with that role). Omit for
+	 *   an empty `role: ` field the user can fill in by hand — e.g. when the
+	 *   scan runs against the plain daily note, where no role is implied.
 	 */
 	async createMissingFromContent(
 		app: AppLike,
 		content: string,
 		today: string,
-		projectRef: string
+		projectRef: string,
+		role: string = ''
 	): Promise<void> {
 		const missing = this.extractMissingPaths(app, content);
 		for (const path of missing) {
-			await this.createActivityFile(app, path, today, projectRef);
+			await this.createActivityFile(app, path, today, projectRef, role);
 		}
 	}
 
@@ -67,7 +73,8 @@ export class AutoActivityCreator {
 		app: AppLike,
 		path: string,
 		today: string,
-		projectRef: string
+		projectRef: string,
+		role: string = ''
 	): Promise<boolean> {
 		const file = app.vault.getAbstractFileByPath(path);
 		if (!file) return false;
@@ -75,7 +82,7 @@ export class AutoActivityCreator {
 		const content = await app.vault.read(file);
 		if (content.trim().length > 0) return false;
 
-		await app.vault.modify(file, this.generateDefaultContent(today, projectRef));
+		await app.vault.modify(file, this.generateDefaultContent(today, projectRef, role));
 		return true;
 	}
 
@@ -153,7 +160,8 @@ export class AutoActivityCreator {
 		app: AppLike,
 		path: string,
 		today: string,
-		projectRef: string
+		projectRef: string,
+		role: string = ''
 	): Promise<void> {
 		try {
 			const folderPath = path.substring(0, path.lastIndexOf('/'));
@@ -161,7 +169,7 @@ export class AutoActivityCreator {
 				await app.vault.createFolder(folderPath);
 			}
 
-			await app.vault.create(path, this.generateDefaultContent(today, projectRef));
+			await app.vault.create(path, this.generateDefaultContent(today, projectRef, role));
 		} catch (err) {
 			const msg = (err as Error).message ?? '';
 			if (!msg.includes('already exists') && !msg.includes('File already exists')) {
@@ -171,7 +179,15 @@ export class AutoActivityCreator {
 		}
 	}
 
-	private generateDefaultContent(today: string, projectRef: string): string {
+	/**
+	 * `role` is always written — even blank — so the field is visible in
+	 * the frontmatter for the user to click into and fill, rather than
+	 * needing to know to add it themselves. Activities are now the source
+	 * of truth for role (a Project can span many roles across its own
+	 * activities), so this replaces relying solely on the linked Project's
+	 * `role:` field.
+	 */
+	private generateDefaultContent(today: string, projectRef: string, role: string = ''): string {
 		return [
 			'---',
 			`startDate: ${today}`,
@@ -180,6 +196,7 @@ export class AutoActivityCreator {
 			'priority: not-urgent-important',
 			'remind: weekdays',
 			`project: ${projectRef}`,
+			`role: ${role}`,
 			'---',
 			'',
 			'## Description',
