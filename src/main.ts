@@ -255,6 +255,7 @@ export default class TwoBrainPlugin extends Plugin {
 		const isActivity = file.path.startsWith(settings.activitiesFolder + '/') &&
 			!file.path.startsWith(settings.archiveFolder + '/');
 		const isPeople = file.path.startsWith(settings.peopleFolder + '/');
+		const isProject = file.path.startsWith(settings.projectsFolder + '/');
 
 		try {
 			if (contextRole) {
@@ -273,25 +274,77 @@ export default class TwoBrainPlugin extends Plugin {
 					this.app as any, { path: file.path, basename: file.basename }
 				);
 			} else if (isActivity || isPeople) {
-				// A blank file here means Obsidian just created it from an
-				// unresolved wikilink click (native behavior) rather than via
-				// AutoActivityCreator's Journal scan — give it the same
-				// default frontmatter before the composer requires startDate.
-				// Figure out which role (if any) it was linked from, so it
-				// doesn't need a manual role: fill-in when clicked from a
-				// Context page.
-				const linkingRole = await this.findLinkingRole(file.path);
-				await this.autoCreator.initializeIfEmpty(
-					this.app as any, file.path, today, 'inbox', linkingRole
-				);
-				await this.activityComposer.processActivity(
-					this.app as any, { path: file.path }
-				);
+				await this.initializeAndProcessActivity(file.path);
+			} else if (file.extension === 'md' && !isProject) {
+				// Not a daily note, Context page, Activity, People, or Project
+				// note. Most likely a blank stub Obsidian just created from a
+				// bare (un-prefixed) wikilink click, dropped wherever the
+				// vault's "Default location for new notes" setting points
+				// (often the same folder as the note it was clicked from) —
+				// Obsidian decides that placement before this plugin ever
+				// sees the file, so it can land outside Activities/ entirely.
+				// Rescue it: relocate into Activities/ and initialize it like
+				// any other freshly-created activity. Only acts on genuinely
+				// blank notes — a real, populated note living elsewhere is
+				// never touched.
+				await this.rescueStrayNote(file);
 			}
 		} catch (e) {
 			new Notice(`2ndBrain: Error processing ${file.name} — ${(e as Error).message}`);
 			console.error('[2ndBrain]', e);
 		}
+	}
+
+	/**
+	 * Initializes a blank Activity/People file with default frontmatter (if
+	 * it's still empty) — inferring its role from whichever page currently
+	 * links to it, so it doesn't need a manual role: fill-in when linked
+	 * from a Context page — then runs it through the normal composer.
+	 */
+	private async initializeAndProcessActivity(path: string): Promise<void> {
+		const today = new Date().toISOString().slice(0, 10);
+		const linkingRole = await this.findLinkingRole(path);
+		await this.autoCreator.initializeIfEmpty(
+			this.app as any, path, today, 'inbox', linkingRole
+		);
+		await this.activityComposer.processActivity(
+			this.app as any, { path }
+		);
+	}
+
+	/**
+	 * Relocates a blank note that landed outside Activities/People/Journal/
+	 * Contexts/Projects into Activities/, then initializes and processes it
+	 * exactly like a native Activity. No-ops (and never touches the file) if
+	 * it already has real content, or if something already occupies the
+	 * target path — always favors leaving a real note alone over guessing.
+	 */
+	private async rescueStrayNote(file: TFile): Promise<void> {
+		const content = await this.app.vault.read(file);
+		if (content.trim().length > 0) return;
+
+		const targetPath = `${this.settings.activitiesFolder}/${file.basename}.md`;
+		if (targetPath === file.path) return;
+		if (this.app.vault.getAbstractFileByPath(targetPath)) {
+			new Notice(`2ndBrain: Can't rescue "${file.path}" — Activities/${file.basename}.md already exists.`);
+			return;
+		}
+
+		if (!this.app.vault.getAbstractFileByPath(this.settings.activitiesFolder)) {
+			try {
+				await this.app.vault.createFolder(this.settings.activitiesFolder);
+			} catch (e) {
+				const msg = (e as Error).message ?? '';
+				if (!msg.includes('already exists')) throw e;
+			}
+		}
+
+		// renameFile (not vault.rename) updates every other note's links to
+		// this file's old path throughout the vault.
+		await this.app.fileManager.renameFile(file, targetPath);
+		new Notice(`2ndBrain: Moved "${file.path}" → ${targetPath}`);
+
+		await this.initializeAndProcessActivity(targetPath);
 	}
 
 	/** Matches .../Contexts/<Role>/YYYY-MM-DD.md (at any nesting depth) and returns the role, or null. */
