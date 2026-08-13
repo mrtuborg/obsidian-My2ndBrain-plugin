@@ -1,21 +1,21 @@
 import { AppLike, FileIO } from '../utilities/FileIO';
+import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { ProjectsDashboard, DashboardActivity, DashboardProject } from '../components/ProjectsDashboard';
 
 export interface ProjectsDashboardSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
 	projectsFolder: string;
-	dashboardPath: string;
 }
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Obsidian-facing wrapper around ProjectsDashboard: gathers every Activity
  * and every Project from the vault, computes the per-project rollup, and
  * writes the rendered markdown into the dashboard note. Regenerated on
  * every open (see main.ts routeFile) so it's always fresh for a periodic
- * review — never hand-edited, same as a Context page.
+ * review — never hand-edited, same as a Context page. Lives in the
+ * Dashboards folder (see settings.dashboardsFolder), not under Projects/,
+ * so it's never mistaken for a project itself.
  */
 export class ProjectsDashboardComposer {
 	private fileIO = new FileIO();
@@ -31,53 +31,24 @@ export class ProjectsDashboardComposer {
 	}
 
 	async generate(app: AppLike): Promise<string> {
-		const activities = await this.loadActivities(app);
+		const activities: DashboardActivity[] = await loadActivityRecords(
+			app, this.settings.activitiesFolder, this.settings.archiveFolder
+		);
 		const projects = await this.loadProjects(app);
 		const rows = this.dashboard.buildRows(activities, projects);
 		return this.dashboard.render(rows, this.fileIO.todayDate());
 	}
 
-	private async loadActivities(app: AppLike): Promise<DashboardActivity[]> {
-		const { activitiesFolder, archiveFolder } = this.settings;
-		const files = app.vault.getFiles().filter(f =>
-			f.path.startsWith(activitiesFolder + '/') &&
-			!f.path.startsWith(archiveFolder + '/') &&
-			f.path.endsWith('.md')
-		);
-
-		const result: DashboardActivity[] = [];
-		for (const file of files) {
-			const handle = app.vault.getAbstractFileByPath(file.path);
-			if (!handle) continue;
-			const content = await app.vault.read(handle);
-			if (this.fileIO.exceedsSizeLimit(content)) continue;
-
-			const startDateRaw = this.fileIO.parseFrontmatterField(content, 'startDate') ?? '';
-			result.push({
-				path: file.path,
-				displayName: file.basename,
-				project: this.fileIO.parseFrontmatterField(content, 'project') ?? '',
-				role: this.fileIO.parseFrontmatterField(content, 'role') ?? '',
-				stage: this.fileIO.parseFrontmatterField(content, 'stage') ?? '',
-				startDate: DATE_RE.test(startDateRaw) ? startDateRaw : '',
-			});
-		}
-		return result;
-	}
-
 	/**
 	 * A "project" is either a top-level Projects/<slug>.md file, or a
 	 * Projects/<slug>/Project.md inside a project subfolder — mirrors the
-	 * two shapes already used across the vault. The dashboard note itself
-	 * (also a top-level .md under Projects/) is excluded so it never lists
-	 * itself as a project.
+	 * two shapes already used across the vault.
 	 */
 	private async loadProjects(app: AppLike): Promise<DashboardProject[]> {
-		const { projectsFolder, dashboardPath } = this.settings;
+		const { projectsFolder } = this.settings;
 		const files = app.vault.getFiles().filter(f =>
 			f.path.startsWith(projectsFolder + '/') &&
-			f.path.endsWith('.md') &&
-			f.path !== dashboardPath
+			f.path.endsWith('.md')
 		);
 
 		const result: DashboardProject[] = [];

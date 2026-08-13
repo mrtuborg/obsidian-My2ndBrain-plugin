@@ -33,7 +33,6 @@ const SETTINGS = {
 	activitiesFolder: 'Activities',
 	archiveFolder: 'Activities/Archive',
 	projectsFolder: 'Projects',
-	dashboardPath: 'Projects/Dashboard.md',
 };
 
 function activityContent(project: string, stage: string, role = ''): string {
@@ -57,7 +56,6 @@ describe('ProjectsDashboardComposer', () => {
 			'Activities/a2.md': activityContent('roommate', 'doing', 'Engineer'),
 			'Activities/Archive/old.md': activityContent('roommate', 'doing'), // excluded: archived
 			'Projects/roommate.md': '---\nrole: Engineer\n---\n',
-			'Projects/Dashboard.md': '', // must not be treated as its own project
 		});
 		const composer = new ProjectsDashboardComposer(SETTINGS);
 
@@ -66,7 +64,6 @@ describe('ProjectsDashboardComposer', () => {
 		expect(content).toContain('## Engineer');
 		expect(content).toContain('[[Projects/roommate\\|roommate]]');
 		expect(content).toContain('1/2 (50%)');
-		expect(content).not.toContain('[[Projects/Dashboard');
 	});
 
 	it('resolves projects living as Projects/<slug>/Project.md', async () => {
@@ -87,13 +84,13 @@ describe('ProjectsDashboardComposer', () => {
 		const app = makeApp({
 			'Activities/a1.md': activityContent('inbox', 'doing'),
 			'Projects/Inbox.md': '---\nrole: Selfcare\n---\n',
-			'Projects/Dashboard.md': '',
+			'Dashboards/Projects.md': '',
 		});
 		const composer = new ProjectsDashboardComposer(SETTINGS);
 
-		await composer.refresh(app, 'Projects/Dashboard.md');
+		await composer.refresh(app, 'Dashboards/Projects.md');
 
-		const saved = app.vault.saves.get('Projects/Dashboard.md');
+		const saved = app.vault.saves.get('Dashboards/Projects.md');
 		expect(saved).toContain('# Projects Dashboard');
 		expect(saved).toContain('## Selfcare');
 		expect(saved).toContain('[[Projects/Inbox\\|Inbox]]');

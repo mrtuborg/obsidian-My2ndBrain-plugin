@@ -1,4 +1,5 @@
 import { AppLike, FileIO } from '../utilities/FileIO';
+import { loadActivityRecords } from '../utilities/ActivityIndex';
 
 export interface InboxActivitiesSettings {
 	activitiesFolder: string;
@@ -9,7 +10,6 @@ export interface InboxActivitiesSettings {
 const START_MARKER = '<!-- 2ndbrain:inbox-activities:start -->';
 const END_MARKER = '<!-- 2ndbrain:inbox-activities:end -->';
 const EMPTY_MESSAGE = '✅ Все активные Activity приписаны к проектам.';
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 interface InboxEntry {
 	path: string;
@@ -65,33 +65,19 @@ export class InboxActivitiesComposer {
 	}
 
 	private async loadInboxActivities(app: AppLike): Promise<InboxEntry[]> {
-		const { activitiesFolder, archiveFolder } = this.settings;
-		const files = app.vault.getFiles().filter(f =>
-			f.path.startsWith(activitiesFolder + '/') &&
-			!f.path.startsWith(archiveFolder + '/') &&
-			f.path.endsWith('.md')
-		);
+		const records = await loadActivityRecords(app, this.settings.activitiesFolder, this.settings.archiveFolder);
 
 		const entries: InboxEntry[] = [];
-		for (const file of files) {
-			const handle = app.vault.getAbstractFileByPath(file.path);
-			if (!handle) continue;
-			const content = await app.vault.read(handle);
-			if (this.fileIO.exceedsSizeLimit(content)) continue;
-
-			const projectRaw = (this.fileIO.parseFrontmatterField(content, 'project') ?? '').trim();
-			const normalized = projectRaw === '' ? 'inbox' : projectRaw;
+		for (const record of records) {
+			const normalized = record.project === '' ? 'inbox' : record.project;
 			if (normalized.toLowerCase() !== 'inbox') continue;
+			if (record.stage === 'done') continue; // only surface open work, like the old query did
 
-			const stage = this.fileIO.parseFrontmatterField(content, 'stage') ?? '';
-			if (stage === 'done') continue; // only surface open work, like the old query did
-
-			const startDateRaw = this.fileIO.parseFrontmatterField(content, 'startDate') ?? '';
 			entries.push({
-				path: file.path,
-				displayName: file.basename,
-				startDate: DATE_RE.test(startDateRaw) ? startDateRaw : '',
-				priority: this.fileIO.parseFrontmatterField(content, 'priority') ?? '',
+				path: record.path,
+				displayName: record.displayName,
+				startDate: record.startDate,
+				priority: record.priority,
 			});
 		}
 

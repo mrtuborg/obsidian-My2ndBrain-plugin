@@ -4,12 +4,19 @@ import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
 import { ProjectsDashboardComposer } from './composers/ProjectsDashboardComposer';
+import { EisenhowerMatrixComposer } from './composers/EisenhowerMatrixComposer';
 import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
 import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
 
 const DAILY_NOTE_ITEM = '📓 Daily Note' as const;
 type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
+
+const PROJECTS_DASHBOARD_FILENAME = 'Projects.md';
+const EISENHOWER_MATRIX_FILENAME = 'Eisenhower Matrix.md';
+// Where Projects.md itself lived before dashboards got their own folder —
+// migrated in place (preserving links) the first time a dashboard is opened.
+const LEGACY_PROJECTS_DASHBOARD_PATH = 'Projects/Dashboard.md';
 
 class ContextRoleSuggestModal extends FuzzySuggestModal<SwitcherItem> {
 	constructor(private plugin: TwoBrainPlugin) {
@@ -40,6 +47,7 @@ export default class TwoBrainPlugin extends Plugin {
 	private dailyNoteComposer!: DailyNoteComposer;
 	private contextPageComposer!: ContextPageComposer;
 	private projectsDashboardComposer!: ProjectsDashboardComposer;
+	private eisenhowerMatrixComposer!: EisenhowerMatrixComposer;
 	private inboxActivitiesComposer!: InboxActivitiesComposer;
 	private autoCreator = new AutoActivityCreator();
 	private contextStatusBarItem!: HTMLElement;
@@ -66,6 +74,12 @@ export default class TwoBrainPlugin extends Plugin {
 			id: 'open-projects-dashboard',
 			name: 'Open projects dashboard',
 			callback: () => void this.openProjectsDashboard(),
+		});
+
+		this.addCommand({
+			id: 'open-eisenhower-matrix',
+			name: 'Open Eisenhower matrix',
+			callback: () => void this.openEisenhowerMatrix(),
 		});
 
 		this.registerEvent(
@@ -225,7 +239,10 @@ export default class TwoBrainPlugin extends Plugin {
 			activitiesFolder: settings.activitiesFolder,
 			archiveFolder: settings.archiveFolder,
 			projectsFolder: settings.projectsFolder,
-			dashboardPath: settings.dashboardPath,
+		});
+		this.eisenhowerMatrixComposer = new EisenhowerMatrixComposer({
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
 		});
 		this.inboxActivitiesComposer = new InboxActivitiesComposer({
 			activitiesFolder: settings.activitiesFolder,
@@ -234,13 +251,23 @@ export default class TwoBrainPlugin extends Plugin {
 		});
 	}
 
+	private projectsDashboardPath(): string {
+		return `${this.settings.dashboardsFolder}/${PROJECTS_DASHBOARD_FILENAME}`;
+	}
+
+	private eisenhowerMatrixPath(): string {
+		return `${this.settings.dashboardsFolder}/${EISENHOWER_MATRIX_FILENAME}`;
+	}
+
 	/**
-	 * Ensures the dashboard note exists (creating it blank if needed) and
-	 * opens it. The file-open handler then regenerates its content — same
-	 * pattern as Context pages, so it's never stale and never hand-edited.
+	 * Ensures a dashboard note exists at `path` — creating parent folders
+	 * as needed — then opens it. If `legacyPath` is given and still exists
+	 * (pre-Dashboards-folder layout) it's moved into place instead of
+	 * creating a blank file, preserving any existing links to it. The
+	 * file-open handler then regenerates its content, same pattern as
+	 * Context pages, so it's never stale and never hand-edited.
 	 */
-	async openProjectsDashboard(): Promise<void> {
-		const path = this.settings.dashboardPath;
+	private async openDashboard(path: string, legacyPath?: string): Promise<void> {
 		let file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
 		if (!file) {
 			const folder = path.slice(0, path.lastIndexOf('/'));
@@ -252,19 +279,48 @@ export default class TwoBrainPlugin extends Plugin {
 					if (!msg.includes('already exists')) console.error('[2ndBrain]', e);
 				}
 			}
-			try {
-				file = await this.app.vault.create(path, '') as TFile;
-			} catch (e) {
-				const msg = (e as Error).message ?? '';
-				if (!msg.includes('already exists')) {
-					new Notice(`2ndBrain: Could not create ${path} — ${msg}`);
-					console.error('[2ndBrain]', e);
-					return;
+
+			const legacyFile = legacyPath
+				? (this.app.vault.getAbstractFileByPath(legacyPath) as TFile | null)
+				: null;
+			if (legacyFile) {
+				try {
+					await this.app.fileManager.renameFile(legacyFile, path);
+					file = this.app.vault.getAbstractFileByPath(path) as TFile;
+				} catch (e) {
+					console.error('[2ndBrain] Failed to migrate legacy dashboard:', e);
 				}
-				file = this.app.vault.getAbstractFileByPath(path) as TFile;
+			}
+
+			if (!file) {
+				try {
+					file = await this.app.vault.create(path, '') as TFile;
+				} catch (e) {
+					const msg = (e as Error).message ?? '';
+					if (!msg.includes('already exists')) {
+						new Notice(`2ndBrain: Could not create ${path} — ${msg}`);
+						console.error('[2ndBrain]', e);
+						return;
+					}
+					file = this.app.vault.getAbstractFileByPath(path) as TFile;
+				}
 			}
 		}
 		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	/**
+	 * Ensures the projects dashboard note exists (creating it, or migrating
+	 * the pre-Dashboards-folder Projects/Dashboard.md into place, if
+	 * needed) and opens it.
+	 */
+	async openProjectsDashboard(): Promise<void> {
+		await this.openDashboard(this.projectsDashboardPath(), LEGACY_PROJECTS_DASHBOARD_PATH);
+	}
+
+	/** Ensures the Eisenhower Matrix dashboard note exists and opens it. */
+	async openEisenhowerMatrix(): Promise<void> {
+		await this.openDashboard(this.eisenhowerMatrixPath());
 	}
 
 	/**
@@ -310,11 +366,14 @@ export default class TwoBrainPlugin extends Plugin {
 			!file.path.startsWith(settings.archiveFolder + '/');
 		const isPeople = file.path.startsWith(settings.peopleFolder + '/');
 		const isProject = file.path.startsWith(settings.projectsFolder + '/');
-		const isDashboard = file.path === settings.dashboardPath;
+		const isProjectsDashboard = file.path === this.projectsDashboardPath();
+		const isEisenhowerMatrix = file.path === this.eisenhowerMatrixPath();
 
 		try {
-			if (isDashboard) {
+			if (isProjectsDashboard) {
 				await this.projectsDashboardComposer.refresh(this.app as any, file.path);
+			} else if (isEisenhowerMatrix) {
+				await this.eisenhowerMatrixComposer.refresh(this.app as any, file.path);
 			} else if (contextRole) {
 				await this.contextPageComposer.processContextPage(
 					this.app as any, { path: file.path }, contextRole
