@@ -295,6 +295,30 @@ describe('AutoActivityCreator', () => {
 		expect(createMock).not.toHaveBeenCalled();
 	});
 
+	describe('contentLinksTo', () => {
+		it('detects a link to the target path via a full-path wikilink', () => {
+			expect(
+				creator.contentLinksTo('##### [[Activities/My Task.md|My Task]]', 'Activities/My Task.md')
+			).toBe(true);
+		});
+
+		it('detects a link to the target path via a bare-name wikilink', () => {
+			expect(
+				creator.contentLinksTo('[[My Task]]', 'Activities/My Task.md')
+			).toBe(true);
+		});
+
+		it('returns false when no link resolves to the target path', () => {
+			expect(
+				creator.contentLinksTo('[[Some Other Task]]', 'Activities/My Task.md')
+			).toBe(false);
+		});
+
+		it('returns false for empty content', () => {
+			expect(creator.contentLinksTo('', 'Activities/My Task.md')).toBe(false);
+		});
+	});
+
 	describe('initializeIfEmpty', () => {
 		// Blank file (e.g. Obsidian's native "create note from link click")
 		// gets the same default frontmatter as AutoActivityCreator-made stubs.

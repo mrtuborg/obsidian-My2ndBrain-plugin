@@ -213,6 +213,36 @@ export default class TwoBrainPlugin extends Plugin {
 		this.contextPageComposer = new ContextPageComposer(composerSettings);
 	}
 
+	/**
+	 * Infers which role (if any) a brand-new Activity/People file should be
+	 * tagged with, by checking whether today's plain daily note or any of
+	 * today's Contexts/YYYY-MM-DD-<Role>.md pages currently link to it.
+	 * Needed because Obsidian's native "create note from an unresolved link
+	 * click" flow opens the newly-created target file directly — routeFile
+	 * has no other way to know which page the link was actually clicked
+	 * from. Returns '' (blank, for manual fill-in) when the link was typed
+	 * in the plain daily note, or no matching page is found.
+	 */
+	private async findLinkingRole(targetPath: string): Promise<string> {
+		const dailyNote = this.findTodaysDailyNoteFile();
+		if (!dailyNote) return '';
+
+		try {
+			const folderPath = contextsFolderForNote(dailyNote.path);
+			const today = new Date().toISOString().slice(0, 10);
+			for (const role of ROLES) {
+				const path = contextPagePath(folderPath, today, role);
+				const file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+				if (!file) continue;
+				const content = await this.app.vault.read(file);
+				if (this.autoCreator.contentLinksTo(content, targetPath)) return role;
+			}
+		} catch (e) {
+			console.error('[2ndBrain] findLinkingRole failed:', e);
+		}
+		return '';
+	}
+
 	private async routeFile(file: TFile) {
 		if (!this.settings.autoProcessOnOpen) return;
 
@@ -247,8 +277,12 @@ export default class TwoBrainPlugin extends Plugin {
 				// unresolved wikilink click (native behavior) rather than via
 				// AutoActivityCreator's Journal scan — give it the same
 				// default frontmatter before the composer requires startDate.
+				// Figure out which role (if any) it was linked from, so it
+				// doesn't need a manual role: fill-in when clicked from a
+				// Context page.
+				const linkingRole = await this.findLinkingRole(file.path);
 				await this.autoCreator.initializeIfEmpty(
-					this.app as any, file.path, today, 'inbox'
+					this.app as any, file.path, today, 'inbox', linkingRole
 				);
 				await this.activityComposer.processActivity(
 					this.app as any, { path: file.path }

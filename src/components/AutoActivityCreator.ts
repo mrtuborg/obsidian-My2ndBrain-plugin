@@ -86,6 +86,28 @@ export class AutoActivityCreator {
 		return true;
 	}
 
+	/**
+	 * Checks whether `content` contains a wikilink resolving to `targetPath`
+	 * (e.g. "Activities/Foo.md"). Used to infer which role a brand-new
+	 * activity should get when Obsidian's native "create note from an
+	 * unresolved link click" flow fires — that flow opens the newly-created
+	 * target file directly, so by the time it's routed we've lost track of
+	 * which page (plain daily note vs. a role's Context page) the link was
+	 * actually clicked from. Scanning candidate pages' on-disk content for a
+	 * link to this exact path recovers that context.
+	 */
+	contentLinksTo(content: string, targetPath: string): boolean {
+		const cleanedContent = stripCodeBlocks(content).replace(/!\[\[[^\]]*\]\]/g, '');
+		let m: RegExpExecArray | null;
+		const re = new RegExp(WIKILINK_RE.source, 'g');
+		while ((m = re.exec(cleanedContent)) !== null) {
+			const raw = m[1]!.trim();
+			if (!raw || !isValidWikiTarget(raw)) continue;
+			if (this.resolveActivityPath(raw) === targetPath) return true;
+		}
+		return false;
+	}
+
 	// ── Private ──────────────────────────────────────────────────────────────
 
 	private extractMissingPaths(app: AppLike, content: string): string[] {
