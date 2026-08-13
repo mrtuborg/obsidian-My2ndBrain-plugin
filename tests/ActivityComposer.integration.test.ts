@@ -189,6 +189,48 @@ describe('ActivityComposer.processActivity', () => {
 		expect(saved).toContain('wiki: ""');
 	});
 
+	// Regression: project was declared a "standard" field but never actually
+	// threaded through to the rewritten frontmatter, so it silently vanished
+	// from every activity on every save.
+	it('preserves the project field across processing', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({}), // fixture includes "project: inbox"
+		});
+
+		await composer.processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = (app.vault as MockVault).saves.get(ACTIVITY_PATH)!;
+		expect(saved).toContain('project: inbox');
+	});
+
+	// Regression: role must survive processing too, and stay visible even
+	// when blank, so a newly-created activity's empty role: field isn't
+	// stripped the moment it's first opened/processed.
+	it('preserves a set role field across processing', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({ extraFields: 'role: Engineer' }),
+		});
+
+		await composer.processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = (app.vault as MockVault).saves.get(ACTIVITY_PATH)!;
+		expect(saved).toContain('role: Engineer');
+	});
+
+	it('keeps a blank role field visible (not stripped) across processing', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({ extraFields: 'role: ' }),
+		});
+
+		await composer.processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = (app.vault as MockVault).saves.get(ACTIVITY_PATH)!;
+		expect(saved).toContain('role: ');
+	});
+
 	// AC-06: ## Description populated from Projects/
 	it('populates ## Description from project file', async () => {
 		const composer = new ActivityComposer(SETTINGS);

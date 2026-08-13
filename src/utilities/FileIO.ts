@@ -48,7 +48,9 @@ export class FileIO {
 		stage: string,
 		responsible: string | string[],
 		type: string | null = null,
-		extraFields: Record<string, unknown> = {}
+		extraFields: Record<string, unknown> = {},
+		project: string = '',
+		role: string = ''
 	): string {
 		// Validate date
 		if (!DATE_RE.test(date) || isNaN(Date.parse(date))) {
@@ -69,6 +71,15 @@ export class FileIO {
 		const lines = ['---', `startDate: ${date}`, `stage: ${stage}`];
 		if (type && typeof type === 'string') lines.push(`type: ${type}`);
 		lines.push(`responsible: [${responsible.join(', ')}]`);
+		// project/role are always written, even blank — unlike arbitrary
+		// "extra" fields below (which are dropped when empty), these are
+		// meant to stay visible in every activity so the user can click in
+		// and assign them (e.g. a brand-new activity scaffolded with an
+		// empty role: for manual fill-in). Previously project was silently
+		// dropped by every save because it was never actually threaded
+		// through here — this restores it.
+		lines.push(`project: ${project}`);
+		lines.push(`role: ${role}`);
 
 		// Extra fields — skip empty strings
 		for (const [key, val] of Object.entries(extraFields)) {

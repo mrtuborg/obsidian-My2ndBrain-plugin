@@ -13,7 +13,7 @@ export interface ComposerSettings {
 	syncGraceSeconds?: number;
 }
 
-const STANDARD_FIELDS = new Set(['startDate', 'stage', 'responsible', 'type', 'project']);
+const STANDARD_FIELDS = new Set(['startDate', 'stage', 'responsible', 'type', 'project', 'role']);
 
 export interface PrebuiltBlocks {
 	journalBlocks: BlockCollection;
@@ -68,12 +68,17 @@ export class ActivityComposer {
 			? respRaw.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean)
 			: [respRaw];
 		const type      = this.fileIO.parseFrontmatterField(rawContent, 'type') ?? null;
+		// project/role are preserved as-is (falling back to blank rather than
+		// null) so they always round-trip through generateActivityHeader,
+		// even when unset — see its own comment for why that matters.
+		const project   = this.fileIO.parseFrontmatterField(rawContent, 'project') ?? '';
+		const role      = this.fileIO.parseFrontmatterField(rawContent, 'role') ?? '';
 
 		// Extra fields must be preserved unchanged (invariant A.1.6)
 		const extraFields = this.fileIO.parseExtraFrontmatterFields(rawContent, STANDARD_FIELDS);
 
 		// 3. Build frontmatter object for directive mutations
-		const frontmatterObj: Record<string, unknown> = { startDate, stage, responsible, type };
+		const frontmatterObj: Record<string, unknown> = { startDate, stage, responsible, type, project, role };
 
 		// 4. Extract content sections
 		const { dataviewJsBlock, pageContent } = this.fileIO.extractFrontmatterAndDataviewJs(rawContent);
@@ -116,8 +121,10 @@ export class ActivityComposer {
 		// 10. Rebuild frontmatter (with mutated Standard fields + preserved Extra fields)
 		const updatedStage     = (frontmatterObj['stage'] as string) ?? stage;
 		const updatedStartDate = (frontmatterObj['startDate'] as string) ?? startDate;
+		const updatedProject   = (frontmatterObj['project'] as string) ?? project;
+		const updatedRole      = (frontmatterObj['role'] as string) ?? role;
 		const newFrontmatter = this.fileIO.generateActivityHeader(
-			updatedStartDate, updatedStage, responsible, type, extraFields
+			updatedStartDate, updatedStage, responsible, type, extraFields, updatedProject, updatedRole
 		);
 
 		// 11. Compose and save
