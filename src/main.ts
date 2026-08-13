@@ -3,6 +3,7 @@ import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab, ROLES, Role } fr
 import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
+import { ProjectsDashboardComposer } from './composers/ProjectsDashboardComposer';
 import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
 
@@ -37,6 +38,7 @@ export default class TwoBrainPlugin extends Plugin {
 	private activityComposer!: ActivityComposer;
 	private dailyNoteComposer!: DailyNoteComposer;
 	private contextPageComposer!: ContextPageComposer;
+	private projectsDashboardComposer!: ProjectsDashboardComposer;
 	private autoCreator = new AutoActivityCreator();
 	private contextStatusBarItem!: HTMLElement;
 
@@ -56,6 +58,12 @@ export default class TwoBrainPlugin extends Plugin {
 			id: 'open-context-page',
 			name: "Open today's context page…",
 			callback: () => new ContextRoleSuggestModal(this).open(),
+		});
+
+		this.addCommand({
+			id: 'open-projects-dashboard',
+			name: 'Open projects dashboard',
+			callback: () => void this.openProjectsDashboard(),
 		});
 
 		this.registerEvent(
@@ -211,6 +219,45 @@ export default class TwoBrainPlugin extends Plugin {
 		this.activityComposer = new ActivityComposer(composerSettings);
 		this.dailyNoteComposer = new DailyNoteComposer(composerSettings);
 		this.contextPageComposer = new ContextPageComposer(composerSettings);
+		this.projectsDashboardComposer = new ProjectsDashboardComposer({
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
+			projectsFolder: settings.projectsFolder,
+			dashboardPath: settings.dashboardPath,
+		});
+	}
+
+	/**
+	 * Ensures the dashboard note exists (creating it blank if needed) and
+	 * opens it. The file-open handler then regenerates its content — same
+	 * pattern as Context pages, so it's never stale and never hand-edited.
+	 */
+	async openProjectsDashboard(): Promise<void> {
+		const path = this.settings.dashboardPath;
+		let file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+		if (!file) {
+			const folder = path.slice(0, path.lastIndexOf('/'));
+			if (folder && !this.app.vault.getAbstractFileByPath(folder)) {
+				try {
+					await this.app.vault.createFolder(folder);
+				} catch (e) {
+					const msg = (e as Error).message ?? '';
+					if (!msg.includes('already exists')) console.error('[2ndBrain]', e);
+				}
+			}
+			try {
+				file = await this.app.vault.create(path, '') as TFile;
+			} catch (e) {
+				const msg = (e as Error).message ?? '';
+				if (!msg.includes('already exists')) {
+					new Notice(`2ndBrain: Could not create ${path} — ${msg}`);
+					console.error('[2ndBrain]', e);
+					return;
+				}
+				file = this.app.vault.getAbstractFileByPath(path) as TFile;
+			}
+		}
+		await this.app.workspace.getLeaf(false).openFile(file);
 	}
 
 	/**
@@ -256,9 +303,12 @@ export default class TwoBrainPlugin extends Plugin {
 			!file.path.startsWith(settings.archiveFolder + '/');
 		const isPeople = file.path.startsWith(settings.peopleFolder + '/');
 		const isProject = file.path.startsWith(settings.projectsFolder + '/');
+		const isDashboard = file.path === settings.dashboardPath;
 
 		try {
-			if (contextRole) {
+			if (isDashboard) {
+				await this.projectsDashboardComposer.refresh(this.app as any, file.path);
+			} else if (contextRole) {
 				await this.contextPageComposer.processContextPage(
 					this.app as any, { path: file.path }, contextRole
 				);

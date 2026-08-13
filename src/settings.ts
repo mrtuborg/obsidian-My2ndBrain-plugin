@@ -12,6 +12,7 @@ export interface PluginSettings {
 	archiveFolder: string;
 	peopleFolder: string;
 	projectsFolder: string;
+	dashboardPath: string;
 	dateFormat: string;
 	autoProcessOnOpen: boolean;
 	removeScriptsFromDailyNotes: boolean;
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	archiveFolder: 'Activities/Archive',
 	peopleFolder: 'People',
 	projectsFolder: 'Projects',
+	dashboardPath: 'Projects/Dashboard.md',
 	dateFormat: 'YYYY-MM-DD',
 	autoProcessOnOpen: true,
 	removeScriptsFromDailyNotes: true,
@@ -95,6 +97,17 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.projectsFolder)
 				.onChange(async (value) => {
 					this.plugin.settings.projectsFolder = value || DEFAULT_SETTINGS.projectsFolder;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Dashboard file path")
+			.setDesc("Note that shows a per-project rollup (done/total, open dates) across all Activities, for periodic review. Regenerated every time you open it.")
+			.addText(text => text
+				.setPlaceholder("Projects/Dashboard.md")
+				.setValue(this.plugin.settings.dashboardPath)
+				.onChange(async (value) => {
+					this.plugin.settings.dashboardPath = value || DEFAULT_SETTINGS.dashboardPath;
 					await this.plugin.saveSettings();
 				}));
 
