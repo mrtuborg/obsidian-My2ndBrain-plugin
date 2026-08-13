@@ -4,6 +4,7 @@ import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
 import { ProjectsDashboardComposer } from './composers/ProjectsDashboardComposer';
+import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
 import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
 
@@ -39,6 +40,7 @@ export default class TwoBrainPlugin extends Plugin {
 	private dailyNoteComposer!: DailyNoteComposer;
 	private contextPageComposer!: ContextPageComposer;
 	private projectsDashboardComposer!: ProjectsDashboardComposer;
+	private inboxActivitiesComposer!: InboxActivitiesComposer;
 	private autoCreator = new AutoActivityCreator();
 	private contextStatusBarItem!: HTMLElement;
 
@@ -225,6 +227,11 @@ export default class TwoBrainPlugin extends Plugin {
 			projectsFolder: settings.projectsFolder,
 			dashboardPath: settings.dashboardPath,
 		});
+		this.inboxActivitiesComposer = new InboxActivitiesComposer({
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
+			projectsFolder: settings.projectsFolder,
+		});
 	}
 
 	/**
@@ -325,6 +332,11 @@ export default class TwoBrainPlugin extends Plugin {
 				);
 			} else if (isActivity || isPeople) {
 				await this.initializeAndProcessActivity(file.path);
+			} else if (isProject) {
+				// No-ops for every Project file except the vault's canonical
+				// "Inbox" one — see InboxActivitiesComposer for why only
+				// Inbox needs an auto-generated activity list.
+				await this.inboxActivitiesComposer.processProjectFile(this.app as any, file.path);
 			} else if (file.extension === 'md' && !isProject) {
 				// Not a daily note, Context page, Activity, People, or Project
 				// note. Most likely a blank stub Obsidian just created from a
