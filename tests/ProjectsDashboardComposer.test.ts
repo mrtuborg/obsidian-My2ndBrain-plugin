@@ -86,6 +86,7 @@ describe('ProjectsDashboardComposer', () => {
 	it('refresh() writes the generated content back into the dashboard file', async () => {
 		const app = makeApp({
 			'Activities/a1.md': activityContent('inbox', 'doing'),
+			'Projects/Inbox.md': '---\nrole: Selfcare\n---\n',
 			'Projects/Dashboard.md': '',
 		});
 		const composer = new ProjectsDashboardComposer(SETTINGS);
@@ -94,6 +95,7 @@ describe('ProjectsDashboardComposer', () => {
 
 		const saved = app.vault.saves.get('Projects/Dashboard.md');
 		expect(saved).toContain('# Projects Dashboard');
-		expect(saved).toContain('(unassigned)');
+		expect(saved).toContain('## Selfcare');
+		expect(saved).toContain('[[Projects/Inbox\\|Inbox]]');
 	});
 });

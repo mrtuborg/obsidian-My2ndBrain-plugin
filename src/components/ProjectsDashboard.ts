@@ -5,7 +5,11 @@
  * takes plain data in, returns markdown out.
  */
 
-export const UNASSIGNED = '(unassigned)';
+// Blank `project:` and `project: inbox` both mean "not yet organized into a
+// real project" — the vault already has a dedicated Projects/Inbox.md for
+// exactly this, so both normalize to this slug and get matched to that real
+// project below (case-insensitively), rather than a synthetic bucket.
+const INBOX_SLUG = 'inbox';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface DashboardActivity {
@@ -45,7 +49,11 @@ export class ProjectsDashboard {
 
 	buildRows(activities: DashboardActivity[], projects: DashboardProject[]): ProjectDashboardRow[] {
 		const projectBySlug = new Map<string, DashboardProject>();
-		for (const p of projects) projectBySlug.set(p.slug, p);
+		const realSlugByLower = new Map<string, string>();
+		for (const p of projects) {
+			projectBySlug.set(p.slug, p);
+			realSlugByLower.set(p.slug.toLowerCase(), p.slug);
+		}
 
 		const groups = new Map<string, DashboardActivity[]>();
 		// Seed a group for every known project, even with zero activities —
@@ -54,7 +62,11 @@ export class ProjectsDashboard {
 
 		for (const activity of activities) {
 			const raw = activity.project.trim();
-			const key = (!raw || raw.toLowerCase() === 'inbox') ? UNASSIGNED : raw;
+			const normalized = raw === '' ? INBOX_SLUG : raw;
+			// Case-insensitively fold into a real project's canonical slug when
+			// one exists (e.g. "inbox" -> the actual "Inbox" project file), so
+			// it shows up as that project rather than a lookalike duplicate row.
+			const key = realSlugByLower.get(normalized.toLowerCase()) ?? normalized;
 			if (!groups.has(key)) groups.set(key, []);
 			groups.get(key)!.push(activity);
 		}
@@ -78,9 +90,7 @@ export class ProjectsDashboard {
 			const oldestOpenDate = openDates.length ? openDates.reduce((a, b) => (a < b ? a : b)) : '';
 			const latestDate = allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : '';
 
-			const role = project?.role
-				|| this.mostCommonRole(groupActivities)
-				|| (slug === UNASSIGNED ? '' : '');
+			const role = project?.role || this.mostCommonRole(groupActivities);
 
 			rows.push({
 				slug,
@@ -97,10 +107,6 @@ export class ProjectsDashboard {
 		}
 
 		rows.sort((a, b) => {
-			// Unassigned bucket always last, regardless of role.
-			if (a.slug === UNASSIGNED && b.slug !== UNASSIGNED) return 1;
-			if (b.slug === UNASSIGNED && a.slug !== UNASSIGNED) return -1;
-
 			const roleA = a.role || '\uffff';
 			const roleB = b.role || '\uffff';
 			if (roleA !== roleB) return roleA.localeCompare(roleB);
@@ -127,7 +133,7 @@ export class ProjectsDashboard {
 
 		let currentRole: string | null = null;
 		for (const row of rows) {
-			const roleHeading = row.slug === UNASSIGNED ? UNASSIGNED : (row.role || '(no role)');
+			const roleHeading = row.role || '(no role)';
 			if (roleHeading !== currentRole) {
 				currentRole = roleHeading;
 				lines.push(`## ${roleHeading}`);
@@ -139,9 +145,7 @@ export class ProjectsDashboard {
 			// Escape the pipe inside the wikilink alias so it doesn't get parsed
 			// as a markdown table column delimiter.
 			const linkPath = row.path ? row.path.replace(/\.md$/, '') : null;
-			const name = row.slug === UNASSIGNED
-				? `_${UNASSIGNED}_`
-				: (linkPath ? `[[${linkPath}\\|${row.slug}]]` : row.slug);
+			const name = linkPath ? `[[${linkPath}\\|${row.slug}]]` : row.slug;
 			const progress = `${row.done}/${row.total} (${row.percentDone}%)`;
 
 			lines.push(`| ${name} | ${progress} | ${row.doing} | ${row.backlog} | ${row.oldestOpenDate || '—'} | ${row.latestDate || '—'} |`);

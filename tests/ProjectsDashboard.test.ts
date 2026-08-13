@@ -1,4 +1,4 @@
-import { ProjectsDashboard, DashboardActivity, DashboardProject, UNASSIGNED } from '../src/components/ProjectsDashboard';
+import { ProjectsDashboard, DashboardActivity, DashboardProject } from '../src/components/ProjectsDashboard';
 
 function activity(overrides: Partial<DashboardActivity> = {}): DashboardActivity {
 	return {
@@ -43,18 +43,25 @@ describe('ProjectsDashboard.buildRows', () => {
 		});
 	});
 
-	it('buckets blank and "inbox" project values into UNASSIGNED', () => {
+	it('folds blank and "inbox" (any case) project values into the real Inbox project', () => {
 		const dashboard = new ProjectsDashboard();
 		const activities = [
 			activity({ project: '' }),
 			activity({ project: 'inbox' }),
 			activity({ project: 'Inbox' }),
 		];
-		const rows = dashboard.buildRows(activities, []);
+		const rows = dashboard.buildRows(activities, [project({ slug: 'Inbox', path: 'Projects/Inbox.md', role: 'Selfcare' })]);
 
 		expect(rows).toHaveLength(1);
-		expect(rows[0]!.slug).toBe(UNASSIGNED);
-		expect(rows[0]!.total).toBe(3);
+		expect(rows[0]).toMatchObject({ slug: 'Inbox', path: 'Projects/Inbox.md', role: 'Selfcare', total: 3 });
+	});
+
+	it('falls back to a bare "inbox" row (no path) when no Inbox project file exists', () => {
+		const dashboard = new ProjectsDashboard();
+		const rows = dashboard.buildRows([activity({ project: '' })], []);
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ slug: 'inbox', path: null, total: 1 });
 	});
 
 	it('includes known projects with zero activities (surfaces dormant projects)', () => {
@@ -102,7 +109,7 @@ describe('ProjectsDashboard.buildRows', () => {
 		expect(rows[0]!.latestDate).toBe('');
 	});
 
-	it('sorts UNASSIGNED last regardless of role, and by role then ascending percentDone otherwise', () => {
+	it('sorts by role then ascending percentDone, with unmatched projects sorted the same way', () => {
 		const dashboard = new ProjectsDashboard();
 		const rows = dashboard.buildRows(
 			[
@@ -117,7 +124,9 @@ describe('ProjectsDashboard.buildRows', () => {
 			]
 		);
 		const slugs = rows.map(r => r.slug);
-		expect(slugs).toEqual(['behind', 'far-along', UNASSIGNED]);
+		// "inbox" has no matching project file here, so it falls back to a
+		// bare, roleless row — roleless rows sort after any role is known.
+		expect(slugs).toEqual(['behind', 'far-along', 'inbox']);
 	});
 });
 
