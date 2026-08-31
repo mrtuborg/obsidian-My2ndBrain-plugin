@@ -1,4 +1,4 @@
-import { EisenhowerMatrixComposer } from '../src/composers/EisenhowerMatrixComposer';
+import { EisenhowerMatrixComposer, MATRIX_CODE_BLOCK_LANG } from '../src/composers/EisenhowerMatrixComposer';
 
 class MockVault {
 	private files: Map<string, string>;
@@ -66,7 +66,9 @@ describe('EisenhowerMatrixComposer', () => {
 		expect(content).not.toContain('[[Activities/Archive/old');
 	});
 
-	it('refresh() writes the generated content back into the matrix file', async () => {
+	// The matrix is a live view now: refresh() installs the code block that the
+	// plugin renders buttons into, rather than baking in a static table.
+	it('refresh() installs the live-view code block into an empty matrix file', async () => {
 		const app = makeApp({
 			'Activities/a1.md': activityContent('backlog', 'not-urgent-important'),
 			'Dashboards/Eisenhower Matrix.md': '',
@@ -77,6 +79,19 @@ describe('EisenhowerMatrixComposer', () => {
 
 		const saved = app.vault.saves.get('Dashboards/Eisenhower Matrix.md');
 		expect(saved).toContain('# Eisenhower Matrix');
-		expect(saved).toContain('[[Activities/a1\\|a1]]');
+		expect(saved).toContain('```' + MATRIX_CODE_BLOCK_LANG);
+	});
+
+	it('refresh() leaves a matrix note that already has the code block untouched', async () => {
+		const existing = ['# Eisenhower Matrix', '', '```' + MATRIX_CODE_BLOCK_LANG, '```', ''].join('\n');
+		const app = makeApp({
+			'Activities/a1.md': activityContent('doing', 'urgent-important'),
+			'Dashboards/Eisenhower Matrix.md': existing,
+		});
+		const composer = new EisenhowerMatrixComposer(SETTINGS);
+
+		await composer.refresh(app, 'Dashboards/Eisenhower Matrix.md');
+
+		expect(app.vault.saves.has('Dashboards/Eisenhower Matrix.md')).toBe(false);
 	});
 });

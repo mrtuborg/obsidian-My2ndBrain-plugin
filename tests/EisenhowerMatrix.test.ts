@@ -9,6 +9,10 @@ function activity(overrides: Partial<MatrixActivity> = {}): MatrixActivity {
 		stage: 'doing',
 		startDate: '2026-01-01',
 		priority: '',
+		takeToWork: false,
+		takeToWorkDate: '',
+		remind: '',
+		snoozeUntil: '',
 		...overrides,
 	};
 }
@@ -101,5 +105,59 @@ describe('EisenhowerMatrix.render', () => {
 		const output = matrix.render(matrix.buildQuadrants([]), '2026-01-15');
 
 		expect(output).toContain('No open activities found');
+	});
+});
+
+describe('EisenhowerMatrix takeToWork and scheduling', () => {
+	const TODAY = '2026-08-31'; // a Monday
+
+	function firstQuadrant(activities: MatrixActivity[]) {
+		return new EisenhowerMatrix()
+			.buildQuadrants(activities, TODAY)
+			.find(q => q.key === 'urgent-important')!;
+	}
+
+	it('hides an activity that is still snoozed', () => {
+		const q = firstQuadrant([
+			activity({ path: 'Activities/snoozed.md', displayName: 'snoozed', priority: 'urgent-important', snoozeUntil: '2099-01-01' }),
+			activity({ path: 'Activities/visible.md', displayName: 'visible', priority: 'urgent-important' }),
+		]);
+		expect(q.activities.map(a => a.displayName)).toEqual(['visible']);
+	});
+
+	it('hides an activity whose remind schedule excludes today', () => {
+		const q = firstQuadrant([
+			activity({ path: 'Activities/weekend.md', displayName: 'weekend', priority: 'urgent-important', remind: 'weekends' }),
+			activity({ path: 'Activities/weekday.md', displayName: 'weekday', priority: 'urgent-important', remind: 'weekdays' }),
+		]);
+		expect(q.activities.map(a => a.displayName)).toEqual(['weekday']);
+	});
+
+	it('puts activities already taken to work first', () => {
+		const q = firstQuadrant([
+			activity({ path: 'Activities/zzz.md', displayName: 'zzz', priority: 'urgent-important', takeToWork: true }),
+			activity({ path: 'Activities/aaa.md', displayName: 'aaa', priority: 'urgent-important' }),
+		]);
+		expect(q.activities.map(a => a.displayName)).toEqual(['zzz', 'aaa']);
+	});
+
+	it('orders planned activities by their plan date, unplanned last', () => {
+		const q = firstQuadrant([
+			activity({ path: 'Activities/none.md', displayName: 'none', priority: 'urgent-important' }),
+			activity({ path: 'Activities/late.md', displayName: 'late', priority: 'urgent-important', takeToWorkDate: '2026-09-10' }),
+			activity({ path: 'Activities/soon.md', displayName: 'soon', priority: 'urgent-important', takeToWorkDate: '2026-09-01' }),
+		]);
+		expect(q.activities.map(a => a.displayName)).toEqual(['soon', 'late', 'none']);
+	});
+
+	it('renders the in-work flag and plan date columns', () => {
+		const matrix = new EisenhowerMatrix();
+		const quadrants = matrix.buildQuadrants([
+			activity({ path: 'Activities/planned.md', displayName: 'planned', priority: 'urgent-important', takeToWork: true, takeToWorkDate: '2026-09-01' }),
+		], TODAY);
+		const output = matrix.render(quadrants, TODAY);
+
+		expect(output).toContain('| Activity | In work | Planned |');
+		expect(output).toContain('| ✅ | 2026-09-01 |');
 	});
 });

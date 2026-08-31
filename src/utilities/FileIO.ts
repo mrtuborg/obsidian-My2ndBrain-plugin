@@ -50,7 +50,9 @@ export class FileIO {
 		type: string | null = null,
 		extraFields: Record<string, unknown> = {},
 		project: string = '',
-		role: string = ''
+		role: string = '',
+		takeToWork: boolean = false,
+		takeToWorkDate: string = ''
 	): string {
 		// Validate date
 		if (!DATE_RE.test(date) || isNaN(Date.parse(date))) {
@@ -69,6 +71,12 @@ export class FileIO {
 		}
 
 		const lines = ['---', `startDate: ${date}`, `stage: ${stage}`];
+		// takeToWork is mandatory on every activity — it is the single switch
+		// deciding whether the activity shows up in today's daily note, so it
+		// is always written, even when false. takeToWorkDate is optional and
+		// only ever consumed by the Eisenhower Matrix for display/sorting.
+		lines.push(`takeToWork: ${takeToWork ? 'true' : 'false'}`);
+		if (DATE_RE.test(takeToWorkDate)) lines.push(`takeToWorkDate: ${takeToWorkDate}`);
 		if (type && typeof type === 'string') lines.push(`type: ${type}`);
 		lines.push(`responsible: [${responsible.join(', ')}]`);
 		// project/role are always written, even blank — unlike arbitrary
@@ -224,6 +232,104 @@ export class FileIO {
 		}
 
 		return result;
+	}
+
+	/**
+	 * Reads a frontmatter field as a boolean. Accepts true/false/yes/no/1/0
+	 * (case-insensitive). Returns null when the field is absent or unparseable,
+	 * so callers can distinguish "explicitly false" from "never set".
+	 */
+	parseFrontmatterBool(content: string, fieldName: string): boolean | null {
+		const raw = this.parseFrontmatterField(content, fieldName);
+		if (raw === null) return null;
+		const v = raw.trim().toLowerCase().replace(/^["']|["']$/g, '');
+		if (v === 'true' || v === 'yes' || v === '1') return true;
+		if (v === 'false' || v === 'no' || v === '0') return false;
+		return null;
+	}
+
+	/**
+	 * Insert, replace, or remove a single scalar frontmatter field, leaving
+	 * every other line byte-identical. Pure string surgery (D7) — deliberately
+	 * not a YAML round-trip, because re-emitting the whole block would reorder
+	 * and reformat fields the user hand-wrote.
+	 *
+	 * Pass `null` as the value to remove the field.
+	 * A brand-new key is inserted after `afterKey` (default `stage`) when that
+	 * key exists, otherwise appended at the end of the block.
+	 */
+	upsertFrontmatterField(
+		content: string,
+		fieldName: string,
+		value: string | null,
+		afterKey = 'stage'
+	): string {
+		const lines = content.split('\n');
+
+		// Locate the frontmatter block. Only a document-leading '---' counts.
+		if (lines[0] !== '---') {
+			if (value === null) return content;
+			return ['---', `${fieldName}: ${value}`, '---', '', content.trimStart()].join('\n');
+		}
+		let end = -1;
+		for (let i = 1; i < lines.length; i++) {
+			if (lines[i] === '---') { end = i; break; }
+		}
+		if (end === -1) return content;
+
+		const keyOf = (line: string): string | null => {
+			const idx = line.indexOf(':');
+			if (idx === -1) return null;
+			return line.slice(0, idx).trim();
+		};
+
+		for (let i = 1; i < end; i++) {
+			if (keyOf(lines[i]!) !== fieldName) continue;
+			if (value === null) {
+				lines.splice(i, 1);
+			} else {
+				lines[i] = `${fieldName}: ${value}`;
+			}
+			return lines.join('\n');
+		}
+
+		if (value === null) return content;
+
+		let insertAt = end;
+		for (let i = 1; i < end; i++) {
+			if (keyOf(lines[i]!) === afterKey) { insertAt = i + 1; break; }
+		}
+		lines.splice(insertAt, 0, `${fieldName}: ${value}`);
+		return lines.join('\n');
+	}
+
+	/**
+	 * Read → upsert each field → write. Used by the matrix buttons, which must
+	 * touch exactly one frontmatter line so two devices editing different
+	 * activities never produce a sync conflict.
+	 */
+	async updateFrontmatterFields(
+		app: AppLike,
+		filename: string,
+		fields: Record<string, string | null>,
+		afterKey = 'stage'
+	): Promise<void> {
+		const content = await this.loadFile(app, filename);
+		if (content === null) return;
+		if (this.exceedsSizeLimit(content)) {
+			throw new Error(
+				`Refusing to update frontmatter of ${filename}: file is over the ` +
+				`${MAX_MANAGED_FILE_BYTES / 1024}KB safety limit.`
+			);
+		}
+
+		let updated = content;
+		for (const [key, value] of Object.entries(fields)) {
+			updated = this.upsertFrontmatterField(updated, key, value, afterKey);
+		}
+		if (updated === content) return;
+
+		await this.saveFile(app, filename, updated);
 	}
 
 	/** UTF-8 byte length (not JS string.length) — matters for Cyrillic/emoji-heavy vault content. */

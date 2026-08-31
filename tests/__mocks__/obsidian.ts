@@ -13,3 +13,11 @@ export class Setting {
   addToggle(cb: any) { return this; }
 }
 export class App {}
+
+export class Modal {
+  app: any;
+  contentEl: any = {};
+  constructor(app: any) { this.app = app; }
+  open() {}
+  close() {}
+}

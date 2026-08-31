@@ -6,3 +6,54 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+/* ── Eisenhower Matrix live view (```2ndbrain-matrix code block) ───────── */
+
+.twobrain-matrix-summary {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin-bottom: var(--size-4-3);
+}
+
+.twobrain-matrix-empty {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.twobrain-matrix-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.twobrain-matrix-table th,
+.twobrain-matrix-table td {
+	padding: var(--size-2-2) var(--size-2-3);
+	text-align: left;
+	vertical-align: middle;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-matrix-table th {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+}
+
+.twobrain-matrix-flag {
+	width: 1.6em;
+	text-align: center;
+}
+
+.twobrain-matrix-inwork {
+	background-color: var(--background-modifier-hover);
+}
+
+.twobrain-matrix-actions {
+	white-space: nowrap;
+}
+
+.twobrain-matrix-actions button {
+	margin-left: var(--size-2-2);
+	padding: var(--size-2-1) var(--size-2-3);
+	font-size: var(--font-ui-smaller);
+}

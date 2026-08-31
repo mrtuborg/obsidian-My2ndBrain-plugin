@@ -214,6 +214,10 @@ export class AutoActivityCreator {
 			'---',
 			`startDate: ${today}`,
 			'stage: doing',
+			// Auto-created stubs are captured, not planned. They start out
+			// false so an offhand wikilink never silently lands in the daily
+			// note — the user takes them to work from the Eisenhower Matrix.
+			'takeToWork: false',
 			'responsible: [Me]',
 			'priority: not-urgent-important',
 			'remind: weekdays',

@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 184 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 361 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -19,13 +19,38 @@ file-open event
               └── mentionsProcessor           (## Journal, state-transition algorithm)
 ```
 
-Components are in `src/components/`, composers in `src/composers/`, file I/O in `src/utilities/`.
+Components are in `src/components/`, composers in `src/composers/`, file I/O in `src/utilities/`. UI
+(code-block views, modals) lives in `src/ui/`, one-shot migrations in `src/commands/`.
+
+## Planning model: `takeToWork`
+
+Every Activity carries a **mandatory** `takeToWork: true|false` frontmatter field. It is the single gate
+deciding whether the activity is rendered into today's daily note.
+
+| Field | Owner | Effect |
+|---|---|---|
+| `takeToWork` | user, via matrix button | Daily note inclusion. Mandatory on every Activity |
+| `takeToWorkDate` | user, via matrix button | **Matrix display/sort only.** Never consulted by the daily note |
+| `remind`, `snoozeUntil` | user, hand-written | **Matrix visibility only.** They no longer gate the daily note |
+
+Rules that must not drift:
+
+- Daily note gate (`ActivitiesInProgress`) = `takeToWork` && `stage != done` && valid `startDate <= today`.
+- `TodoSyncManager` is deliberately **not** gated on `takeToWork`. It writes journal todos *into* activity
+  files — that is data integrity, not display. Gating it there silently loses Journal entries.
+- A missing `takeToWork` resolves to `stage === 'doing'` (`resolveTakeToWork` in `src/utilities/TakeToWork.ts`),
+  so a pre-backfill vault behaves exactly as before.
+- Taking an activity to work also sets `stage: doing`; marking it done also clears `takeToWork`.
+- The matrix is a live view rendered from a ```` ```2ndbrain-matrix ```` code block, not generated markdown —
+  static tables cannot carry buttons. `EisenhowerMatrixComposer.refresh` only installs the block if absent.
+- Matrix buttons write via `FileIO.updateFrontmatterFields`, which does pure line-level surgery
+  (`upsertFrontmatterField`) rather than a YAML round-trip, so hand-written field order survives.
 
 **Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 184 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 361 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

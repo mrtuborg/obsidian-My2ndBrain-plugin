@@ -52,6 +52,12 @@ export class TodoSyncManager {
 				console.warn(`[2ndBrain] Skipping oversized activity in sync: ${file.path}`);
 				continue;
 			}
+			// Deliberately NOT gated on takeToWork. This loop writes journal
+			// todos *into* activity files — data integrity, not display. An
+			// activity the user hasn't planned for today must still record
+			// what was written about it, otherwise its Journal section
+			// silently loses entries. `takeToWork` only decides what the
+			// daily note renders back out (see ActivitiesInProgress).
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
 			if (stage !== 'doing') continue;
 			const startDate = this.fileIO.parseFrontmatterField(content, 'startDate');

@@ -4,7 +4,10 @@ import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
 import { ProjectsDashboardComposer } from './composers/ProjectsDashboardComposer';
-import { EisenhowerMatrixComposer } from './composers/EisenhowerMatrixComposer';
+import { EisenhowerMatrixComposer, MATRIX_CODE_BLOCK_LANG } from './composers/EisenhowerMatrixComposer';
+import { MatrixView } from './ui/MatrixView';
+import { backfillTakeToWork } from './commands/BackfillTakeToWork';
+import { AppLike } from './utilities/FileIO';
 import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
 import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
@@ -80,6 +83,27 @@ export default class TwoBrainPlugin extends Plugin {
 			id: 'open-eisenhower-matrix',
 			name: 'Open Eisenhower matrix',
 			callback: () => void this.openEisenhowerMatrix(),
+		});
+
+		this.addCommand({
+			id: 'backfill-take-to-work',
+			name: 'Backfill takeToWork on all activities',
+			callback: () => void this.backfillTakeToWork(),
+		});
+
+		// The matrix is a live view, not generated markdown — only a rendered
+		// code block can carry the take-to-work / plan / done buttons.
+		this.registerMarkdownCodeBlockProcessor(MATRIX_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new MatrixView(this.app, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+			});
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render matrix — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
 		});
 
 		this.registerEvent(
@@ -321,6 +345,23 @@ export default class TwoBrainPlugin extends Plugin {
 	/** Ensures the Eisenhower Matrix dashboard note exists and opens it. */
 	async openEisenhowerMatrix(): Promise<void> {
 		await this.openDashboard(this.eisenhowerMatrixPath());
+	}
+
+	/** One-shot migration: stamp the mandatory takeToWork field everywhere. */
+	async backfillTakeToWork(): Promise<void> {
+		try {
+			const result = await backfillTakeToWork(this.app as unknown as AppLike, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+			});
+			new Notice(
+				`2ndBrain: takeToWork stamped on ${result.stamped} of ${result.scanned} activities` +
+				(result.skipped > 0 ? ` (${result.skipped} skipped).` : '.')
+			);
+		} catch (e) {
+			new Notice(`2ndBrain: Backfill failed — ${(e as Error).message}`);
+			console.error('[2ndBrain]', e);
+		}
 	}
 
 	/**

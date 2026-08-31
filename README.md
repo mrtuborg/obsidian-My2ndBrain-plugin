@@ -9,9 +9,45 @@ A TypeScript Obsidian plugin that replaces the CustomJS + DataviewJS automation 
 ## What it does
 
 - **Daily notes** — generates the canonical header and `### Activities:` section on first open; freezes the note after that. Only runs for today; past notes are recovered from activity history on first open.
+- **Planning with `takeToWork`** — every Activity carries a mandatory `takeToWork: true|false` field. It is the single switch deciding whether that activity shows up in today's daily note. You flip it by clicking **Take to work** in the Eisenhower Matrix.
+- **Eisenhower Matrix** — a live view (not generated markdown) with per-activity buttons: take to work, set a plan date, mark done.
 - **Activity files** — injects `## Description` from the owning Project file (replace-semantics) and rebuilds `## Journal` using a state-transition algorithm (only records first introduction and completion of each todo — no carry-forward noise).
 - **AutoActivityCreator** — scans previous journal entry and all project files for unresolved wikilinks and creates missing Activity files automatically.
 - **Past note recovery** — if a past daily note is deleted and recreated (empty), the plugin reconstructs its Activities section from activity Journal history.
+
+---
+
+## Planning model
+
+| Field | Type | What it controls |
+|---|---|---|
+| `takeToWork` | `true` / `false`, **mandatory** | Whether the activity appears in today's daily note |
+| `takeToWorkDate` | `YYYY-MM-DD`, optional | **Matrix only** — display and sort order. Never affects daily notes |
+| `stage` | `doing` / `backlog` / `done` | `done` retires the activity from both the matrix and the daily note |
+| `remind` | `daily`, `weekdays`, `monday`, `YYYY-MM[-DD]`, … | **Matrix visibility only** — whether the activity is offered for planning today |
+| `snoozeUntil` | `YYYY-MM-DD` | **Matrix visibility only** — temporarily hides it from planning |
+
+An activity lands in today's daily note when `takeToWork: true`, `stage != done`, and `startDate <= today`.
+`remind` and `snoozeUntil` no longer gate the daily note — they decide what the matrix offers you.
+
+Clicking **Take to work** also sets `stage: doing`; clicking **✓** sets `stage: done` and clears `takeToWork`.
+
+Activities written before this field existed fall back to `stage === 'doing'` when read, so nothing changes
+until you start clicking. Run **2ndBrain: Backfill takeToWork on all activities** from the command palette
+to stamp the field everywhere at once; it is idempotent.
+
+### The matrix note
+
+`Dashboards/Eisenhower Matrix.md` contains only a fenced block:
+
+````markdown
+```2ndbrain-matrix
+```
+````
+
+The plugin renders the live, clickable matrix into it. Each button writes a single frontmatter line on one
+activity file — the smallest possible write, so two devices planning different activities never collide in
+Obsidian Sync.
 
 ---
 
@@ -21,7 +57,7 @@ A TypeScript Obsidian plugin that replaces the CustomJS + DataviewJS automation 
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (184 tests)
+npm test        # Jest unit tests (361 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

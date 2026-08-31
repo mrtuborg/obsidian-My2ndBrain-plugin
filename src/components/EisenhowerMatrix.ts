@@ -5,6 +5,8 @@
  * in, returns markdown out.
  */
 
+import { scheduleAllowsToday } from '../utilities/ReminderSchedule';
+
 export interface MatrixActivity {
 	path: string;
 	displayName: string;
@@ -13,6 +15,13 @@ export interface MatrixActivity {
 	stage: string;
 	startDate: string;
 	priority: string;
+	/** Effective planning flag — true means it shows in today's daily note. */
+	takeToWork: boolean;
+	/** Optional YYYY-MM-DD plan date. Display/sorting only, never daily-note gating. */
+	takeToWorkDate: string;
+	/** Scheduling hints — these now gate matrix visibility, not the daily note. */
+	remind: string;
+	snoozeUntil: string;
 }
 
 export interface MatrixQuadrant {
@@ -30,11 +39,44 @@ const QUADRANTS: Array<{ key: string; heading: string }> = [
 const OTHER_KEY = 'other';
 const OTHER_HEADING = '❔ Unprioritized / other';
 
+/**
+ * Within a quadrant: what is already taken to work comes first (that is the
+ * user's own commitment for today), then whatever is planned for a specific
+ * date, soonest first, then the previous role/startDate/name ordering.
+ */
+function compareActivities(a: MatrixActivity, b: MatrixActivity): number {
+	if (a.takeToWork !== b.takeToWork) return a.takeToWork ? -1 : 1;
+
+	const planA = a.takeToWorkDate || '\uffff';
+	const planB = b.takeToWorkDate || '\uffff';
+	if (planA !== planB) return planA < planB ? -1 : 1;
+
+	const roleA = a.role || '\uffff';
+	const roleB = b.role || '\uffff';
+	if (roleA !== roleB) return roleA.localeCompare(roleB);
+
+	const da = a.startDate || '\uffff';
+	const db = b.startDate || '\uffff';
+	if (da !== db) return da < db ? -1 : 1;
+
+	return a.displayName.localeCompare(b.displayName);
+}
+
 export class EisenhowerMatrix {
 
-	/** Only open (non-done) activities belong on a working matrix. */
-	buildQuadrants(activities: MatrixActivity[]): MatrixQuadrant[] {
-		const open = activities.filter(a => a.stage !== 'done');
+	/**
+	 * Only open (non-done) activities belong on a working matrix, and only
+	 * those the `remind`/`snoozeUntil` schedule says are worth considering
+	 * today. Those two fields used to gate the daily note; now `takeToWork`
+	 * owns that and they gate matrix visibility instead.
+	 *
+	 * @param today YYYY-MM-DD used to evaluate the schedule fields.
+	 */
+	buildQuadrants(activities: MatrixActivity[], today?: string): MatrixQuadrant[] {
+		const day = today ?? new Date().toISOString().slice(0, 10);
+		const open = activities.filter(a =>
+			a.stage !== 'done' && scheduleAllowsToday(a.remind, a.snoozeUntil, day)
+		);
 
 		const quadrants: MatrixQuadrant[] = QUADRANTS.map(q => ({ ...q, activities: [] as MatrixActivity[] }));
 		const other: MatrixQuadrant = { key: OTHER_KEY, heading: OTHER_HEADING, activities: [] };
@@ -46,16 +88,9 @@ export class EisenhowerMatrix {
 		}
 
 		for (const q of quadrants) {
-			q.activities.sort((a, b) => {
-				const roleA = a.role || '\uffff';
-				const roleB = b.role || '\uffff';
-				if (roleA !== roleB) return roleA.localeCompare(roleB);
-				const da = a.startDate || '\uffff';
-				const db = b.startDate || '\uffff';
-				if (da !== db) return da < db ? -1 : 1;
-				return a.displayName.localeCompare(b.displayName);
-			});
+			q.activities.sort(compareActivities);
 		}
+		other.activities.sort(compareActivities);
 
 		return other.activities.length > 0 ? [...quadrants, other] : quadrants;
 	}
@@ -83,11 +118,15 @@ export class EisenhowerMatrix {
 				continue;
 			}
 
-			lines.push('| Activity | Role | Project | Stage | Started |');
-			lines.push('|---|---|---|---|---|');
+			lines.push('| Activity | In work | Planned | Role | Project | Stage | Started |');
+			lines.push('|---|---|---|---|---|---|---|');
 			for (const a of quadrant.activities) {
 				const linkPath = a.path.replace(/\.md$/, '');
-				lines.push(`| [[${linkPath}\\|${a.displayName}]] | ${a.role || '—'} | ${a.project || '—'} | ${a.stage || '—'} | ${a.startDate || '—'} |`);
+				lines.push(
+					`| [[${linkPath}\\|${a.displayName}]] | ${a.takeToWork ? '✅' : '—'} | ` +
+					`${a.takeToWorkDate || '—'} | ${a.role || '—'} | ${a.project || '—'} | ` +
+					`${a.stage || '—'} | ${a.startDate || '—'} |`
+				);
 			}
 			lines.push('');
 		}

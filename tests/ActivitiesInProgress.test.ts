@@ -15,6 +15,7 @@ function makeActivityContent(opts: {
 	remind?: string;
 	priority?: string;
 	snoozeUntil?: string;
+	takeToWork?: boolean;
 	role?: string;
 	journalTasks?: string[];
 	doneTasks?: string[];
@@ -26,6 +27,7 @@ function makeActivityContent(opts: {
 		remind = 'daily',
 		priority = 'medium',
 		snoozeUntil,
+		takeToWork,
 		role,
 		journalTasks = [],
 		doneTasks = [],
@@ -39,6 +41,7 @@ function makeActivityContent(opts: {
 		`remind: ${remind}`,
 		`priority: ${priority}`,
 		...(snoozeUntil ? [`snoozeUntil: ${snoozeUntil}`] : []),
+		...(takeToWork === undefined ? [] : [`takeToWork: ${takeToWork}`]),
 		...(role ? [`role: ${role}`] : []),
 		'---',
 		'',
@@ -206,15 +209,17 @@ describe('ActivitiesInProgress', () => {
 		expect(result).not.toContain('- [ ] Do work');
 	});
 
-	// AIP-10: remind YYYY-MM — future month hides activity
-	it('excludes activity with remind set to a future month', async () => {
+	// AIP-10: `remind` no longer gates the daily note — it only governs
+	// Eisenhower Matrix visibility now. takeToWork is the sole gate here.
+	it('ignores a future remind month — remind no longer gates the daily note', async () => {
 		const app = makeApp([{
 			path: 'Activities/deferred.md',
 			content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: '2099-09', journalTasks: ['Deferred task'] }),
 		}]);
 
 		const result = await aip.run(app, '');
-		expect(result).not.toContain('deferred');
+		expect(result).toContain('deferred');
+		expect(result).toContain('Deferred task');
 	});
 
 	// AIP-11: remind YYYY-MM — past month shows activity
@@ -229,15 +234,16 @@ describe('ActivitiesInProgress', () => {
 		expect(result).toContain('Old remind task');
 	});
 
-	// AIP-12: remind YYYY-MM-DD — future date hides activity
-	it('excludes activity with remind set to a future date', async () => {
+	// AIP-12: a future remind date is likewise ignored by the daily note
+	it('ignores a future remind date — remind no longer gates the daily note', async () => {
 		const app = makeApp([{
 			path: 'Activities/future-date.md',
 			content: makeActivityContent({ stage: 'doing', startDate: PAST, remind: '2099-12-31', journalTasks: ['Far future task'] }),
 		}]);
 
 		const result = await aip.run(app, '');
-		expect(result).not.toContain('future-date');
+		expect(result).toContain('future-date');
+		expect(result).toContain('Far future task');
 	});
 
 	// AIP-13: remind YYYY-MM-DD — past date shows activity
@@ -264,16 +270,17 @@ describe('ActivitiesInProgress', () => {
 		expect(result).toContain('Task');
 	});
 
-	// snoozeUntil: temporary hide independent of `remind` (e.g. for vacation)
+	// snoozeUntil also stopped gating the daily note — it hides an activity
+	// from the Eisenhower Matrix (i.e. from being offered for planning) only.
 	describe('snoozeUntil', () => {
-		it('hides an activity while today is before snoozeUntil', async () => {
+		it('does not hide an activity from the daily note while snoozed', async () => {
 			const app = makeApp([{
 				path: 'Activities/on-vacation.md',
 				content: makeActivityContent({ stage: 'doing', startDate: PAST, snoozeUntil: FUTURE, journalTasks: ['Ship feature'] }),
 			}]);
 
 			const result = await aip.run(app, '');
-			expect(result).not.toContain('on-vacation');
+			expect(result).toContain('on-vacation');
 		});
 
 		it('shows the activity again once today reaches snoozeUntil', async () => {
@@ -488,6 +495,61 @@ describe('ActivitiesInProgress', () => {
 
 			const daily = await aip.run(app, '');
 			expect(daily).toContain('Plan for Today');
+		});
+	});
+	// takeToWork is the gate for the daily note
+	describe('takeToWork', () => {
+		it('includes an activity explicitly taken to work', async () => {
+			const app = makeApp([{
+				path: 'Activities/planned.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, takeToWork: true, journalTasks: ['Planned task'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('planned');
+			expect(result).toContain('Planned task');
+		});
+
+		it('excludes an activity explicitly not taken to work, even when doing', async () => {
+			const app = makeApp([{
+				path: 'Activities/not-planned.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, takeToWork: false, journalTasks: ['Unplanned task'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).not.toContain('not-planned');
+			expect(result).not.toContain('Unplanned task');
+		});
+
+		it('includes a backlog activity that was taken to work from the matrix', async () => {
+			const app = makeApp([{
+				path: 'Activities/pulled-from-backlog.md',
+				content: makeActivityContent({ stage: 'backlog', startDate: PAST, takeToWork: true, journalTasks: ['Backlog task'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('pulled-from-backlog');
+		});
+
+		it('never includes a done activity, even if takeToWork was left true', async () => {
+			const app = makeApp([{
+				path: 'Activities/finished.md',
+				content: makeActivityContent({ stage: 'done', startDate: PAST, takeToWork: true, journalTasks: ['Old task'] }),
+			}]);
+
+			const result = await aip.run(app, '');
+			expect(result).not.toContain('finished');
+		});
+
+		it('falls back to stage === doing when the field is missing (pre-backfill vault)', async () => {
+			const app = makeApp([
+				{ path: 'Activities/legacy-doing.md', content: makeActivityContent({ stage: 'doing', startDate: PAST, journalTasks: ['Legacy task'] }) },
+				{ path: 'Activities/legacy-backlog.md', content: makeActivityContent({ stage: 'backlog', startDate: PAST, journalTasks: ['Backlog task'] }) },
+			]);
+
+			const result = await aip.run(app, '');
+			expect(result).toContain('legacy-doing');
+			expect(result).not.toContain('legacy-backlog');
 		});
 	});
 });

@@ -1,5 +1,6 @@
 import { FileIO, AppLike, VaultFile } from '../utilities/FileIO';
 import { NoteBlocksParser } from './NoteBlocksParser';
+import { TAKE_TO_WORK_FIELD, resolveTakeToWork } from '../utilities/TakeToWork';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
 
 const ACTIVITIES_FOLDER = 'Activities';
@@ -208,22 +209,25 @@ export class ActivitiesInProgress {
 
 			// Only include explicitly active activities (not planning, inbox, backlog, done, etc.)
 			const stage = this.fileIO.parseFrontmatterField(content, 'stage');
-			if (stage !== 'doing') continue;
+			if (stage === 'done') continue;
+
+			// takeToWork is THE gate: the daily note shows exactly what the user
+			// deliberately planned (normally by clicking a button in the
+			// Eisenhower Matrix). `remind`/`snoozeUntil` no longer apply here —
+			// they now only govern matrix visibility. Activities that predate
+			// the field fall back to `stage === 'doing'`, so behaviour is
+			// unchanged until the backfill runs.
+			const takeToWork = resolveTakeToWork(
+				this.fileIO.parseFrontmatterBool(content, TAKE_TO_WORK_FIELD),
+				stage
+			);
+			if (!takeToWork) continue;
 
 			// Require a valid YYYY-MM-DD startDate — excludes template files with
 			// Templater placeholders like <% tp.date.now() %> and files with no date at all
 			const startDate = this.fileIO.parseFrontmatterField(content, 'startDate');
 			if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) continue;
 			if (startDate > today) continue;
-
-			const remind = this.fileIO.parseFrontmatterField(content, 'remind') ?? 'daily';
-			if (!this.remindAllowsToday(remind)) continue;
-
-			// snoozeUntil: YYYY-MM-DD — independent, temporary hide, e.g. for vacation.
-			// Unlike `remind`, this doesn't change the activity's normal schedule;
-			// it just suppresses it until the given date, then resumes as before.
-			const snoozeUntil = this.fileIO.parseFrontmatterField(content, 'snoozeUntil');
-			if (snoozeUntil && /^\d{4}-\d{2}-\d{2}$/.test(snoozeUntil) && today < snoozeUntil) continue;
 
 			const openTodos = this.extractOpenTodos(content);
 			results.push({ file, content, openTodos });
@@ -285,31 +289,6 @@ export class ActivitiesInProgress {
 			seen.add(text);
 			return true;
 		});
-	}
-
-	private remindAllowsToday(remind: string): boolean {
-		const now = new Date();
-		const day = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
-		switch (remind) {
-			case 'weekdays': return day >= 1 && day <= 5;
-			case 'weekends': return day === 0 || day === 6;
-			case 'monday':   return day === 1;
-			case 'tuesday':  return day === 2;
-			case 'wednesday':return day === 3;
-			case 'thursday': return day === 4;
-			case 'friday':   return day === 5;
-			case 'saturday': return day === 6;
-			case 'sunday':   return day === 0;
-			default: {
-				// YYYY-MM or YYYY-MM-DD — show only from that date onward
-				if (/^\d{4}-\d{2}(-\d{2})?$/.test(remind)) {
-					const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
-					const threshold = remind.length === 7 ? remind + '-01' : remind;
-					return todayStr >= threshold;
-				}
-				return true; // daily or unknown
-			}
-		}
 	}
 
 	private renderSection(
