@@ -6,6 +6,14 @@ export { ROLES };
 export type { Role };
 
 
+/**
+ * What should be on screen when Obsidian finishes starting.
+ *  - 'off'   — whatever you had open, untouched.
+ *  - 'focus' — Home opens and takes focus, your other tabs stay put.
+ *  - 'only'  — Home is the only tab; everything else is closed.
+ */
+export type HomeStartupMode = 'off' | 'focus' | 'only';
+
 export interface PluginSettings {
 	journalFolder: string;
 	activitiesFolder: string;
@@ -15,6 +23,7 @@ export interface PluginSettings {
 	dashboardsFolder: string;
 	dateFormat: string;
 	autoProcessOnOpen: boolean;
+	openHomeOnStartup: HomeStartupMode;
 	removeScriptsFromDailyNotes: boolean;
 	syncGraceSeconds: number;
 	// Last role picked from the status bar — used only to preselect the picker.
@@ -30,6 +39,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	dashboardsFolder: 'Dashboards',
 	dateFormat: 'YYYY-MM-DD',
 	autoProcessOnOpen: true,
+	// Off by default: taking over startup is the user's call, not the plugin's.
+	openHomeOnStartup: 'off',
 	removeScriptsFromDailyNotes: true,
 	syncGraceSeconds: 5,
 	currentRole: null,
@@ -118,6 +129,22 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.autoProcessOnOpen)
 				.onChange(async (value) => {
 					this.plugin.settings.autoProcessOnOpen = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Open home on startup")
+			.setDesc(
+				"Show the Home landing page when Obsidian starts. " +
+				"Applies on every device the vault syncs to."
+			)
+			.addDropdown(drop => drop
+				.addOption('off', "Don't")
+				.addOption('focus', 'Open and focus it')
+				.addOption('only', 'Open it and close everything else')
+				.setValue(this.plugin.settings.openHomeOnStartup)
+				.onChange(async (value) => {
+					this.plugin.settings.openHomeOnStartup = value as HomeStartupMode;
 					await this.plugin.saveSettings();
 				}));
 

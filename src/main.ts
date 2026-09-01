@@ -1,4 +1,4 @@
-import { Plugin, TFile, Notice, FuzzySuggestModal } from 'obsidian';
+import { Plugin, TFile, Notice, FuzzySuggestModal, WorkspaceLeaf } from 'obsidian';
 import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab, ROLES, Role } from './settings';
 import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
@@ -97,6 +97,10 @@ export default class TwoBrainPlugin extends Plugin {
 			name: 'Open home',
 			callback: () => void this.openHome(),
 		});
+
+		// After the workspace has finished restoring, so opening Home doesn't
+		// race Obsidian putting yesterday's tabs back and then lose focus.
+		this.app.workspace.onLayoutReady(() => void this.openHomeOnStartup());
 
 		this.addCommand({
 			id: 'backfill-take-to-work',
@@ -404,6 +408,33 @@ export default class TwoBrainPlugin extends Plugin {
 	/** Ensures the Home landing page exists and opens it. */
 	async openHome(): Promise<void> {
 		await this.openDashboard(this.homePath());
+	}
+
+	/**
+	 * Opens Home when Obsidian starts, if the user asked for it. Runs on
+	 * every device the vault syncs to, phone included, because it is a plugin
+	 * setting rather than a per-machine workspace layout.
+	 *
+	 * Failures here are logged, never surfaced: something going wrong on
+	 * startup should not greet you with an error dialog before you have even
+	 * read anything.
+	 */
+	private async openHomeOnStartup(): Promise<void> {
+		const mode = this.settings.openHomeOnStartup;
+		if (mode === 'off') return;
+
+		try {
+			if (mode === 'only') {
+				// Only the main area — a markdown note pinned in a sidebar is
+				// furniture the user arranged, not a leftover tab.
+				const leaves: WorkspaceLeaf[] = [];
+				this.app.workspace.iterateRootLeaves(leaf => leaves.push(leaf));
+				for (const leaf of leaves) leaf.detach();
+			}
+			await this.openHome();
+		} catch (e) {
+			console.error('[2ndBrain] Could not open home on startup:', e);
+		}
 	}
 
 	/** One-shot migration: stamp the mandatory takeToWork field everywhere. */

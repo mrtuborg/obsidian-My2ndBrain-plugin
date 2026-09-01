@@ -137,6 +137,12 @@ Both charts are built from file metadata alone — the date in a journal filenam
 sit beside it, and the note's size on disk. Nothing is re-read, so a year of history costs nothing to draw.
 Today's note missing doesn't break the streak; at 9am you simply haven't written it yet.
 
+**Opening it on startup.** *Settings → 2ndBrain Engine → Open home on startup* has three positions: leave
+your workspace alone, open Home and focus it, or open Home and close everything else. It's a plugin
+setting rather than a saved workspace layout, so it follows the vault to every device it syncs to —
+including your phone. It runs once the workspace has finished restoring, so it can't race Obsidian putting
+yesterday's tabs back and then lose focus to them.
+
 Home never creates anything. If today's daily note or a role's Context page doesn't exist yet, it shows a
 plain label rather than a link — creating those stays owned by opening them directly.
 
