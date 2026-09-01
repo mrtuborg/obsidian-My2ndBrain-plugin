@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 361 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 364 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -41,6 +41,12 @@ Rules that must not drift:
 - A missing `takeToWork` resolves to `stage === 'doing'` (`resolveTakeToWork` in `src/utilities/TakeToWork.ts`),
   so a pre-backfill vault behaves exactly as before.
 - Taking an activity to work also sets `stage: doing`; marking it done also clears `takeToWork`.
+- Activities born from a journal wikilink (`AutoActivityCreator`) start `takeToWork: true`. The Journal is
+  the source of truth, so writing `[[Something]]` in a daily note or Context page *is* the act of taking it
+  to work — and the stub must appear in the very Activities section that created it. Anything else would
+  also contradict the `stage: doing` those stubs are born with.
+- That applies to **creation only**. An existing activity is never re-flagged by being mentioned again,
+  otherwise yesterday's carried-forward journal would silently resurrect everything the user dropped.
 - The matrix is a live view rendered from a ```` ```2ndbrain-matrix ```` code block, not generated markdown —
   static tables cannot carry buttons. `EisenhowerMatrixComposer.refresh` only installs the block if absent.
 - Matrix buttons write via `FileIO.updateFrontmatterFields`, which does pure line-level surgery
@@ -50,7 +56,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 361 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 364 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

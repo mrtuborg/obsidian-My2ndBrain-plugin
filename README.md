@@ -32,6 +32,11 @@ An activity lands in today's daily note when `takeToWork: true`, `stage != done`
 
 Clicking **Take to work** also sets `stage: doing`; clicking **✓** sets `stage: done` and clears `takeToWork`.
 
+Writing a new `[[wikilink]]` in a daily note or Context page creates the activity already taken to work —
+the Journal is the source of truth, so jotting it down *is* planning it, and it appears in that same day's
+Activities section. Use **Drop** in the matrix to say "captured, but not today". Mentioning an activity that
+already exists never changes its flag, so carried-forward notes can't quietly resurrect what you dropped.
+
 Activities written before this field existed fall back to `stage === 'doing'` when read, so nothing changes
 until you start clicking. Run **2ndBrain: Backfill takeToWork on all activities** from the command palette
 to stamp the field everywhere at once; it is idempotent.
@@ -57,7 +62,7 @@ Obsidian Sync.
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (361 tests)
+npm test        # Jest unit tests (364 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

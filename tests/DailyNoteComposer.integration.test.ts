@@ -614,4 +614,66 @@ describe('DailyNoteComposer — context page links', () => {
 		expect(saved).toContain(`[[Journal/Contexts/${TODAY}-Family|Family]]`);
 		expect(saved).toContain(ACTIVITIES_BUILT_MARKER); // untouched
 	});
+
+	// ── Journal-born activities ──────────────────────────────────────────
+	// The Journal is the source of truth: writing [[Something]] in a daily
+	// note IS the act of taking it to work, so a stub created from that link
+	// must be planned from birth and land in the very section it came from.
+
+	it('an activity auto-created from a journal wikilink is taken to work immediately', async () => {
+		const composer = new DailyNoteComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/${YESTERDAY}.md`]: '- [ ] chase [[Brand New Thing]]\n',
+			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+		const stub = (app.vault as MockVault).created.get('Activities/Brand New Thing.md')!;
+		expect(stub).toContain('takeToWork: true');
+		expect(stub).toContain('stage: doing');
+	});
+
+	it('that brand-new activity appears in the same daily note that created it', async () => {
+		const composer = new DailyNoteComposer(SETTINGS);
+		const app = makeApp({
+			[`Journal/${YESTERDAY}.md`]: '- [ ] chase [[Brand New Thing]]\n',
+			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
+		expect(saved).toContain('Brand New Thing');
+	});
+
+	it('a dropped activity is not resurrected by an old mention of it', async () => {
+		const composer = new DailyNoteComposer(SETTINGS);
+		const dropped = [
+			'---',
+			`startDate: ${PAST}`,
+			'stage: doing',
+			'takeToWork: false',
+			'responsible: [Me]',
+			'project: ',
+			'---',
+			'',
+			'## Journal',
+			'',
+		].join('\n');
+		const app = makeApp({
+			[`Journal/${YESTERDAY}.md`]: '- [ ] chase [[Dropped Thing]]\n',
+			'Activities/Dropped Thing.md': dropped,
+			[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+		});
+
+		await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+		// The stub is never re-created (the file exists), and the explicit
+		// false stands — only the matrix can put it back on the plate.
+		expect((app.vault as MockVault).created.has('Activities/Dropped Thing.md')).toBe(false);
+		const saved = (app.vault as MockVault).saves.get(`Journal/${TODAY}.md`)!;
+		const activitiesSection = saved.split(ACTIVITIES_BUILT_MARKER)[0]!;
+		expect(activitiesSection).not.toContain('[[Dropped Thing');
+	});
 });

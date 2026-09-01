@@ -214,10 +214,13 @@ export class AutoActivityCreator {
 			'---',
 			`startDate: ${today}`,
 			'stage: doing',
-			// Auto-created stubs are captured, not planned. They start out
-			// false so an offhand wikilink never silently lands in the daily
-			// note — the user takes them to work from the Eisenhower Matrix.
-			'takeToWork: false',
+			// The Journal is the source of truth: writing [[Something]] in a
+			// daily note or Context page IS the act of taking it to work, so
+			// the stub is born planned. That also keeps it consistent with
+			// `stage: doing` above (and with resolveTakeToWork's fallback for
+			// activities predating this field). Use the matrix's "Drop" button
+			// to say "captured, but not today".
+			'takeToWork: true',
 			'responsible: [Me]',
 			'priority: not-urgent-important',
 			'remind: weekdays',
