@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 445 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 464 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -68,6 +68,12 @@ Rules that must not drift:
   on every matrix render. It **always clears the date**. A date left in the frontmatter would re-take the
   activity on every render, making it impossible to drop for as long as the date stayed in the past. A
   `done` activity has its stale date cleared but is never revived.
+- Home (```` ```2ndbrain-home ````, `HomeView`, `HomeComposer` installing `Home.md`) does not recompute the
+  matrix or projects data — it constructs a `MatrixView`/`ProjectsView` and calls `.render()` into a
+  sub-container, so it can never drift from what those two notes show standing alone. It only adds what
+  they don't cover (today's note link, role→Context-page readiness, Inbox pressure count, recent journal
+  list), and it never creates a daily note or Context page itself — only links to one if `HomeDashboard`
+  finds it already exists, otherwise it renders a plain, non-clickable label.
 - **Nothing written into a daily note or Context page is ever deleted by the plugin** (D1). A rebuild keeps
   every existing activity block that has content beneath its heading — even for an activity that is now
   dropped or done — and merges genuinely new todos in rather than replacing the user's lines
@@ -83,7 +89,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 445 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 464 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

@@ -714,3 +714,99 @@ a.twobrain-projects-chip:hover {
 	color: var(--text-accent);
 	border-color: var(--text-accent);
 }
+
+
+/* ── Home landing page (```2ndbrain-home code block) ──────────────────────
+ *
+ * The thinnest possible layer on top of the matrix and projects views it
+ * embeds: a today link, role readiness, an inbox nudge, and a short recent
+ * list. Same visual language, deliberately with almost no chrome of its own.
+ */
+
+.twobrain-home h3 {
+	margin: var(--size-4-6) 0 var(--size-2-3);
+	font-size: var(--font-ui-medium);
+	color: var(--text-muted);
+}
+
+.twobrain-home-today {
+	margin-bottom: var(--size-2-3);
+}
+
+.twobrain-home-today-link {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	text-decoration: none;
+	color: var(--text-normal);
+}
+
+.twobrain-home-today-link:hover {
+	color: var(--text-accent);
+}
+
+.twobrain-home-today-missing {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	color: var(--text-faint);
+}
+
+.twobrain-home-roles {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	margin-bottom: var(--size-2-3);
+}
+
+.twobrain-home-role-chip {
+	padding: 2px var(--size-2-3);
+	border-radius: 999px;
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	border: 1px solid transparent;
+}
+
+.twobrain-home-role-ready {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+}
+
+.twobrain-home-role-ready:hover {
+	text-decoration: underline;
+}
+
+.twobrain-home-role-pending {
+	color: var(--text-faint);
+	border-color: var(--background-modifier-border);
+}
+
+.twobrain-home-inbox {
+	margin-bottom: var(--size-2-3);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-home-inbox a {
+	color: var(--color-orange);
+}
+
+.twobrain-home-recent {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-home-recent-label {
+	color: var(--text-faint);
+}
+
+.twobrain-home-recent-link {
+	color: var(--text-muted);
+	text-decoration: none;
+}
+
+.twobrain-home-recent-link:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}

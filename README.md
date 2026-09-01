@@ -12,6 +12,7 @@ A TypeScript Obsidian plugin that replaces the CustomJS + DataviewJS automation 
 - **Planning with `takeToWork`** — every Activity carries a mandatory `takeToWork: true|false` field. It is the single switch deciding whether that activity shows up in today's daily note. You flip it by clicking **Take to work** in the Eisenhower Matrix.
 - **Eisenhower Matrix** — a live view (not generated markdown) with editable columns and a take-to-work / drop button per activity.
 - **Projects dashboard** — a live view that leads with which projects need a decision, not with row counts.
+- **Home** — a landing page (`Home.md`) that embeds the matrix and projects dashboard, plus today's note, role Context links, an Inbox-pressure count, and a short recent-journal list.
 - **Plan ahead** — set a **Planned** date and the activity takes itself to work on that day, no reminder needed.
 - **Activity files** — injects `## Description` from the owning Project file (replace-semantics) and rebuilds `## Journal` using a state-transition algorithm (only records first introduction and completion of each todo — no carry-forward noise).
 - **AutoActivityCreator** — scans previous journal entry and all project files for unresolved wikilinks and creates missing Activity files automatically.
@@ -109,6 +110,19 @@ of the standard vocabulary, so editing one column never quietly rewrites another
 Every control writes a single frontmatter line on one activity file — the smallest possible write, so two
 devices planning different activities never collide in Obsidian Sync.
 
+### Home
+
+`Home.md` (vault root) holds a fenced ` ```2ndbrain-home ` block and is meant to be the first thing you open.
+It doesn't recompute anything — it embeds the same `MatrixView` and `ProjectsView` used by their own
+dashboard notes, so Home can never disagree with them. On top of that it adds only what those two don't
+already cover:
+
+- A link to today's daily note, or a plain "no daily note yet" nudge if it hasn't been created.
+- One chip per role, linking to today's Context page if it already exists — nothing here creates a
+  daily note or a Context page; that stays owned by opening them directly.
+- An "N untriaged in Inbox" line (project-less or `project: inbox`, not yet done), shown only when non-zero.
+- A short "Recent" list of the last few daily notes, for glancing back.
+
 ---
 
 ## Plugin development
@@ -117,7 +131,7 @@ devices planning different activities never collide in Obsidian Sync.
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (445 tests)
+npm test        # Jest unit tests (464 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

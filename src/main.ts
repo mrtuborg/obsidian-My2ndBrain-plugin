@@ -4,9 +4,11 @@ import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
 import { ProjectsDashboardComposer, PROJECTS_CODE_BLOCK_LANG } from './composers/ProjectsDashboardComposer';
+import { HomeComposer, HOME_CODE_BLOCK_LANG } from './composers/HomeComposer';
 import { EisenhowerMatrixComposer, MATRIX_CODE_BLOCK_LANG } from './composers/EisenhowerMatrixComposer';
 import { MatrixView } from './ui/MatrixView';
 import { ProjectsView } from './ui/ProjectsView';
+import { HomeView } from './ui/HomeView';
 import { backfillTakeToWork } from './commands/BackfillTakeToWork';
 import { AppLike } from './utilities/FileIO';
 import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
@@ -18,6 +20,9 @@ type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
 
 const PROJECTS_DASHBOARD_FILENAME = 'Projects.md';
 const EISENHOWER_MATRIX_FILENAME = 'Eisenhower Matrix.md';
+// At the vault root, not under Dashboards/ — a landing page is where you
+// land, not one more thing to navigate to.
+const HOME_FILENAME = 'Home.md';
 // Where Projects.md itself lived before dashboards got their own folder —
 // migrated in place (preserving links) the first time a dashboard is opened.
 const LEGACY_PROJECTS_DASHBOARD_PATH = 'Projects/Dashboard.md';
@@ -52,6 +57,7 @@ export default class TwoBrainPlugin extends Plugin {
 	private contextPageComposer!: ContextPageComposer;
 	private projectsDashboardComposer!: ProjectsDashboardComposer;
 	private eisenhowerMatrixComposer!: EisenhowerMatrixComposer;
+	private homeComposer = new HomeComposer();
 	private inboxActivitiesComposer!: InboxActivitiesComposer;
 	private autoCreator = new AutoActivityCreator();
 	private contextStatusBarItem!: HTMLElement;
@@ -84,6 +90,12 @@ export default class TwoBrainPlugin extends Plugin {
 			id: 'open-eisenhower-matrix',
 			name: 'Open Eisenhower matrix',
 			callback: () => void this.openEisenhowerMatrix(),
+		});
+
+		this.addCommand({
+			id: 'open-home',
+			name: 'Open home',
+			callback: () => void this.openHome(),
 		});
 
 		this.addCommand({
@@ -122,6 +134,24 @@ export default class TwoBrainPlugin extends Plugin {
 				await view.render(el);
 			} catch (e) {
 				el.setText(`2ndBrain: could not render projects dashboard — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
+
+		// The home page embeds the matrix and projects views verbatim rather
+		// than recomputing them, so it can never show something those two
+		// notes disagree with.
+		this.registerMarkdownCodeBlockProcessor(HOME_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new HomeView(this.app, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+				projectsFolder: this.settings.projectsFolder,
+				journalFolder: this.settings.journalFolder,
+			});
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render home — ${(e as Error).message}`);
 				console.error('[2ndBrain]', e);
 			}
 		});
@@ -303,6 +333,10 @@ export default class TwoBrainPlugin extends Plugin {
 		return `${this.settings.dashboardsFolder}/${EISENHOWER_MATRIX_FILENAME}`;
 	}
 
+	private homePath(): string {
+		return HOME_FILENAME;
+	}
+
 	/**
 	 * Ensures a dashboard note exists at `path` — creating parent folders
 	 * as needed — then opens it. If `legacyPath` is given and still exists
@@ -367,6 +401,11 @@ export default class TwoBrainPlugin extends Plugin {
 		await this.openDashboard(this.eisenhowerMatrixPath());
 	}
 
+	/** Ensures the Home landing page exists and opens it. */
+	async openHome(): Promise<void> {
+		await this.openDashboard(this.homePath());
+	}
+
 	/** One-shot migration: stamp the mandatory takeToWork field everywhere. */
 	async backfillTakeToWork(): Promise<void> {
 		try {
@@ -429,12 +468,15 @@ export default class TwoBrainPlugin extends Plugin {
 		const isProject = file.path.startsWith(settings.projectsFolder + '/');
 		const isProjectsDashboard = file.path === this.projectsDashboardPath();
 		const isEisenhowerMatrix = file.path === this.eisenhowerMatrixPath();
+		const isHome = file.path === this.homePath();
 
 		try {
 			if (isProjectsDashboard) {
 				await this.projectsDashboardComposer.refresh(this.app as any, file.path);
 			} else if (isEisenhowerMatrix) {
 				await this.eisenhowerMatrixComposer.refresh(this.app as any, file.path);
+			} else if (isHome) {
+				await this.homeComposer.refresh(this.app as any, file.path);
 			} else if (contextRole) {
 				await this.contextPageComposer.processContextPage(
 					this.app as any, { path: file.path }, contextRole
