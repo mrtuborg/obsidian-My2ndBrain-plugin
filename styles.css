@@ -1057,9 +1057,13 @@ a.twobrain-home-signal.is-quiet-people {
 
 /* ── The long view: balance + consistency ─────────────────────────────── */
 
+/* Equal columns, so the two panels are always the same width — and on a
+ * phone in portrait only one column fits, which stacks them full-width
+ * under the People strip at matching size rather than leaving the radar
+ * pinned to its intrinsic 236px. */
 .twobrain-home-charts {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 	align-items: stretch;
 	gap: 10px;
 	margin-bottom: 10px;
@@ -1070,16 +1074,18 @@ a.twobrain-home-signal.is-quiet-people {
 	border-radius: 10px;
 	border: 1px solid var(--zen-line);
 	background-color: var(--zen-surface);
+	/* Both panels hold content wider than a phone; without this the grid
+	   track refuses to shrink and the page scrolls sideways. */
+	min-width: 0;
 }
 
 .twobrain-home-panel.is-radar {
-	flex: 0 0 auto;
+	/* The chart centres in whatever width the grid gives it. */
+	display: flex;
+	flex-direction: column;
 }
 
-/* Takes the rest of the row, and may shrink below its content — the grid
-   inside scrolls rather than pushing the radar off the page. */
 .twobrain-home-panel.is-consistency {
-	flex: 1 1 300px;
 	min-width: 0;
 }
 
@@ -1114,10 +1120,15 @@ a.twobrain-home-signal.is-quiet-people {
 
 /* ── Radar ─────────────────────────────────────────────────────────────── */
 
+/* Scales to the panel instead of a fixed 236px, so the radar fills a phone
+ * the same way the consistency grid does. Capped so it doesn't balloon into
+ * a wide desktop column, and centred in whatever space is left over. */
 .twobrain-home-radar {
 	display: block;
-	width: 236px;
-	height: 166px;
+	width: 100%;
+	max-width: 300px;
+	height: auto;
+	margin: 0 auto;
 }
 
 .twobrain-radar-ring {
