@@ -135,13 +135,14 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Open home on startup")
 			.setDesc(
-				"Show the Home landing page when Obsidian starts. " +
-				"Applies on every device the vault syncs to."
+				"Show the Home landing page when Obsidian starts. Set to off to leave " +
+				"startup alone and keep whatever you had open. Applies on every device " +
+				"the vault syncs to."
 			)
 			.addDropdown(drop => drop
-				.addOption('off', "Don't")
-				.addOption('focus', 'Open and focus it')
-				.addOption('only', 'Open it and close everything else')
+				.addOption('off', 'Off — keep my open tabs')
+				.addOption('focus', 'Open home and focus it')
+				.addOption('only', 'Open home and close everything else')
 				.setValue(this.plugin.settings.openHomeOnStartup)
 				.onChange(async (value) => {
 					this.plugin.settings.openHomeOnStartup = value as HomeStartupMode;
