@@ -1,10 +1,10 @@
 import { App, Notice, TFile } from 'obsidian';
 import { FileIO, AppLike } from '../utilities/FileIO';
 import { loadActivityRecords } from '../utilities/ActivityIndex';
+import { loadProjectRecords } from '../utilities/ProjectIndex';
 import {
 	ProjectsDashboard,
 	ProjectDashboardRow,
-	DashboardProject,
 	DashboardActivity,
 	HEALTH_LABEL,
 	HEALTH_HINT,
@@ -53,7 +53,7 @@ export class ProjectsView {
 		const activities: DashboardActivity[] = await loadActivityRecords(
 			app, this.settings.activitiesFolder, this.settings.archiveFolder
 		);
-		const projects = await this.loadProjects(app);
+		const projects = await loadProjectRecords(app, this.settings.projectsFolder);
 		const rows = this.dashboard.buildRows(activities, projects, today);
 
 		this.renderSummary(container, today, rows);
@@ -315,37 +315,6 @@ export class ProjectsView {
 	 * Projects/<slug>/Project.md inside a project subfolder — mirrors the
 	 * two shapes already used across the vault.
 	 */
-	private async loadProjects(app: AppLike): Promise<DashboardProject[]> {
-		const { projectsFolder } = this.settings;
-		const files = app.vault.getFiles().filter(f =>
-			f.path.startsWith(projectsFolder + '/') && f.path.endsWith('.md')
-		);
-
-		const result: DashboardProject[] = [];
-		const seen = new Set<string>();
-		for (const file of files) {
-			const parts = file.path.slice(projectsFolder.length + 1).split('/');
-			let slug: string;
-			if (parts.length === 1) {
-				slug = parts[0]!.replace(/\.md$/, '');
-			} else if (parts[parts.length - 1] === 'Project.md') {
-				slug = parts[0]!;
-			} else {
-				continue;
-			}
-			if (seen.has(slug)) continue;
-			seen.add(slug);
-
-			const content = await this.fileIO.loadFile(app, file.path);
-			if (content === null) continue;
-			result.push({
-				slug,
-				path: file.path,
-				role: this.fileIO.parseFrontmatterField(content, 'role') ?? '',
-			});
-		}
-		return result;
-	}
 }
 
 /**

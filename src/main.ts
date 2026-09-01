@@ -138,15 +138,15 @@ export default class TwoBrainPlugin extends Plugin {
 			}
 		});
 
-		// The home page embeds the matrix and projects views verbatim rather
-		// than recomputing them, so it can never show something those two
-		// notes disagree with.
+		// The home page is a glance, not a third dashboard — it links to the
+		// matrix and projects views rather than repeating their rows.
 		this.registerMarkdownCodeBlockProcessor(HOME_CODE_BLOCK_LANG, async (_src, el) => {
 			const view = new HomeView(this.app, {
 				activitiesFolder: this.settings.activitiesFolder,
 				archiveFolder: this.settings.archiveFolder,
 				projectsFolder: this.settings.projectsFolder,
 				journalFolder: this.settings.journalFolder,
+				dashboardsFolder: this.settings.dashboardsFolder,
 			});
 			try {
 				await view.render(el);

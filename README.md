@@ -12,7 +12,7 @@ A TypeScript Obsidian plugin that replaces the CustomJS + DataviewJS automation 
 - **Planning with `takeToWork`** — every Activity carries a mandatory `takeToWork: true|false` field. It is the single switch deciding whether that activity shows up in today's daily note. You flip it by clicking **Take to work** in the Eisenhower Matrix.
 - **Eisenhower Matrix** — a live view (not generated markdown) with editable columns and a take-to-work / drop button per activity.
 - **Projects dashboard** — a live view that leads with which projects need a decision, not with row counts.
-- **Home** — a landing page (`Home.md`) that embeds the matrix and projects dashboard, plus today's note, role Context links, an Inbox-pressure count, and a short recent-journal list.
+- **Home** — a one-glance landing page (`Home.md`): role balance, system health, and where to go next. Fits a phone screen in landscape.
 - **Plan ahead** — set a **Planned** date and the activity takes itself to work on that day, no reminder needed.
 - **Activity files** — injects `## Description` from the owning Project file (replace-semantics) and rebuilds `## Journal` using a state-transition algorithm (only records first introduction and completion of each todo — no carry-forward noise).
 - **AutoActivityCreator** — scans previous journal entry and all project files for unresolved wikilinks and creates missing Activity files automatically.
@@ -112,18 +112,28 @@ devices planning different activities never collide in Obsidian Sync.
 
 ### Home
 
-`Home.md` (vault root) holds a fenced ` ```2ndbrain-home ` block and is meant to be the first thing you open.
-It doesn't recompute anything — it embeds the same `MatrixView` and `ProjectsView` used by their own
-dashboard notes, so Home can never disagree with them. On top of that it adds only what those two don't
-already cover:
+`Home.md` (vault root) holds a fenced ` ```2ndbrain-home ` block. Open it with **2ndBrain: Open home** —
+the note is created on first open.
 
-- A link to today's daily note, or a plain "no daily note yet" nudge if it hasn't been created.
-- One chip per role, linking to today's Context page if it already exists — nothing here creates a
-  daily note or a Context page; that stays owned by opening them directly.
-- An "N untriaged in Inbox" line (project-less or `project: inbox`, not yet done), shown only when non-zero.
-- A short "Recent" list of the last few daily notes, for glancing back.
+It is deliberately **not** a third dashboard. The matrix already answers *what do I do today* and the
+projects view answers *what needs a decision*; repeating either here would only add a second place to read
+the same rows. Home answers the question neither one does — **am I balanced across my roles, and is the
+system healthy** — then hands off with a link. Everything is counts and chips, never tables, so the whole
+page is readable in one glance in landscape on a phone.
 
----
+| Section | Shows |
+|---|---|
+| Banner | Greeting, today's date, and how many activities you have taken to work out of everything open |
+| Role cards | Per role: `taken / open`, a bar for the share you committed to today, and a badge counting that role's projects needing a decision. The name links to today's Context page when it exists |
+| Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
+| Next steps | Today's note, Plan (matrix), Projects, Inbox — plus the last few days for a glance back |
+
+A role card is highlighted only when it owns open work and **none of it** is planned for today. A role with
+nothing open is *clear*, not neglected, and recedes instead of nagging.
+
+Home never creates anything. If today's daily note or a role's Context page doesn't exist yet, it shows a
+plain label rather than a link — creating those stays owned by opening them directly.
+
 
 ## Plugin development
 
@@ -131,7 +141,7 @@ already cover:
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (464 tests)
+npm test        # Jest unit tests (489 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

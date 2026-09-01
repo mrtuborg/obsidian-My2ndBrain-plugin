@@ -716,97 +716,317 @@ a.twobrain-projects-chip:hover {
 }
 
 
+
 /* ── Home landing page (```2ndbrain-home code block) ──────────────────────
  *
- * The thinnest possible layer on top of the matrix and projects views it
- * embeds: a today link, role readiness, an inbox nudge, and a short recent
- * list. Same visual language, deliberately with almost no chrome of its own.
+ * A glance, not a third dashboard. Sized so the whole thing is readable in
+ * one screen in landscape on a phone (~780x360), which is why everything
+ * here is counts and chips and there is not a single table.
+ *
+ * It also runs its own calm palette rather than the sharper accent colours
+ * the matrix and projects views use — this is the page you open first, and
+ * it should read as a quiet room, not a control panel.
  */
 
-.twobrain-home h3 {
-	margin: var(--size-4-6) 0 var(--size-2-3);
-	font-size: var(--font-ui-medium);
-	color: var(--text-muted);
+.twobrain-home {
+	--zen-ink: #33413c;
+	--zen-soft: #6d7f78;
+	--zen-faint: #9aa8a2;
+	--zen-surface: #f4f1ec;
+	--zen-line: #e2ded6;
+	--zen-accent: #6f9285;
+	--zen-warn: #c08a52;
+	--zen-alert: #b4705f;
+
+	max-width: 860px;
+	font-size: var(--font-ui-small);
+	color: var(--zen-ink);
 }
 
-.twobrain-home-today {
-	margin-bottom: var(--size-2-3);
+.theme-dark .twobrain-home {
+	--zen-ink: #d8e0dc;
+	--zen-soft: #9dada7;
+	--zen-faint: #6f7d78;
+	--zen-surface: #23282a;
+	--zen-line: #333a3c;
+	--zen-accent: #85ab9c;
+	--zen-warn: #d3a273;
+	--zen-alert: #cc8878;
 }
 
-.twobrain-home-today-link {
+/* ── Banner ───────────────────────────────────────────────────────────── */
+
+.twobrain-home-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
+	min-height: 76px;
+	padding: 12px 18px;
+	margin-bottom: 10px;
+	border-radius: 10px;
+	background-size: cover;
+	background-position: center;
+	background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><defs><linearGradient id='s' x1='0' y1='0' x2='0.7' y2='1'><stop offset='0' stop-color='%23dce8e3'/><stop offset='0.5' stop-color='%23ede4d8'/><stop offset='1' stop-color='%23e4dce9'/></linearGradient></defs><rect width='1200' height='160' fill='url(%23s)'/><circle cx='640' cy='52' r='23' fill='%23f2cba6' opacity='0.75'/><g fill='none' stroke='%23a9c1b7' stroke-width='1.8' opacity='0.62'><ellipse cx='640' cy='118' rx='46' ry='6'/><ellipse cx='640' cy='118' rx='88' ry='11'/><ellipse cx='640' cy='118' rx='136' ry='17'/><ellipse cx='640' cy='118' rx='190' ry='24'/><ellipse cx='640' cy='118' rx='250' ry='31'/></g><path d='M0 112 Q 210 86 430 108 T 830 104 Q 1020 84 1200 112 L1200 160 L0 160 Z' fill='%23b4c7bc' opacity='0.5'/><path d='M0 134 Q 280 116 560 132 T 1030 130 Q 1120 124 1200 136 L1200 160 L0 160 Z' fill='%239fb6aa' opacity='0.45'/></svg>");
+}
+
+.theme-dark .twobrain-home-banner {
+	background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><defs><linearGradient id='s' x1='0' y1='0' x2='0.7' y2='1'><stop offset='0' stop-color='%231e2a29'/><stop offset='0.5' stop-color='%232a2b28'/><stop offset='1' stop-color='%23262233'/></linearGradient></defs><rect width='1200' height='160' fill='url(%23s)'/><circle cx='640' cy='52' r='23' fill='%23c99060' opacity='0.4'/><g fill='none' stroke='%235d7d72' stroke-width='1.8' opacity='0.5'><ellipse cx='640' cy='118' rx='46' ry='6'/><ellipse cx='640' cy='118' rx='88' ry='11'/><ellipse cx='640' cy='118' rx='136' ry='17'/><ellipse cx='640' cy='118' rx='190' ry='24'/><ellipse cx='640' cy='118' rx='250' ry='31'/></g><path d='M0 112 Q 210 86 430 108 T 830 104 Q 1020 84 1200 112 L1200 160 L0 160 Z' fill='%233b4f47' opacity='0.55'/><path d='M0 134 Q 280 116 560 132 T 1030 130 Q 1120 124 1200 136 L1200 160 L0 160 Z' fill='%2332453e' opacity='0.5'/></svg>");
+}
+
+.twobrain-home-greeting {
 	font-size: var(--font-ui-large);
 	font-weight: var(--font-bold);
-	text-decoration: none;
-	color: var(--text-normal);
+	line-height: 1.15;
+	color: #2f3d38;
 }
 
-.twobrain-home-today-link:hover {
-	color: var(--text-accent);
+.twobrain-home-date {
+	font-size: var(--font-ui-smaller);
+	color: #5f7168;
 }
 
-.twobrain-home-today-missing {
-	font-size: var(--font-ui-large);
+.theme-dark .twobrain-home-greeting { color: #dfe7e3; }
+.theme-dark .twobrain-home-date { color: #93a49d; }
+
+.twobrain-home-banner-count {
+	text-align: right;
+	flex-shrink: 0;
+}
+
+.twobrain-home-bignum {
+	font-size: 30px;
 	font-weight: var(--font-bold);
-	color: var(--text-faint);
+	line-height: 1;
+	color: #3c5b4f;
 }
+
+.twobrain-home-bignum-label {
+	font-size: var(--font-ui-smaller);
+	color: #5f7168;
+	white-space: nowrap;
+}
+
+.theme-dark .twobrain-home-bignum { color: #a8ccbc; }
+.theme-dark .twobrain-home-bignum-label { color: #93a49d; }
+
+/* ── Roles ────────────────────────────────────────────────────────────── */
 
 .twobrain-home-roles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.twobrain-home-role {
+	padding: 7px 10px 8px;
+	border-radius: 8px;
+	background-color: var(--zen-surface);
+	border: 1px solid var(--zen-line);
+	border-left: 3px solid var(--zen-accent);
+}
+
+/* Open work, none of it planned for today — the only real neglect signal. */
+.twobrain-home-role.is-untouched {
+	border-left-color: var(--zen-warn);
+}
+
+/* Nothing open at all is finished, not neglected: recede, don't warn. */
+.twobrain-home-role.is-clear {
+	border-left-color: var(--zen-line);
+	opacity: 0.65;
+}
+
+.twobrain-home-role-head {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--size-2-2);
-	margin-bottom: var(--size-2-3);
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px;
 }
 
-.twobrain-home-role-chip {
-	padding: 2px var(--size-2-3);
-	border-radius: 999px;
+.twobrain-home-role-name {
 	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-bold);
+	color: var(--zen-soft);
 	text-decoration: none;
-	border: 1px solid transparent;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.twobrain-home-role-ready {
-	color: var(--text-accent);
-	background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+a.twobrain-home-role-name.is-ready {
+	color: var(--zen-accent);
 }
 
-.twobrain-home-role-ready:hover {
+a.twobrain-home-role-name.is-ready:hover {
 	text-decoration: underline;
 }
 
-.twobrain-home-role-pending {
-	color: var(--text-faint);
-	border-color: var(--background-modifier-border);
+.twobrain-home-role-flag {
+	flex-shrink: 0;
+	min-width: 15px;
+	padding: 0 4px;
+	border-radius: 999px;
+	font-size: 10px;
+	line-height: 15px;
+	text-align: center;
+	color: var(--zen-alert);
+	background-color: color-mix(in srgb, var(--zen-alert) 16%, transparent);
 }
 
-.twobrain-home-inbox {
-	margin-bottom: var(--size-2-3);
+.twobrain-home-role-count {
+	margin-top: 1px;
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-bold);
+	color: var(--zen-ink);
+}
+
+.twobrain-home-role.is-clear .twobrain-home-role-count {
 	font-size: var(--font-ui-smaller);
+	font-weight: normal;
+	color: var(--zen-faint);
 }
 
-.twobrain-home-inbox a {
-	color: var(--color-orange);
+.twobrain-home-role-track {
+	height: 3px;
+	margin-top: 5px;
+	border-radius: 2px;
+	background-color: var(--zen-line);
+	overflow: hidden;
+}
+
+.twobrain-home-role-fill {
+	height: 100%;
+	border-radius: 2px;
+	background-color: var(--zen-accent);
+}
+
+/* ── Health signals ───────────────────────────────────────────────────── */
+
+.twobrain-home-signals {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+a.twobrain-home-signal {
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	color: var(--zen-soft);
+	border: 1px solid var(--zen-line);
+	background-color: var(--zen-surface);
+}
+
+a.twobrain-home-signal:hover {
+	border-color: var(--zen-accent);
+	color: var(--zen-ink);
+}
+
+a.twobrain-home-signal.is-stalled {
+	color: var(--zen-alert);
+	border-color: color-mix(in srgb, var(--zen-alert) 35%, transparent);
+}
+
+a.twobrain-home-signal.is-no-next-action {
+	color: var(--zen-warn);
+	border-color: color-mix(in srgb, var(--zen-warn) 35%, transparent);
+}
+
+.twobrain-home-allclear {
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	color: var(--zen-faint);
+}
+
+/* ── Next steps ───────────────────────────────────────────────────────── */
+
+.twobrain-home-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+a.twobrain-home-nav-link {
+	padding: 4px 12px;
+	border-radius: 7px;
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	color: var(--zen-soft);
+	border: 1px solid var(--zen-line);
+	background-color: var(--zen-surface);
+}
+
+a.twobrain-home-nav-link:hover {
+	color: var(--zen-ink);
+	border-color: var(--zen-accent);
+}
+
+a.twobrain-home-nav-link.is-primary {
+	color: #fff;
+	border-color: var(--zen-accent);
+	background-color: var(--zen-accent);
+}
+
+a.twobrain-home-nav-link.is-primary:hover {
+	color: #fff;
+	filter: brightness(1.06);
+}
+
+/* The dark palette's accent is a light mint — white on it is unreadable. */
+.theme-dark a.twobrain-home-nav-link.is-primary,
+.theme-dark a.twobrain-home-nav-link.is-primary:hover {
+	color: #1c2422;
+}
+
+.twobrain-home-nav-missing {
+	padding: 4px 12px;
+	border-radius: 7px;
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+	border: 1px dashed var(--zen-line);
 }
 
 .twobrain-home-recent {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--size-2-3);
-	margin-bottom: var(--size-4-4);
+	gap: 8px;
 	font-size: var(--font-ui-smaller);
 }
 
 .twobrain-home-recent-label {
-	color: var(--text-faint);
+	color: var(--zen-faint);
 }
 
-.twobrain-home-recent-link {
-	color: var(--text-muted);
+a.twobrain-home-recent-link {
+	color: var(--zen-soft);
 	text-decoration: none;
 }
 
-.twobrain-home-recent-link:hover {
-	color: var(--text-accent);
+a.twobrain-home-recent-link:hover {
+	color: var(--zen-accent);
 	text-decoration: underline;
+}
+
+/* Phone portrait: the banner's two halves stop fitting side by side. */
+@media (max-width: 420px) {
+	.twobrain-home-banner {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.twobrain-home-banner-count {
+		text-align: left;
+	}
+
+	.twobrain-home-bignum {
+		font-size: 24px;
+	}
 }

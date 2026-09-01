@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 464 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 489 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -68,12 +68,22 @@ Rules that must not drift:
   on every matrix render. It **always clears the date**. A date left in the frontmatter would re-take the
   activity on every render, making it impossible to drop for as long as the date stayed in the past. A
   `done` activity has its stale date cleared but is never revived.
-- Home (```` ```2ndbrain-home ````, `HomeView`, `HomeComposer` installing `Home.md`) does not recompute the
-  matrix or projects data — it constructs a `MatrixView`/`ProjectsView` and calls `.render()` into a
-  sub-container, so it can never drift from what those two notes show standing alone. It only adds what
-  they don't cover (today's note link, role→Context-page readiness, Inbox pressure count, recent journal
-  list), and it never creates a daily note or Context page itself — only links to one if `HomeDashboard`
-  finds it already exists, otherwise it renders a plain, non-clickable label.
+- Home (```` ```2ndbrain-home ````, `HomeView`, `HomeComposer` installing `Home.md`) is **not** a third
+  dashboard and must not grow into one. It renders no tables and repeats no rows from the matrix or the
+  projects view — it reports role balance and system health, then links out. The hard constraint is that
+  the whole page stays readable in one glance in landscape on a phone (~780x360); anything that needs a
+  table belongs in one of the other two views. `tests/HomeView.test.ts` asserts no table is ever emitted.
+- A role card warns only when `open > 0 && taken === 0`. A role with nothing open is *clear*, not
+  neglected — warning on it would train the user to ignore the warning colour.
+- Home never creates a daily note or Context page — it links to one only if it already exists, else renders
+  a plain non-clickable label. Creation stays owned by the daily-note pipeline and the open commands, which
+  know the nested-folder conventions.
+- Home runs its own calm palette (`--zen-*`, scoped to `.twobrain-home`) rather than the sharper accent
+  colours the other views use — it is the page opened first, and it should read as a quiet room. The banner
+  is an inline SVG data-URI, not a binary asset: no file to ship, no licence to track, and it recolours for
+  the dark theme.
+- `loadProjectRecords` (`utilities/ProjectIndex.ts`) is the one place the `Projects/<slug>.md` vs
+  `Projects/<slug>/Project.md` resolution lives; `ProjectsView` and `HomeView` both use it.
 - **Nothing written into a daily note or Context page is ever deleted by the plugin** (D1). A rebuild keeps
   every existing activity block that has content beneath its heading — even for an activity that is now
   dropped or done — and merges genuinely new todos in rather than replacing the user's lines
@@ -89,7 +99,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 464 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 489 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

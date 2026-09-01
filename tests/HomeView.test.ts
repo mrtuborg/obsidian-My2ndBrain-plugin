@@ -1,16 +1,14 @@
 import { HomeView } from '../src/ui/HomeView';
+import { TFile } from 'obsidian';
 
-// Same fake as tests/ProjectsView.test.ts / tests/MatrixView.test.ts — HomeView
-// only touches empty/addClass/setText/createEl/createDiv/createSpan/
-// setAttribute/addEventListener, and so do the MatrixView/ProjectsView
-// instances it embeds, so this one fake covers the whole tree.
+// Same fake as tests/ProjectsView.test.ts / tests/MatrixView.test.ts.
+// NOTE: createEl treats `cls` as one class string, so multi-class elements
+// must be built with a follow-up addClass — HomeView does exactly that.
 class FakeEl {
 	children: FakeEl[] = [];
 	classes = new Set<string>();
 	attrs: Record<string, string> = {};
 	text = '';
-	value = '';
-	selected = false;
 	listeners: Record<string, Array<(evt: any) => void>> = {};
 
 	constructor(public tag: string) {}
@@ -30,34 +28,41 @@ class FakeEl {
 		this.children.push(el);
 		return el as unknown as HTMLElement;
 	}
-	createDiv(opts?: { cls?: string }) { return this.createEl('div', opts); }
+	createDiv(opts?: { cls?: string; text?: string }) { return this.createEl('div', opts); }
 	createSpan(opts?: { cls?: string; text?: string }) { return this.createEl('span', opts); }
 
 	all(): FakeEl[] { return this.children.flatMap(c => [c, ...c.all()]); }
 	find(tag: string): FakeEl[] { return this.all().filter(e => e.tag === tag); }
 	withClass(c: string): FakeEl[] { return this.all().filter(e => e.classes.has(c)); }
+	one(c: string): FakeEl | undefined { return this.withClass(c)[0]; }
+	click(c: string) {
+		for (const cb of this.one(c)?.listeners['click'] ?? []) cb({ preventDefault() {} });
+	}
 }
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
-function makeApp(files: Record<string, string>) {
-	const store = new Map(Object.entries(files));
-	const app = {
-		vault: {
-			getAbstractFileByPath: (p: string) => (store.has(p) ? { path: p } : null),
-			read: async (f: { path: string }) => store.get(f.path) ?? '',
-			modify: async (f: { path: string }, c: string) => { store.set(f.path, c); },
-			getFiles: () => [...store.keys()].map(p => ({
-				path: p,
-				name: p.split('/').pop()!,
-				basename: p.split('/').pop()!.replace(/\.md$/, ''),
-			})),
-			create: async () => undefined,
-			createFolder: async () => undefined,
-		},
-		workspace: { getLeaf: () => ({ openFile: async () => undefined }) },
-	};
-	return { app, store };
+function daysAgo(n: number): string {
+	const d = new Date();
+	d.setUTCDate(d.getUTCDate() - n);
+	return d.toISOString().slice(0, 10);
+}
+
+function activityFile(
+	role: string, project: string, stage: string, takeToWork: boolean, startDate = daysAgo(1)
+): string {
+	return [
+		'---',
+		`startDate: ${startDate}`,
+		`stage: ${stage}`,
+		'responsible: [Me]',
+		`project: ${project}`,
+		`role: ${role}`,
+		`takeToWork: ${takeToWork}`,
+		'---',
+		'',
+		'## Description',
+	].join('\n');
 }
 
 const SETTINGS = {
@@ -65,91 +70,190 @@ const SETTINGS = {
 	archiveFolder: 'Activities/Archive',
 	projectsFolder: 'Projects',
 	journalFolder: 'Journal',
+	dashboardsFolder: 'Dashboards',
 };
 
-async function renderWith(files: Record<string, string>) {
-	const { app } = makeApp(files);
-	const view = new HomeView(app as any, SETTINGS);
-	const root = new FakeEl('div');
-	await view.render(root as unknown as HTMLElement);
-	return { root, view };
+function makeApp(files: Record<string, string>) {
+	const store = new Map(Object.entries(files));
+	const opened: string[] = [];
+	// Real TFile instances: HomeView.open() guards on `instanceof TFile` so it
+	// never tries to open a folder, and a plain object would slip past the test.
+	const handle = (p: string) => Object.assign(new TFile(), {
+		path: p,
+		name: p.split('/').pop()!,
+		basename: p.split('/').pop()!.replace(/\.md$/, ''),
+	});
+	const app = {
+		vault: {
+			getAbstractFileByPath: (p: string) => (store.has(p) ? handle(p) : null),
+			read: async (f: { path: string }) => store.get(f.path) ?? '',
+			modify: async (f: { path: string }, c: string) => { store.set(f.path, c); },
+			getFiles: () => [...store.keys()].map(handle),
+		},
+		workspace: {
+			getLeaf: () => ({
+				openFile: async (f: { path: string }) => { opened.push(f.path); },
+			}),
+		},
+	};
+	return { app, opened };
 }
 
-describe('HomeView', () => {
-	it('links to today\'s daily note when it exists', async () => {
-		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: '# Journal' });
-		const link = root.withClass('twobrain-home-today-link')[0]!;
-		expect(link.text).toBe(`Today · ${TODAY}`);
-		expect(link.attrs['href']).toBe(`Journal/${TODAY}.md`);
+async function renderWith(files: Record<string, string>) {
+	const { app, opened } = makeApp(files);
+	const root = new FakeEl('div');
+	await new HomeView(app as any, SETTINGS).render(root as unknown as HTMLElement);
+	return { root, opened };
+}
+
+describe('HomeView banner', () => {
+	it('leads with how many activities are taken to work today', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('Engineer', 'p', 'doing', true),
+			'Activities/a2.md': activityFile('Engineer', 'p', 'backlog', false),
+			'Projects/p.md': '---\nrole: Engineer\n---\n',
+		});
+		expect(root.one('twobrain-home-bignum')!.text).toBe('1');
+		expect(root.one('twobrain-home-bignum-label')!.text).toBe('taken to work · 2 open');
 	});
 
-	it('shows a non-link nudge when today has no daily note yet', async () => {
+	it('shows a greeting and a human-readable date', async () => {
 		const { root } = await renderWith({});
-		expect(root.withClass('twobrain-home-today-link')).toHaveLength(0);
-		expect(root.withClass('twobrain-home-today-missing')[0]!.text)
-			.toBe(`Today · ${TODAY} — no daily note yet`);
+		expect(root.one('twobrain-home-greeting')!.text).toMatch(/^(Good|Still)/);
+		expect(root.one('twobrain-home-date')!.text).toMatch(/^[A-Z][a-z]+day, \d+ [A-Z][a-z]+$/);
+	});
+});
+
+describe('HomeView roles', () => {
+	it('renders one card per role with its taken/open ratio', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('Engineer', 'p', 'doing', true),
+			'Activities/a2.md': activityFile('Engineer', 'p', 'backlog', false),
+			'Projects/p.md': '---\nrole: Engineer\n---\n',
+		});
+		const cards = root.withClass('twobrain-home-role');
+		expect(cards).toHaveLength(5);
+		const engineer = cards.find(c =>
+			c.all().some(x => x.classes.has('twobrain-home-role-name') && x.text === 'Engineer'))!;
+		expect(engineer.all().find(x => x.classes.has('twobrain-home-role-count'))!.text)
+			.toBe('1 / 2');
 	});
 
-	it('links a role to its Context page when the page already exists', async () => {
+	it('marks a role untouched when it has open work but nothing planned', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('Family', 'p', 'backlog', false),
+			'Projects/p.md': '---\nrole: Family\n---\n',
+		});
+		const untouched = root.withClass('is-untouched');
+		expect(untouched).toHaveLength(1);
+		expect(untouched[0]!.all().find(x => x.classes.has('twobrain-home-role-name'))!.text)
+			.toBe('Family');
+	});
+
+	it('shows a role with no open work as clear, not as a warning', async () => {
+		const { root } = await renderWith({});
+		expect(root.withClass('is-untouched')).toHaveLength(0);
+		expect(root.withClass('is-clear')).toHaveLength(5);
+		expect(root.withClass('twobrain-home-role-count')[0]!.text).toBe('clear');
+	});
+
+	it('links a role to its context page when it exists, plain text when not', async () => {
 		const { root } = await renderWith({
 			[`Journal/${TODAY}.md`]: '# Journal',
 			[`Journal/Contexts/${TODAY}-Engineer.md`]: '# Engineer',
 		});
-		const chips = root.withClass('twobrain-home-role-chip');
-		const engineer = chips.find(c => c.text === 'Engineer')!;
-		expect(engineer.classes.has('twobrain-home-role-ready')).toBe(true);
+		const names = root.withClass('twobrain-home-role-name');
+		const engineer = names.find(n => n.text === 'Engineer')!;
+		const family = names.find(n => n.text === 'Family')!;
+		expect(engineer.tag).toBe('a');
 		expect(engineer.attrs['href']).toBe(`Journal/Contexts/${TODAY}-Engineer.md`);
+		expect(family.tag).toBe('span');
 	});
 
-	it('shows a role as pending (no link) when its Context page does not exist', async () => {
-		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: '# Journal' });
-		const chips = root.withClass('twobrain-home-role-chip');
-		const engineer = chips.find(c => c.text === 'Engineer')!;
-		expect(engineer.classes.has('twobrain-home-role-pending')).toBe(true);
-		expect(engineer.attrs['href']).toBeUndefined();
-	});
-
-	it('shows no role chips as ready when there is no daily note yet to hang Contexts off of', async () => {
-		const { root } = await renderWith({});
-		const ready = root.withClass('twobrain-home-role-ready');
-		expect(ready).toHaveLength(0);
-	});
-
-	it('surfaces an inbox-pressure line only when there is untriaged work', async () => {
-		const withInbox = await renderWith({
-			'Activities/a1.md': [
-				'---', 'startDate: 2026-01-01', 'stage: backlog', 'responsible: [Me]',
-				'project: inbox', '---', '',
-			].join('\n'),
+	it('flags how many of a role\'s projects need a decision', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('TechLead', 'old', 'doing', false, daysAgo(200)),
+			'Projects/old.md': '---\nrole: TechLead\n---\n',
 		});
-		expect(withInbox.root.withClass('twobrain-home-inbox')).toHaveLength(1);
-		expect(withInbox.root.withClass('twobrain-home-inbox')[0]!.find('a')[0]!.text)
-			.toBe('1 untriaged in Inbox');
+		expect(root.one('twobrain-home-role-flag')!.text).toBe('1');
+	});
+});
 
-		const empty = await renderWith({});
-		expect(empty.root.withClass('twobrain-home-inbox')).toHaveLength(0);
+describe('HomeView health signals', () => {
+	it('shows only the signals that are actually firing', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('TechLead', 'old', 'doing', false, daysAgo(200)),
+			// Referenced but has no Projects/ file, and nothing in `doing` —
+			// so it also raises "no next action" as an implicit project.
+			'Activities/a2.md': activityFile('', 'inbox', 'backlog', false),
+			'Projects/old.md': '---\nrole: TechLead\n---\n',
+		});
+		expect(root.withClass('twobrain-home-signal').map(s => s.text))
+			.toEqual(['1 stalled', '1 no next action', '1 untriaged', '1 no role']);
 	});
 
-	it('lists recent journal entries, most recent first, excluding today', async () => {
+	it('says everything is clear rather than showing zeroes', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('Engineer', 'p', 'doing', true),
+			'Projects/p.md': '---\nrole: Engineer\n---\n',
+		});
+		expect(root.withClass('twobrain-home-signal')).toHaveLength(0);
+		expect(root.one('twobrain-home-allclear')!.text)
+			.toBe('Everything is triaged. Nothing is asking for you.');
+	});
+
+	it('sends each signal to the note that resolves it', async () => {
+		const { root } = await renderWith({
+			'Activities/a1.md': activityFile('', 'inbox', 'backlog', false),
+		});
+		const byText = (t: string) => root.withClass('twobrain-home-signal').find(s => s.text === t)!;
+		expect(byText('1 untriaged').attrs['href']).toBe('Projects/Inbox.md');
+		expect(byText('1 no role').attrs['href']).toBe('Dashboards/Eisenhower Matrix.md');
+	});
+});
+
+describe('HomeView next steps', () => {
+	it('offers today\'s note plus the planning and review destinations', async () => {
+		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: '# Journal' });
+		const nav = root.withClass('twobrain-home-nav-link');
+		expect(nav.map(n => n.text)).toEqual(["Today's note", 'Plan', 'Projects', 'Inbox']);
+		expect(nav[0]!.attrs['href']).toBe(`Journal/${TODAY}.md`);
+		expect(nav[1]!.attrs['href']).toBe('Dashboards/Eisenhower Matrix.md');
+		expect(nav[2]!.attrs['href']).toBe('Dashboards/Projects.md');
+	});
+
+	it('degrades to a non-link nudge when today has no daily note', async () => {
+		const { root } = await renderWith({});
+		expect(root.one('twobrain-home-nav-missing')!.text).toBe('No daily note yet');
+		expect(root.withClass('twobrain-home-nav-link').map(n => n.text))
+			.toEqual(['Plan', 'Projects', 'Inbox']);
+	});
+
+	it('opens the note behind a link when it is clicked', async () => {
+		const { root, opened } = await renderWith({ [`Journal/${TODAY}.md`]: '# Journal' });
+		root.click('is-primary');
+		expect(opened).toEqual([`Journal/${TODAY}.md`]);
+	});
+
+	it('lists recent days without the redundant year', async () => {
 		const { root } = await renderWith({
 			[`Journal/${TODAY}.md`]: '# Journal',
-			'Journal/2026-01-01.md': '# Journal',
 			'Journal/2026-01-03.md': '# Journal',
+			'Journal/2026-01-01.md': '# Journal',
 		});
-		const links = root.withClass('twobrain-home-recent-link');
-		expect(links.map(l => l.text)).toEqual(['2026-01-03', '2026-01-01']);
+		expect(root.withClass('twobrain-home-recent-link').map(l => l.text))
+			.toEqual(['01-03', '01-01']);
 	});
+});
 
-	it('renders the embedded matrix and projects sections', async () => {
+describe('HomeView scope', () => {
+	it('does not embed the matrix or projects tables', async () => {
 		const { root } = await renderWith({
-			'Activities/a1.md': [
-				'---', 'startDate: 2026-01-01', 'stage: doing', 'responsible: [Me]',
-				'project: roommate', 'role: Engineer', 'takeToWork: true', '---', '',
-			].join('\n'),
-			'Projects/roommate.md': '---\nrole: Engineer\n---\n',
+			'Activities/a1.md': activityFile('Engineer', 'p', 'doing', true),
+			'Projects/p.md': '---\nrole: Engineer\n---\n',
 		});
-		expect(root.find('h3').map(h => h.text)).toEqual(['Take to work', 'Projects']);
-		expect(root.withClass('twobrain-matrix-table').length).toBeGreaterThan(0);
-		expect(root.withClass('twobrain-projects-table').length).toBeGreaterThan(0);
+		expect(root.withClass('twobrain-matrix-table')).toHaveLength(0);
+		expect(root.withClass('twobrain-projects-table')).toHaveLength(0);
+		expect(root.find('table')).toHaveLength(0);
 	});
 });
