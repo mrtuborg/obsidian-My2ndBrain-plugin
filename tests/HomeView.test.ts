@@ -247,7 +247,7 @@ describe('HomeView next steps', () => {
 	it('offers today\'s note plus the planning and review destinations', async () => {
 		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: '# Journal' });
 		const nav = root.withClass('twobrain-home-nav-link');
-		expect(nav.map(n => n.text)).toEqual(["Today's note", 'Plan', 'Projects', 'Inbox']);
+		expect(nav.map(n => n.text)).toEqual(["Today's note", 'Plan', 'Projects', 'People', 'Inbox']);
 		expect(nav[0]!.attrs['href']).toBe(`Journal/${TODAY}.md`);
 		expect(nav[1]!.attrs['href']).toBe('Dashboards/Eisenhower Matrix.md');
 		expect(nav[2]!.attrs['href']).toBe('Dashboards/Projects.md');
@@ -257,7 +257,7 @@ describe('HomeView next steps', () => {
 		const { root } = await renderWith({});
 		expect(root.one('twobrain-home-nav-missing')!.text).toBe('No daily note yet');
 		expect(root.withClass('twobrain-home-nav-link').map(n => n.text))
-			.toEqual(['Plan', 'Projects', 'Inbox']);
+			.toEqual(['Plan', 'Projects', 'People', 'Inbox']);
 	});
 
 	it('opens the note behind a link when it is clicked', async () => {

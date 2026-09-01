@@ -277,6 +277,7 @@ export class HomeView {
 		}
 		this.navLink(nav, 'Plan', this.targetPath('matrix'));
 		this.navLink(nav, 'Projects', this.targetPath('projects'));
+		this.navLink(nav, 'People', this.targetPath('people'));
 		this.navLink(nav, 'Inbox', this.targetPath('inbox'));
 
 		if (summary.recentJournal.length === 0) return;

@@ -184,7 +184,7 @@ page is readable in one glance in landscape on a phone.
 | Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role, promises aging, people gone quiet. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
 | Life balance | A radar with an axis per role, showing how many days each one showed up in your journal over the last 12 months. Normalized against your busiest role, so the shape reads as balance rather than volume — round is even, a spike is a year spent on one thing. A dashed ring marks your own average |
 | Consistency | A year of days, one cell each, shaded by how full the day was relative to your typical day. Current streak, longest streak, and total active days. Click any day to open it |
-| Next steps | Today's note, Plan (matrix), Projects, Inbox — plus the last few days for a glance back |
+| Next steps | Today's note, Plan (matrix), Projects, People, Inbox — plus the last few days for a glance back |
 
 A role card is highlighted only when it owns open work and **none of it** is planned for today. A role with
 nothing open is *clear*, not neglected, and recedes instead of nagging.
