@@ -36,6 +36,9 @@ const QUADRANTS: Array<{ key: string; heading: string }> = [
 	{ key: 'urgent-not-important', heading: '📨 Urgent, not important — delegate' },
 	{ key: 'not-urgent-not-important', heading: '🗑️ Not urgent, not important — eliminate' },
 ];
+
+/** The four `priority:` values that place an activity in a real quadrant. */
+export const PRIORITY_KEYS: readonly string[] = QUADRANTS.map(q => q.key);
 const OTHER_KEY = 'other';
 const OTHER_HEADING = '❔ Unprioritized / other';
 

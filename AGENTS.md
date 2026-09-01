@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 365 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 382 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -42,7 +42,12 @@ Rules that must not drift:
   so a pre-backfill vault still renders something, but the **backfill deliberately does not use that rule**:
   it stamps `false` everywhere. Migrating "every doing activity" to `true` reproduces exactly the behaviour
   this field exists to replace, and hands the user a day they never planned.
-- Taking an activity to work also sets `stage: doing`; marking it done also clears `takeToWork`.
+- Taking an activity to work also sets `stage: doing`. Setting stage to `done` or `backlog` from the matrix
+  dropdown clears `takeToWork` (both mean "not today"); setting it to `doing` leaves the flag alone, because
+  working on something and planning it for today are separate decisions.
+- Matrix dropdowns (`src/utilities/MatrixOptions.ts`) always include the value currently on disk, labelled
+  `(unknown)` when it is outside the standard vocabulary. A `<select>` that omitted it would rewrite that
+  field the moment the user changed any other column in the row.
 - Activities born from a journal wikilink (`AutoActivityCreator`) start `takeToWork: true`. The Journal is
   the source of truth, so writing `[[Something]]` in a daily note or Context page *is* the act of taking it
   to work — and the stub must appear in the very Activities section that created it. Anything else would
@@ -58,7 +63,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 365 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 382 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

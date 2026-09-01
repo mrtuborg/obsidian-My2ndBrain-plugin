@@ -97,6 +97,7 @@ export default class TwoBrainPlugin extends Plugin {
 			const view = new MatrixView(this.app, {
 				activitiesFolder: this.settings.activitiesFolder,
 				archiveFolder: this.settings.archiveFolder,
+				projectsFolder: this.settings.projectsFolder,
 			});
 			try {
 				await view.render(el);

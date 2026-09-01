@@ -51,9 +51,22 @@ idempotent and never overwrites a decision you've already recorded.
 ```
 ````
 
-The plugin renders the live, clickable matrix into it. Each button writes a single frontmatter line on one
-activity file — the smallest possible write, so two devices planning different activities never collide in
-Obsidian Sync.
+The plugin renders the live, editable matrix into it. Each row has:
+
+| Control | Writes |
+|---|---|
+| **Take to work** / **Drop** | `takeToWork` (taking also sets `stage: doing`) |
+| **📅** | `takeToWorkDate` |
+| **Role**, **Project**, **Priority** dropdowns | the matching frontmatter field |
+| **Stage** dropdown | `stage` — choosing `done` or `backlog` also clears `takeToWork` |
+
+Changing **Priority** moves the row between quadrants. The **Project** list is built from your
+`Projects/` folder — subfolders and top-level notes both count — plus anything your activities already
+reference. A dropdown always contains the value currently on disk, marked `(unknown)` if it isn't part
+of the standard vocabulary, so editing one column never quietly rewrites another.
+
+Every control writes a single frontmatter line on one activity file — the smallest possible write, so two
+devices planning different activities never collide in Obsidian Sync.
 
 ---
 
@@ -63,7 +76,7 @@ Obsidian Sync.
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (365 tests)
+npm test        # Jest unit tests (382 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

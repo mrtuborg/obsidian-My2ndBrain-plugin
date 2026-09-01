@@ -4,10 +4,19 @@ import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { EisenhowerMatrix, MatrixActivity, MatrixQuadrant } from '../components/EisenhowerMatrix';
 import { TAKE_TO_WORK_FIELD, TAKE_TO_WORK_DATE_FIELD } from '../utilities/TakeToWork';
 import { PlanDateModal } from './PlanDateModal';
+import {
+	SelectOption,
+	stageOptions,
+	roleOptions,
+	priorityOptions,
+	projectOptions,
+	collectProjectNames,
+} from '../utilities/MatrixOptions';
 
 export interface MatrixViewSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
+	projectsFolder: string;
 }
 
 /**
@@ -23,6 +32,7 @@ export class MatrixView {
 	private fileIO = new FileIO();
 	private matrix = new EisenhowerMatrix();
 	private container: HTMLElement | null = null;
+	private projectNames: string[] = [];
 
 	constructor(private app: App, private settings: MatrixViewSettings) {}
 
@@ -38,6 +48,15 @@ export class MatrixView {
 			this.settings.archiveFolder
 		);
 		const quadrants = this.matrix.buildQuadrants(activities as MatrixActivity[], today);
+
+		// Built once per render, not per row: every dropdown offers the same
+		// vault-wide project list, and scanning the file list 50 times over
+		// would be pure waste.
+		this.projectNames = collectProjectNames(
+			this.app.vault.getFiles().map(f => f.path),
+			this.settings.projectsFolder,
+			activities.map(a => a.project)
+		);
 
 		const total = quadrants.reduce((n, q) => n + q.activities.length, 0);
 		const inWork = quadrants.reduce(
@@ -68,7 +87,7 @@ export class MatrixView {
 
 		const table = container.createEl('table', { cls: 'twobrain-matrix-table' });
 		const head = table.createEl('thead').createEl('tr');
-		for (const label of ['', 'Activity', 'Planned', 'Role', 'Project', 'Stage', 'Actions']) {
+		for (const label of ['', 'Activity', 'Planned', 'Role', 'Project', 'Priority', 'Stage', 'Actions']) {
 			head.createEl('th', { text: label });
 		}
 
@@ -97,9 +116,19 @@ export class MatrixView {
 		});
 
 		row.createEl('td', { text: activity.takeToWorkDate || '—' });
-		row.createEl('td', { text: activity.role || '—' });
-		row.createEl('td', { text: activity.project || '—' });
-		row.createEl('td', { text: activity.stage || '—' });
+
+		this.renderSelect(row, 'Role', roleOptions(activity.role), activity.role,
+			value => this.applyFields(activity, { role: value || null }));
+
+		this.renderSelect(row, 'Project', projectOptions(this.projectNames, activity.project),
+			activity.project,
+			value => this.applyFields(activity, { project: value || null }));
+
+		this.renderSelect(row, 'Priority', priorityOptions(activity.priority), activity.priority,
+			value => this.applyFields(activity, { priority: value || null }));
+
+		this.renderSelect(row, 'Stage', stageOptions(activity.stage), activity.stage,
+			value => this.changeStage(activity, value));
 
 		const actions = row.createEl('td', { cls: 'twobrain-matrix-actions' });
 
@@ -117,10 +146,52 @@ export class MatrixView {
 		const plan = actions.createEl('button', { text: '📅' });
 		plan.setAttribute('aria-label', 'Set a plan date (matrix only)');
 		plan.addEventListener('click', () => void this.planDate(activity));
+	}
 
-		const done = actions.createEl('button', { text: '✓' });
-		done.setAttribute('aria-label', 'Mark done — removes it from the matrix');
-		done.addEventListener('click', () => void this.markDone(activity));
+	/**
+	 * One dropdown cell. The option list always contains the activity's
+	 * current value (see MatrixOptions), so rendering can never rewrite a
+	 * field just by being displayed.
+	 */
+	private renderSelect(
+		row: HTMLElement,
+		label: string,
+		options: SelectOption[],
+		current: string,
+		onChange: (value: string) => Promise<void>
+	): void {
+		const cell = row.createEl('td');
+		const select = cell.createEl('select', { cls: 'twobrain-matrix-select' });
+		select.setAttribute('aria-label', label);
+
+		for (const option of options) {
+			const el = select.createEl('option', { text: option.label });
+			el.value = option.value;
+			if (option.value === current) el.selected = true;
+		}
+
+		select.addEventListener('change', () => {
+			const next = select.value;
+			if (next === current) return;
+			void onChange(next);
+		});
+	}
+
+	/**
+	 * Stage is now the only way to finish an activity — the old ✓ button did
+	 * exactly this and nothing else, so a dropdown that already had to exist
+	 * makes it redundant.
+	 *
+	 * `done` and `backlog` both mean "not what I'm doing today", so both clear
+	 * the flag; leaving takeToWork set would keep a finished or shelved
+	 * activity in tomorrow's daily note. Moving to `doing` leaves the flag
+	 * alone: working on something and planning it for today are separate
+	 * decisions, and the Take to work button owns the second one.
+	 */
+	private async changeStage(activity: MatrixActivity, stage: string): Promise<void> {
+		const fields: Record<string, string | null> = { stage: stage || null };
+		if (stage === 'done' || stage === 'backlog') fields[TAKE_TO_WORK_FIELD] = 'false';
+		await this.applyFields(activity, fields);
 	}
 
 	/**
@@ -144,13 +215,6 @@ export class MatrixView {
 
 		await this.applyFields(activity, {
 			[TAKE_TO_WORK_DATE_FIELD]: chosen === '' ? null : chosen,
-		});
-	}
-
-	private async markDone(activity: MatrixActivity): Promise<void> {
-		await this.applyFields(activity, {
-			stage: 'done',
-			[TAKE_TO_WORK_FIELD]: 'false',
 		});
 	}
 

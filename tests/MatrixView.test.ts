@@ -10,6 +10,8 @@ class FakeEl {
 	classes = new Set<string>();
 	attrs: Record<string, string> = {};
 	text = '';
+	value = '';
+	selected = false;
 	listeners: Record<string, Array<(evt: any) => void>> = {};
 
 	constructor(public tag: string) {}
@@ -39,6 +41,16 @@ class FakeEl {
 		return this.all().filter(e => e.tag === tag);
 	}
 	click() { for (const cb of this.listeners['click'] ?? []) cb({ preventDefault() {} }); }
+
+	/** Pick an option by value and fire 'change', like a real user would. */
+	choose(value: string) {
+		this.value = value;
+		for (const cb of this.listeners['change'] ?? []) cb({ preventDefault() {} });
+	}
+	options(): string[] { return this.find('option').map(o => o.value); }
+	selectedValue(): string {
+		return this.find('option').find(o => o.selected)?.value ?? '';
+	}
 }
 
 function activityFile(name: string, lines: string[]): string {
@@ -66,7 +78,20 @@ function makeApp(files: Record<string, string>) {
 	return { app, store, saves };
 }
 
-const SETTINGS = { activitiesFolder: 'Activities', archiveFolder: 'Activities/Archive' };
+const SETTINGS = {
+	activitiesFolder: 'Activities',
+	archiveFolder: 'Activities/Archive',
+	projectsFolder: 'Projects',
+};
+
+/** The dropdown labelled `label` on the row for `displayName`. */
+function selectFor(root: FakeEl, displayName: string, label: string): FakeEl {
+	const row = root.find('tr').find(r => r.all().some(c => c.text === displayName));
+	if (!row) throw new Error(`No row rendered for ${displayName}`);
+	const sel = row.find('select').find(s => s.attrs['aria-label'] === label);
+	if (!sel) throw new Error(`No ${label} dropdown on row ${displayName}`);
+	return sel;
+}
 
 /** The row-level buttons, in render order: [toggle, plan, done]. */
 function buttonsFor(root: FakeEl, displayName: string): FakeEl[] {
@@ -129,15 +154,16 @@ describe('MatrixView', () => {
 		expect(saved).toContain('stage: doing');
 	});
 
-	it('marking done retires the activity from the matrix and from planning', async () => {
+	it('choosing done in the Stage column retires the activity, replacing the old ✓ button', async () => {
 		const { app, store } = makeApp({
 			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
 		});
 		const root = new FakeEl('div');
 		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
 
-		const done = buttonsFor(root, 'planned')[2]!;
-		done.click();
+		expect(buttonsFor(root, 'planned').map(b => b.text)).toEqual(['Drop', '📅']);
+
+		selectFor(root, 'planned', 'Stage').choose('done');
 		await new Promise(r => setTimeout(r, 0));
 
 		const saved = store.get('Activities/planned.md')!;
@@ -158,5 +184,109 @@ describe('MatrixView', () => {
 
 		expect(buttonsFor(root, 'idle')[0]!.text).toBe('Drop');
 		expect(root.find('a').filter(a => a.text === 'idle')).toHaveLength(1);
+	});
+
+	// ── Dropdown columns ─────────────────────────────────────────────────
+
+	it('offers every stage, role and priority, with the current value preselected', async () => {
+		const { app } = makeApp({
+			'Activities/planned.md': activityFile('p', [
+				'stage: doing', 'takeToWork: true', 'priority: urgent-important', 'role: Engineer',
+			]),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		const stage = selectFor(root, 'planned', 'Stage');
+		expect(stage.options()).toEqual(['', 'doing', 'backlog', 'done']);
+		expect(stage.selectedValue()).toBe('doing');
+
+		const role = selectFor(root, 'planned', 'Role');
+		expect(role.options()).toContain('Engineer');
+		expect(role.options()).toContain('Family');
+		expect(role.selectedValue()).toBe('Engineer');
+
+		const priority = selectFor(root, 'planned', 'Priority');
+		expect(priority.options()).toContain('not-urgent-important');
+		expect(priority.selectedValue()).toBe('urgent-important');
+	});
+
+	it('changing priority moves the activity to another quadrant', async () => {
+		const { app, store } = makeApp({
+			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		selectFor(root, 'planned', 'Priority').choose('not-urgent-not-important');
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(store.get('Activities/planned.md')!).toContain('priority: not-urgent-not-important');
+		expect(selectFor(root, 'planned', 'Priority').selectedValue()).toBe('not-urgent-not-important');
+	});
+
+	it('assigning a role writes it, and clearing it removes the field', async () => {
+		const { app, store } = makeApp({
+			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important', 'role: Engineer']),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		selectFor(root, 'planned', 'Role').choose('Family');
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.get('Activities/planned.md')!).toContain('role: Family');
+
+		selectFor(root, 'planned', 'Role').choose('');
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.get('Activities/planned.md')!).not.toContain('role:');
+	});
+
+	it('lists projects found in the vault and keeps the one already assigned', async () => {
+		const { app, store } = makeApp({
+			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
+			'Projects/roommate/notes.md': '# roommate',
+			'Projects/standalone.md': '# standalone',
+		});
+		// The helper writes `project: p`, a name no folder scan would find.
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		const project = selectFor(root, 'planned', 'Project');
+		expect(project.options()).toEqual(expect.arrayContaining(['roommate', 'standalone', 'p']));
+		expect(project.selectedValue()).toBe('p');
+
+		project.choose('roommate');
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.get('Activities/planned.md')!).toContain('project: roommate');
+	});
+
+	it('shelving to backlog also drops it from today, so it cannot linger in tomorrow\'s note', async () => {
+		const { app, store } = makeApp({
+			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		selectFor(root, 'planned', 'Stage').choose('backlog');
+		await new Promise(r => setTimeout(r, 0));
+
+		const saved = store.get('Activities/planned.md')!;
+		expect(saved).toContain('stage: backlog');
+		expect(saved).toContain('takeToWork: false');
+	});
+
+	it('moving to doing leaves the take-to-work decision alone', async () => {
+		const { app, store } = makeApp({
+			'Activities/idle.md': activityFile('i', ['stage: backlog', 'takeToWork: false', 'priority: urgent-important']),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		selectFor(root, 'idle', 'Stage').choose('doing');
+		await new Promise(r => setTimeout(r, 0));
+
+		const saved = store.get('Activities/idle.md')!;
+		expect(saved).toContain('stage: doing');
+		expect(saved).toContain('takeToWork: false');
 	});
 });
