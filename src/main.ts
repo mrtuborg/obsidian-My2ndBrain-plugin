@@ -451,7 +451,10 @@ export default class TwoBrainPlugin extends Plugin {
 		// showing so we never fight a user who has already clicked away.
 		for (const delay of STARTUP_REASSERT_MS) {
 			await this.sleep(delay);
-			if (this.app.workspace.getActiveFile()?.path === home) return;
+			if (this.app.workspace.getActiveFile()?.path === home) {
+				this.persistHomeAsStartupLayout();
+				return;
+			}
 			try {
 				await this.openHome();
 				console.info('[2ndBrain] Startup: re-opened home after', delay, 'ms');
@@ -460,6 +463,22 @@ export default class TwoBrainPlugin extends Plugin {
 				return;
 			}
 		}
+		this.persistHomeAsStartupLayout();
+	}
+
+	/**
+	 * Saves the current (now Home-first) layout to workspace.json.
+	 *
+	 * The daily-note flash some users see on launch — especially on mobile —
+	 * isn't this plugin's doing: Obsidian paints the previously saved layout
+	 * natively before any plugin code runs, and no hook fires early enough to
+	 * beat that first frame. What we *can* do is make sure the layout we save
+	 * after fixing things up is the one that gets painted next time, so the
+	 * flash only returns on a launch after a session that ended somewhere
+	 * other than Home.
+	 */
+	private persistHomeAsStartupLayout(): void {
+		this.app.workspace.requestSaveLayout();
 	}
 
 	onunload(): void {
