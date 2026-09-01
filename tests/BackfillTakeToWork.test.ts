@@ -27,7 +27,10 @@ function activity(stage: string, extra: string[] = []): string {
 }
 
 describe('backfillTakeToWork', () => {
-	it('derives true for doing and false for everything else', async () => {
+	// The migration is a clean slate, NOT a behaviour-preserving translation of
+	// `stage`. Stamping `doing` activities true would hand the user a day they
+	// never planned — exactly what this field exists to stop.
+	it('stamps false everywhere, whatever the stage, so the user starts empty-handed', async () => {
 		const { app, store, saves } = makeApp({
 			'Activities/doing.md': activity('doing'),
 			'Activities/backlog.md': activity('backlog'),
@@ -38,9 +41,20 @@ describe('backfillTakeToWork', () => {
 
 		expect(result.stamped).toBe(3);
 		expect(saves).toHaveLength(3);
-		expect(store.get('Activities/doing.md')).toContain('takeToWork: true');
+		expect(store.get('Activities/doing.md')).toContain('takeToWork: false');
 		expect(store.get('Activities/backlog.md')).toContain('takeToWork: false');
 		expect(store.get('Activities/done.md')).toContain('takeToWork: false');
+	});
+
+	it('does not overwrite a real decision the user already made', async () => {
+		const { app, store, saves } = makeApp({
+			'Activities/chosen.md': activity('backlog', ['takeToWork: true']),
+		});
+
+		await backfillTakeToWork(app, SETTINGS);
+
+		expect(saves).toHaveLength(0);
+		expect(store.get('Activities/chosen.md')).toContain('takeToWork: true');
 	});
 
 	it('leaves activities that already carry the field untouched', async () => {
@@ -85,7 +99,7 @@ describe('backfillTakeToWork', () => {
 		await backfillTakeToWork(app, SETTINGS);
 
 		expect(store.get('Activities/a.md')!.split('\n').slice(0, 5)).toEqual([
-			'---', 'startDate: 2026-01-05', 'stage: doing', 'takeToWork: true', 'responsible: [Me]',
+			'---', 'startDate: 2026-01-05', 'stage: doing', 'takeToWork: false', 'responsible: [Me]',
 		]);
 	});
 

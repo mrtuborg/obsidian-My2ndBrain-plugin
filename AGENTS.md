@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 364 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 365 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -38,8 +38,10 @@ Rules that must not drift:
 - Daily note gate (`ActivitiesInProgress`) = `takeToWork` && `stage != done` && valid `startDate <= today`.
 - `TodoSyncManager` is deliberately **not** gated on `takeToWork`. It writes journal todos *into* activity
   files — that is data integrity, not display. Gating it there silently loses Journal entries.
-- A missing `takeToWork` resolves to `stage === 'doing'` (`resolveTakeToWork` in `src/utilities/TakeToWork.ts`),
-  so a pre-backfill vault behaves exactly as before.
+- A missing `takeToWork` resolves to `stage === 'doing'` (`resolveTakeToWork` in `src/utilities/TakeToWork.ts`)
+  so a pre-backfill vault still renders something, but the **backfill deliberately does not use that rule**:
+  it stamps `false` everywhere. Migrating "every doing activity" to `true` reproduces exactly the behaviour
+  this field exists to replace, and hands the user a day they never planned.
 - Taking an activity to work also sets `stage: doing`; marking it done also clears `takeToWork`.
 - Activities born from a journal wikilink (`AutoActivityCreator`) start `takeToWork: true`. The Journal is
   the source of truth, so writing `[[Something]]` in a daily note or Context page *is* the act of taking it
@@ -56,7 +58,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 364 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 365 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

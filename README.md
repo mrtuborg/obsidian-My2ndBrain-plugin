@@ -37,9 +37,10 @@ the Journal is the source of truth, so jotting it down *is* planning it, and it 
 Activities section. Use **Drop** in the matrix to say "captured, but not today". Mentioning an activity that
 already exists never changes its flag, so carried-forward notes can't quietly resurrect what you dropped.
 
-Activities written before this field existed fall back to `stage === 'doing'` when read, so nothing changes
-until you start clicking. Run **2ndBrain: Backfill takeToWork on all activities** from the command palette
-to stamp the field everywhere at once; it is idempotent.
+Run **2ndBrain: Backfill takeToWork on all activities** once from the command palette to stamp the field
+across the vault. It stamps `false` everywhere — a clean slate you plan from — rather than deriving the
+value from `stage`, which would silently hand you a day's worth of choices you never made. It is
+idempotent and never overwrites a decision you've already recorded.
 
 ### The matrix note
 
@@ -62,7 +63,7 @@ Obsidian Sync.
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (364 tests)
+npm test        # Jest unit tests (365 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```
