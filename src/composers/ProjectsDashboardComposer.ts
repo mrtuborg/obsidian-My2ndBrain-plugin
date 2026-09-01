@@ -8,14 +8,28 @@ export interface ProjectsDashboardSettings {
 	projectsFolder: string;
 }
 
+/** Fence the plugin's markdown code block processor renders the live dashboard into. */
+export const PROJECTS_CODE_BLOCK_LANG = '2ndbrain-projects';
+
+const PROJECTS_STUB = [
+	'---',
+	'---',
+	'# Projects Dashboard',
+	'',
+	'```' + PROJECTS_CODE_BLOCK_LANG,
+	'```',
+	'',
+].join('\n');
+
 /**
- * Obsidian-facing wrapper around ProjectsDashboard: gathers every Activity
- * and every Project from the vault, computes the per-project rollup, and
- * writes the rendered markdown into the dashboard note. Regenerated on
- * every open (see main.ts routeFile) so it's always fresh for a periodic
- * review — never hand-edited, same as a Context page. Lives in the
- * Dashboards folder (see settings.dashboardsFolder), not under Projects/,
- * so it's never mistaken for a project itself.
+ * Obsidian-facing wrapper around ProjectsDashboard.
+ *
+ * Like the Eisenhower matrix, the dashboard is a live view rendered from a
+ * `2ndbrain-projects` code block rather than regenerated markdown: static
+ * tables can't carry progress bars, health pills or the inline role picker,
+ * and rewriting the note on every open was a steady source of sync churn on
+ * a file the user never edits by hand. This composer therefore only ensures
+ * the note contains that block.
  */
 export class ProjectsDashboardComposer {
 	private fileIO = new FileIO();
@@ -24,19 +38,33 @@ export class ProjectsDashboardComposer {
 	constructor(private settings: ProjectsDashboardSettings) {}
 
 	async refresh(app: AppLike, path: string): Promise<void> {
-		const content = await this.generate(app);
 		const file = app.vault.getAbstractFileByPath(path);
 		if (!file) return;
-		await app.vault.modify(file, content);
+
+		const content = await app.vault.read(file);
+		if (content.includes('```' + PROJECTS_CODE_BLOCK_LANG)) return;
+
+		await app.vault.modify(file, PROJECTS_STUB);
 	}
 
+	/** The note skeleton: frontmatter, title, and the live-view code block. */
+	stub(): string {
+		return PROJECTS_STUB;
+	}
+
+	/**
+	 * Static markdown rendering of the same rollup. No longer used for the
+	 * note itself, but kept as the pure, testable description of the data —
+	 * and as an export path for anywhere a live view can't run.
+	 */
 	async generate(app: AppLike): Promise<string> {
 		const activities: DashboardActivity[] = await loadActivityRecords(
 			app, this.settings.activitiesFolder, this.settings.archiveFolder
 		);
 		const projects = await this.loadProjects(app);
-		const rows = this.dashboard.buildRows(activities, projects);
-		return this.dashboard.render(rows, this.fileIO.todayDate());
+		const today = this.fileIO.todayDate();
+		const rows = this.dashboard.buildRows(activities, projects, today);
+		return this.dashboard.render(rows, today);
 	}
 
 	/**

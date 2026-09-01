@@ -3,9 +3,10 @@ import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab, ROLES, Role } fr
 import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
-import { ProjectsDashboardComposer } from './composers/ProjectsDashboardComposer';
+import { ProjectsDashboardComposer, PROJECTS_CODE_BLOCK_LANG } from './composers/ProjectsDashboardComposer';
 import { EisenhowerMatrixComposer, MATRIX_CODE_BLOCK_LANG } from './composers/EisenhowerMatrixComposer';
 import { MatrixView } from './ui/MatrixView';
+import { ProjectsView } from './ui/ProjectsView';
 import { backfillTakeToWork } from './commands/BackfillTakeToWork';
 import { AppLike } from './utilities/FileIO';
 import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
@@ -104,6 +105,23 @@ export default class TwoBrainPlugin extends Plugin {
 				await view.render(el);
 			} catch (e) {
 				el.setText(`2ndBrain: could not render matrix — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
+
+		// Same reasoning as the matrix: the projects dashboard carries
+		// progress bars, health pills and an inline role picker, none of
+		// which survive as generated markdown.
+		this.registerMarkdownCodeBlockProcessor(PROJECTS_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new ProjectsView(this.app, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+				projectsFolder: this.settings.projectsFolder,
+			});
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render projects dashboard — ${(e as Error).message}`);
 				console.error('[2ndBrain]', e);
 			}
 		});

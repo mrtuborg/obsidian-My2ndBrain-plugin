@@ -326,3 +326,391 @@ If your plugin does not need CSS, delete this file.
 .twobrain-matrix-table {
 	min-width: 640px;
 }
+
+
+/* ── Projects dashboard live view (```2ndbrain-projects code block) ──────
+ *
+ * Same design language as the matrix above — Obsidian's own variables, quiet
+ * chrome, content-first — but the unit is a project rather than an activity,
+ * so the row carries a stacked progress bar and a health pill instead of
+ * per-field editors.
+ */
+
+.twobrain-projects {
+	font-size: var(--font-ui-small);
+}
+
+/* ── Summary bar ──────────────────────────────────────────────────────── */
+
+.twobrain-projects-summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-3) var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-projects-summary-main {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+}
+
+.twobrain-projects-summary-count {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: var(--text-accent);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-summary-label {
+	color: var(--text-muted);
+}
+
+.twobrain-projects-summary-date {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-summary-meta {
+	flex-basis: 100%;
+	display: flex;
+	gap: var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-progress {
+	flex-basis: 100%;
+	margin-top: var(--size-2-1);
+	height: 3px;
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.twobrain-projects-progress-fill {
+	height: 100%;
+	border-radius: inherit;
+	background-color: var(--text-accent);
+	transition: width 160ms ease-out;
+}
+
+/* ── Role sections ────────────────────────────────────────────────────── */
+
+.twobrain-projects-section {
+	margin-bottom: var(--size-4-6);
+	overflow-x: auto;
+}
+
+.twobrain-projects-section-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	padding-left: var(--size-2-3);
+	margin-bottom: var(--size-2-3);
+	border-left: 3px solid var(--text-accent);
+}
+
+.twobrain-projects-section-title {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.twobrain-projects-section-count {
+	padding: 0 var(--size-2-2);
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-empty {
+	margin: 0 0 var(--size-4-4) var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+
+.twobrain-projects-table {
+	width: 100%;
+	min-width: 720px;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.twobrain-projects-table th,
+.twobrain-projects-table td {
+	padding: var(--size-2-1) var(--size-2-2);
+	text-align: left;
+	vertical-align: middle;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-projects-table th {
+	padding-bottom: var(--size-2-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.twobrain-projects-table tbody tr:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.twobrain-projects-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* A rail on the projects that are asking for something, so they're findable
+ * while scrolling without tinting whole rows. */
+.twobrain-projects-table tr.twobrain-health-stalled td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-red);
+}
+
+.twobrain-projects-table tr.twobrain-health-no-next-action td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-orange);
+}
+
+.twobrain-projects-name {
+	overflow: hidden;
+}
+
+.twobrain-projects-name a,
+.twobrain-projects-orphan {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+	text-decoration: none;
+}
+
+.twobrain-projects-name a:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+/* A `project:` value with no matching file: real, but not navigable. */
+.twobrain-projects-orphan {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* ── Progress bar ─────────────────────────────────────────────────────── */
+
+/* Bar and count share a line: stacked, they double every row's height for
+ * a number that's only a reference point. */
+.twobrain-projects-progress-cell {
+	white-space: nowrap;
+}
+
+.twobrain-projects-barwrap {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.twobrain-projects-bar {
+	display: flex;
+	flex: 1;
+	min-width: 40px;
+	height: 6px;
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.twobrain-projects-bar-seg {
+	height: 100%;
+	transition: width 160ms ease-out;
+}
+
+.twobrain-seg-done { background-color: var(--color-green); }
+.twobrain-seg-doing { background-color: var(--text-accent); }
+.twobrain-seg-backlog { background-color: var(--background-modifier-border-hover); }
+
+.twobrain-projects-bar-label {
+	flex: none;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Legend ───────────────────────────────────────────────────────────── */
+
+.twobrain-projects-legend {
+	display: flex;
+	gap: var(--size-2-3);
+	margin-left: auto;
+}
+
+.twobrain-projects-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.twobrain-projects-swatch {
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+}
+
+/* ── Counts ───────────────────────────────────────────────────────────── */
+
+.twobrain-projects-num,
+.twobrain-projects-age {
+	font-variant-numeric: tabular-nums;
+	color: var(--text-muted);
+}
+
+/* Zero is the common case; it should recede rather than read as data. */
+.twobrain-projects-zero {
+	color: var(--text-faint);
+}
+
+/* Planned into today's note — the one number worth an accent. */
+.twobrain-projects-today {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+}
+
+/* ── Health pills ─────────────────────────────────────────────────────── */
+
+.twobrain-projects-pill {
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.twobrain-pill-stalled {
+	color: var(--color-red);
+	border-color: var(--color-red);
+	background-color: transparent;
+	background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+
+.twobrain-pill-no-next-action {
+	color: var(--color-orange);
+	border-color: var(--color-orange);
+	background-color: transparent;
+	background-color: color-mix(in srgb, var(--color-orange) 10%, transparent);
+}
+
+.twobrain-pill-active {
+	color: var(--color-green);
+	border-color: transparent;
+	background-color: transparent;
+	background-color: color-mix(in srgb, var(--color-green) 12%, transparent);
+}
+
+.twobrain-pill-complete,
+.twobrain-pill-empty {
+	color: var(--text-faint);
+	border-color: var(--background-modifier-border);
+}
+
+/* ── Role picker ──────────────────────────────────────────────────────── */
+
+.twobrain-projects-select {
+	width: 100%;
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	color: var(--text-normal);
+	background-color: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+		linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+	background-position: right 0.75em top 55%, right 0.5em top 55%;
+	background-size: 4px 4px, 4px 4px;
+	background-repeat: no-repeat;
+	text-overflow: ellipsis;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.twobrain-projects-table tbody tr:hover .twobrain-projects-select {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--background-modifier-border);
+}
+
+.twobrain-projects-select:focus {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.twobrain-projects-select option[value=''] {
+	color: var(--text-faint);
+}
+
+/* ── Dormant projects ─────────────────────────────────────────────────── */
+
+.twobrain-projects-dormant {
+	margin-top: var(--size-4-4);
+	padding: var(--size-2-3) var(--size-4-3);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-projects-dormant summary {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	list-style-position: outside;
+}
+
+.twobrain-projects-dormant summary:hover {
+	color: var(--text-muted);
+}
+
+.twobrain-projects-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	margin-top: var(--size-2-3);
+}
+
+.twobrain-projects-chip {
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+}
+
+a.twobrain-projects-chip:hover {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}

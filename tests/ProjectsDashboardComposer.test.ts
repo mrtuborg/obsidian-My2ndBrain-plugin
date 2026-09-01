@@ -1,4 +1,4 @@
-import { ProjectsDashboardComposer } from '../src/composers/ProjectsDashboardComposer';
+import { ProjectsDashboardComposer, PROJECTS_CODE_BLOCK_LANG } from '../src/composers/ProjectsDashboardComposer';
 
 class MockVault {
 	private files: Map<string, string>;
@@ -80,7 +80,7 @@ describe('ProjectsDashboardComposer', () => {
 		expect((content.match(/\| \[\[/g) ?? []).length).toBe(1);
 	});
 
-	it('refresh() writes the generated content back into the dashboard file', async () => {
+	it('refresh() installs the live-view code block stub', async () => {
 		const app = makeApp({
 			'Activities/a1.md': activityContent('inbox', 'doing'),
 			'Projects/Inbox.md': '---\nrole: Selfcare\n---\n',
@@ -92,7 +92,17 @@ describe('ProjectsDashboardComposer', () => {
 
 		const saved = app.vault.saves.get('Dashboards/Projects.md');
 		expect(saved).toContain('# Projects Dashboard');
-		expect(saved).toContain('## Selfcare');
-		expect(saved).toContain('[[Projects/Inbox\\|Inbox]]');
+		expect(saved).toContain('```' + PROJECTS_CODE_BLOCK_LANG);
+	});
+
+	it('refresh() leaves a note that already has the block completely alone', async () => {
+		const existing = '---\n---\n# Projects Dashboard\n\nmy own notes\n\n```'
+			+ PROJECTS_CODE_BLOCK_LANG + '\n```\n';
+		const app = makeApp({ 'Dashboards/Projects.md': existing });
+		const composer = new ProjectsDashboardComposer(SETTINGS);
+
+		await composer.refresh(app, 'Dashboards/Projects.md');
+
+		expect(app.vault.saves.size).toBe(0);
 	});
 });

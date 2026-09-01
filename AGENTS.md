@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 421 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 445 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -56,6 +56,14 @@ Rules that must not drift:
   otherwise yesterday's carried-forward journal would silently resurrect everything the user dropped.
 - The matrix is a live view rendered from a ```` ```2ndbrain-matrix ```` code block, not generated markdown —
   static tables cannot carry buttons. `EisenhowerMatrixComposer.refresh` only installs the block if absent.
+- The Projects dashboard works the same way (```` ```2ndbrain-projects ````, `ProjectsView`). It answers
+  *which projects need a decision*, not *how many activities each one has*: `ProjectsDashboard` computes a
+  `health` per project (`stalled` / `no-next-action` / `active` / `complete` / `empty`) and sorts by it
+  inside each role, most-neglected first. Projects with no activities are folded into one collapsed line —
+  in a real vault they outnumber the rest and a screen of `0/0 (0%)` rows carries no review signal.
+- The per-project bar is a stage **mix** (done/doing/backlog), so it always fills its track. Its column is
+  therefore labelled "Activities", never "Progress" — an untouched project with one `doing` activity would
+  otherwise look finished.
 - `takeToWorkDate` fires through `PlanDateActivation`, run before the Activities section is built and again
   on every matrix render. It **always clears the date**. A date left in the frontmatter would re-take the
   activity on every render, making it impossible to drop for as long as the date stayed in the past. A
@@ -75,7 +83,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 421 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 445 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

@@ -11,6 +11,7 @@ A TypeScript Obsidian plugin that replaces the CustomJS + DataviewJS automation 
 - **Daily notes** — generates the canonical header and `### Activities:` section on first open; freezes the note after that. Only runs for today; past notes are recovered from activity history on first open.
 - **Planning with `takeToWork`** — every Activity carries a mandatory `takeToWork: true|false` field. It is the single switch deciding whether that activity shows up in today's daily note. You flip it by clicking **Take to work** in the Eisenhower Matrix.
 - **Eisenhower Matrix** — a live view (not generated markdown) with editable columns and a take-to-work / drop button per activity.
+- **Projects dashboard** — a live view that leads with which projects need a decision, not with row counts.
 - **Plan ahead** — set a **Planned** date and the activity takes itself to work on that day, no reminder needed.
 - **Activity files** — injects `## Description` from the owning Project file (replace-semantics) and rebuilds `## Journal` using a state-transition algorithm (only records first introduction and completion of each todo — no carry-forward noise).
 - **AutoActivityCreator** — scans previous journal entry and all project files for unresolved wikilinks and creates missing Activity files automatically.
@@ -66,6 +67,32 @@ The plugin renders the live, editable matrix into it. Each row has:
 automatically and the date is cleared — so something you plan, then drop, never comes back on its own.
 Until that day it only affects the sort order inside a quadrant (soonest first).
 
+### The projects dashboard
+
+`Dashboards/Projects.md` holds a fenced block too:
+
+````markdown
+```2ndbrain-projects
+```
+````
+
+It is built for a periodic review, so it leads with the projects that are asking for something rather than
+listing every project alphabetically. Each project gets a status:
+
+| Status | Means |
+|---|---|
+| **Stalled** | Open work, but nothing dated in the last 60 days |
+| **No next action** | Open work, but nothing is in `doing` — there is nothing to pull |
+| **Active** | In progress and recently touched |
+| **Complete** | Every activity is done |
+| **No activities** | Nothing references this project yet |
+
+Inside each role, rows sort by that status — stalled first, most neglected at the top. Projects with no
+activities are collapsed into a single foldable line at the bottom instead of filling the page with empty
+rows. The **Activities** bar shows the stage mix (done / doing / backlog), the **Today** column counts how
+many of the project's activities you have taken to work, and the **Role** dropdown writes `role:` straight
+into the project file — useful for anything sitting under *No role*.
+
 ### What a button will never do
 
 **Drop**, and moving the **Stage** to `done` or `backlog`, also take the activity back out of today's daily
@@ -90,7 +117,7 @@ devices planning different activities never collide in Obsidian Sync.
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (421 tests)
+npm test        # Jest unit tests (445 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

@@ -130,6 +130,98 @@ describe('ProjectsDashboard.buildRows', () => {
 	});
 });
 
+describe('ProjectsDashboard health', () => {
+	const dashboard = new ProjectsDashboard();
+	const TODAY = '2026-09-01';
+
+	function health(activities: DashboardActivity[], projects: DashboardProject[] = []) {
+		return dashboard.buildRows(activities, projects, TODAY)[0]!;
+	}
+
+	it('marks a project with no activities as empty', () => {
+		expect(health([], [project({ slug: 'dormant' })]).health).toBe('empty');
+	});
+
+	it('marks a project whose activities are all done as complete', () => {
+		const row = health([
+			activity({ project: 'p', stage: 'done', startDate: TODAY }),
+			activity({ project: 'p', stage: 'done', startDate: TODAY }),
+		]);
+		expect(row.health).toBe('complete');
+		expect(row.open).toBe(0);
+	});
+
+	it('marks open work untouched for longer than the stale window as stalled', () => {
+		// 2025-11-26 is well past STALE_DAYS before 2026-09-01.
+		const row = health([activity({ project: 'p', stage: 'doing', startDate: '2025-11-26' })]);
+		expect(row.health).toBe('stalled');
+		expect(row.daysSinceActivity).toBe(279);
+	});
+
+	it('marks recent open work with nothing in progress as no-next-action', () => {
+		const row = health([activity({ project: 'p', stage: 'backlog', startDate: '2026-08-25' })]);
+		expect(row.health).toBe('no-next-action');
+	});
+
+	it('marks recent work in progress as active', () => {
+		const row = health([activity({ project: 'p', stage: 'doing', startDate: '2026-08-25' })]);
+		expect(row.health).toBe('active');
+	});
+
+	it('never calls an undated project stalled — no date is not evidence of neglect', () => {
+		const row = health([activity({ project: 'p', stage: 'doing', startDate: '' })]);
+		expect(row.daysSinceActivity).toBeNull();
+		expect(row.health).toBe('active');
+	});
+
+	it('leaves health undecided-by-date when no today is supplied', () => {
+		const rows = dashboard.buildRows(
+			[activity({ project: 'p', stage: 'doing', startDate: '2020-01-01' })], []
+		);
+		expect(rows[0]!.daysSinceActivity).toBeNull();
+		expect(rows[0]!.health).toBe('active');
+	});
+
+	it('counts only open activities that are taken to work today', () => {
+		const row = health([
+			activity({ project: 'p', stage: 'doing', takeToWork: true }),
+			activity({ project: 'p', stage: 'doing', takeToWork: false }),
+			// Finished work is never "today's plan", even if the flag lingers.
+			activity({ project: 'p', stage: 'done', takeToWork: true }),
+		]);
+		expect(row.takenToday).toBe(1);
+	});
+
+	it('sorts within a role by what needs a decision, most neglected first', () => {
+		const rows = dashboard.buildRows(
+			[
+				activity({ project: 'humming', stage: 'doing', startDate: '2026-08-30' }),
+				activity({ project: 'finished', stage: 'done', startDate: '2026-08-30' }),
+				activity({ project: 'no-action', stage: 'backlog', startDate: '2026-08-30' }),
+				activity({ project: 'old', stage: 'doing', startDate: '2026-01-01' }),
+				activity({ project: 'older', stage: 'doing', startDate: '2025-01-01' }),
+			],
+			[
+				project({ slug: 'humming', role: 'Engineer' }),
+				project({ slug: 'finished', role: 'Engineer' }),
+				project({ slug: 'no-action', role: 'Engineer' }),
+				project({ slug: 'old', role: 'Engineer' }),
+				project({ slug: 'older', role: 'Engineer' }),
+				project({ slug: 'never-used', role: 'Engineer' }),
+			],
+			TODAY
+		);
+		expect(rows.map(r => r.slug)).toEqual([
+			'older',      // stalled, oldest
+			'old',        // stalled
+			'no-action',  // no next action
+			'humming',    // active
+			'finished',   // complete
+			'never-used', // empty
+		]);
+	});
+});
+
 describe('ProjectsDashboard.render', () => {
 	it('renders a markdown table grouped by role, with an escaped wikilink to the project', () => {
 		const dashboard = new ProjectsDashboard();
@@ -143,6 +235,39 @@ describe('ProjectsDashboard.render', () => {
 		expect(md).toContain('## Engineer');
 		expect(md).toContain('[[Projects/roommate\\|roommate]]');
 		expect(md).toContain('1/1 (100%)');
+		expect(md).toContain('Complete');
+	});
+
+	it('collects activity-less projects into one line instead of a screen of 0/0 rows', () => {
+		const dashboard = new ProjectsDashboard();
+		const rows = dashboard.buildRows(
+			[activity({ project: 'real', stage: 'doing' })],
+			[
+				project({ slug: 'real', path: 'Projects/real.md', role: 'Engineer' }),
+				project({ slug: 'ghost-a', path: 'Projects/ghost-a.md', role: 'Engineer' }),
+				project({ slug: 'ghost-b', path: 'Projects/ghost-b.md', role: 'Family' }),
+			]
+		);
+		const md = dashboard.render(rows, '2026-08-13');
+
+		expect(md).toContain('## No activities (2)');
+		expect(md).toContain('[[Projects/ghost-a\\|ghost-a]], [[Projects/ghost-b\\|ghost-b]]');
+		// The ghosts must not also appear as rows in their role tables.
+		expect(md).not.toContain('| [[Projects/ghost-a\\|ghost-a]] |');
+		expect(md).not.toContain('## Family');
+	});
+
+	it('separates consecutive role sections with a blank line', () => {
+		const dashboard = new ProjectsDashboard();
+		const rows = dashboard.buildRows(
+			[
+				activity({ project: 'a', stage: 'doing', role: 'Engineer' }),
+				activity({ project: 'b', stage: 'doing', role: 'Family' }),
+			],
+			[]
+		);
+		const md = dashboard.render(rows, '2026-08-13');
+		expect(md).toContain('\n\n## Family');
 	});
 
 	it('renders a friendly empty state when there is nothing to show', () => {
