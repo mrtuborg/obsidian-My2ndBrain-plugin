@@ -1,5 +1,5 @@
 import {
-	PeopleDashboard, PersonPage, AGING_DAYS, QUIET_DAYS,
+	PeopleDashboard, PersonPage, AGING_DAYS, QUIET_DAYS, HISTORY_DAYS,
 	PERSON_HEALTH_LABEL,
 } from '../src/components/PeopleDashboard';
 import { Commitment, UNASSIGNED } from '../src/components/Commitments';
@@ -29,12 +29,22 @@ function page(name: string, archived = false): PersonPage {
 	};
 }
 
+/**
+ * Contact history as `[name, lastSeen]` or `[name, lastSeen, days]`. Days
+ * defaults to the history floor so the common case reads as "a real contact",
+ * leaving tests to opt in to the one-off-mention case explicitly.
+ */
+type Contact = [string, string] | [string, string, number];
+
 function build(
 	commitments: Commitment[],
-	lastSeen: Array<[string, string]> = [],
+	contact: Contact[] = [],
 	pages: PersonPage[] = []
 ) {
-	return dash.buildRows({ commitments, lastSeen: new Map(lastSeen), pages, today: TODAY });
+	const stats = new Map(contact.map(([name, lastSeen, days]) => [
+		name, { days: days ?? HISTORY_DAYS, firstSeen: lastSeen, lastSeen },
+	]));
+	return dash.buildRows({ commitments, contact: stats, pages, today: TODAY });
 }
 
 describe('buildRows', () => {
@@ -108,7 +118,15 @@ describe('health', () => {
 
 	it('never calls an archived person quiet', () => {
 		const rows = build([], [['Tuva Moxnes', '2024-09-30']], [page('Tuva Moxnes', true)]);
-		expect(rows[0]!.health).toBe('clear');
+		expect(rows[0]!.health).toBe('dormant');
+	});
+
+	it('leaves a one-off mention dormant rather than reporting it as lapsed', () => {
+		const rows = build(
+			[], [['Ida Haugland', '2026-06-01', HISTORY_DAYS - 1]], [page('Ida Haugland')]
+		);
+		expect(rows[0]!.daysSinceSeen).toBeGreaterThanOrEqual(QUIET_DAYS);
+		expect(rows[0]!.health).toBe('dormant');
 	});
 
 	it('prefers aging over quiet when both apply', () => {
@@ -120,15 +138,20 @@ describe('health', () => {
 		expect(rows[0]!.health).toBe('aging');
 	});
 
-	it('calls someone clear when nothing is outstanding and they were seen recently', () => {
+	it('calls someone active when nothing is outstanding and they were seen recently', () => {
 		const rows = build([], [['Ida Haugland', '2026-08-30']], [page('Ida Haugland')]);
-		expect(rows[0]!.health).toBe('clear');
+		expect(rows[0]!.health).toBe('active');
+	});
+
+	it('counts a single mention as being in touch when it is recent', () => {
+		const rows = build([], [['Ida Haugland', '2026-08-30', 1]], [page('Ida Haugland')]);
+		expect(rows[0]!.health).toBe('active');
 	});
 
 	it('does not call a never-mentioned page quiet', () => {
 		const rows = build([], [], [page('Ida Haugland')]);
 		expect(rows[0]!.daysSinceSeen).toBeNull();
-		expect(rows[0]!.health).toBe('clear');
+		expect(rows[0]!.health).toBe('dormant');
 	});
 });
 
@@ -193,7 +216,7 @@ describe('the unassigned bucket', () => {
 
 	it('never calls it quiet', () => {
 		const rows = build([], [[UNASSIGNED, '2026-01-01']]);
-		expect(rows[0]!.health).toBe('clear');
+		expect(rows[0]!.health).toBe('dormant');
 	});
 
 	it('still ages what is in it', () => {
@@ -235,14 +258,27 @@ describe('summarize', () => {
 
 	it('reports zeroes for an empty vault rather than throwing', () => {
 		const s = dash.summarize(build([]));
-		expect(s).toEqual({ owed: 0, waiting: 0, aging: 0, people: 0, quiet: 0, missingPages: 0 });
+		expect(s).toEqual({
+			owed: 0, waiting: 0, aging: 0, people: 0, active: 0, quiet: 0, missingPages: 0,
+		});
+	});
+
+	it('counts people in touch separately from those gone quiet', () => {
+		const rows = build(
+			[],
+			[['Quiet One', '2026-01-01'], ['Recent One', TODAY]],
+			[page('Quiet One'), page('Recent One')]
+		);
+		const s = dash.summarize(rows);
+		expect(s.active).toBe(1);
+		expect(s.quiet).toBe(1);
 	});
 });
 
 describe('labels', () => {
 	it('names every health state', () => {
 		expect(Object.keys(PERSON_HEALTH_LABEL).sort()).toEqual(
-			['aging', 'clear', 'open', 'quiet']
+			['active', 'aging', 'dormant', 'open', 'quiet']
 		);
 	});
 });

@@ -119,8 +119,14 @@ devices planning different activities never collide in Obsidian Sync.
 ```
 ````
 
-It tracks promises in both directions — what you owe people, and what you're waiting on from
-them — by scanning `Journal/**/*.md` for two inline tags on an ordinary todo line:
+It answers two questions from the same journal scan: **who are you actually in touch with**, and
+**what did you promise them**.
+
+The first needs nothing from you. Every `[[Person]]` link already in `Journal/**/*.md` counts as a
+day of contact, so the page has real content the moment you open it — how many days each person
+has come up, when you last wrote about them, and who has gone silent.
+
+The second is opt-in, via two inline tags on an ordinary todo line:
 
 ```markdown
 - [ ] Send the BOM @owed [[Ida Haugland]]
@@ -133,9 +139,15 @@ them — by scanning `Journal/**/*.md` for two inline tags on an ordinary todo l
 | `@waiting` | They owe me | **Waiting on** |
 
 Only the Journal is scanned — Activities and People pages mirror journal content, so reading them
-too would double-count every commitment. The dashboard therefore **starts empty**; it fills up as
-you use the tags going forward, and its own empty state shows the syntax above so you don't have
-to remember it.
+too would double-count every commitment. The promise half **starts empty** and fills as you use
+the tags; until then the page shows a one-line reminder of the syntax and gets on with reporting
+contact history.
+
+**Not everything in `People/` is a person.** The folder accumulates iteration notes, overviews and
+meeting minutes, and a stale `[[People/EELS-W33-iteration]]` link in an old daily note would
+otherwise become a row. Names containing a digit or a dot are rejected, as is anything reading as
+*overview*, *index*, *template*, *dashboard*, *iteration*, *meeting*, *backlog*, *planning* or
+*deliveries* — and the `People/Meetings/` subfolder is skipped entirely.
 
 **Person resolution**, tried in order: a person link on the line itself, then a person link on the
 nearest enclosing heading (the `### Topic [[Person]]` pattern already used in this vault), then —
@@ -154,8 +166,19 @@ note it first appears in; carrying it forward on later days doesn't reset that. 
 |---|---|
 | **Aging** | Has a commitment open past the aging threshold (14 days) |
 | **Open** | Has open commitments, none aging yet |
-| **Quiet** | Active (non-archived) page with no mention in 60 days |
-| **Clear** | Nothing open |
+| **Quiet** | Came up on 2+ days, silent for 60, page not archived |
+| **Active** | Mentioned within the last 60 days, nothing outstanding |
+| **Dormant** | Archived, never mentioned, or a single passing mention long ago |
+
+**Quiet needs a history to lapse from.** Someone named once eighteen months ago is a name that came
+up, not a relationship that went cold, so two days of contact are required before silence is
+reported — otherwise the list fills with one-offs and the genuine lapses are lost in it. Archived
+people are never called quiet: filing them was the decision, and the dashboard doesn't second-guess
+it.
+
+The table is split into **Outstanding**, **Gone quiet** and **In touch**, with everyone else folded
+away — three questions in the order a review asks them, rather than one undifferentiated list whose
+sort order has to be inferred.
 
 Checking a commitment off writes `[x]` back onto the exact matched line in the daily note — the
 journal stays the source of truth, so this is precisely the edit you'd make by hand. If that line
@@ -236,7 +259,7 @@ Two things to check after switching:
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (602 tests)
+npm test        # Jest unit tests (623 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

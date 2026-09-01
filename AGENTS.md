@@ -117,10 +117,24 @@ Rules that must not drift:
 - Matrix buttons write via `FileIO.updateFrontmatterFields`, which does pure line-level surgery
   (`upsertFrontmatterField`) rather than a YAML round-trip, so hand-written field order survives.
 - The People dashboard (```` ```2ndbrain-people ````, `PeopleView`, `PeopleDashboardComposer`
-  installing `Dashboards/People.md`) tracks promises in both directions by scanning **only**
-  `Journal/**/*.md` for two inline tags on a todo line: `@owed [[Person]]` (I owe them) and
-  `@waiting [[Person]]` (they owe me). Activities and People pages are never scanned — they mirror
-  journal content, so scanning them too would double-count every commitment (same rule as D1).
+  installing `Dashboards/People.md`) reports on **two** things from one scan of **only**
+  `Journal/**/*.md`: contact history from every `[[Person]]` link, and promises from two inline
+  tags on a todo line — `@owed [[Person]]` (I owe them) and `@waiting [[Person]]` (they owe me).
+  Activities and People pages are never scanned — they mirror journal content, so scanning them too
+  would double-count every commitment (same rule as D1).
+- **Contact history is load-bearing, not a nice-to-have.** The tag convention did not exist in this
+  vault when the feature shipped (0 of 470 journal files used it), so a dashboard built only on
+  `@owed`/`@waiting` rendered as all zeroes and taught the user to stop opening it. Anything added
+  here must produce something useful from links that are *already* in the journal. `days` counts
+  journal *files* mentioning a person, never raw link occurrences — otherwise one note with a long
+  attendee list outranks someone mentioned weekly for a year.
+- **`People/` contains notes that are not people** — iteration notes, overviews, meeting minutes,
+  test pages. `looksLikePerson()` in `Commitments.ts` is the single gate (digits and dots are the
+  strongest discriminators here; no human in this vault has either in their page name), and
+  `isPersonPage()` in `CommitmentIndex.ts` adds the `People/Meetings/` exclusion. Both `personFrom`
+  and every caller that enumerates person pages must go through them, or stale links like
+  `[[People/EELS-W33-iteration]]` come back as rows. Bump `CACHE_VERSION` whenever this filter
+  changes — unchanged files otherwise keep serving results the current parser would never produce.
 - `Commitments.ts` (pure, D7) resolves the person for a tagged line in order: link on the line
   itself, then a link on the nearest enclosing heading (the existing `### Topic [[Person]]`
   pattern), then — if neither names anyone — the commitment is kept under an `UNASSIGNED` bucket
@@ -136,12 +150,23 @@ Rules that must not drift:
   `settings.commitmentCache` (round-trips through the existing `loadData`/`saveData`, no separate
   storage). `TwoBrainPlugin.commitmentCacheAccess()` is the one shared accessor — both `PeopleView`
   and `HomeView` must go through it so a warm scan from either view benefits the other.
-- `PeopleDashboard.buildRows()` (pure, D7) computes a `health` per person: `aging` (oldest open
-  commitment ≥ 14 days) beats `open` (has open commitments, none aging) beats `quiet` (no page
-  mention in 60 days, and not archived) beats `clear`. Archived people can never be `quiet` — quiet
-  is a warning about neglect, not a status for a relationship you deliberately filed away. The
-  `UNASSIGNED` bucket is data, not a person: `missingPage` is always false for it and it never
-  appears in `summarize().people` or the resting/collapsed section.
+- `PeopleDashboard.buildRows()` (pure, D7) computes a `health` per person, in strict precedence:
+  `aging` (oldest open commitment ≥ `AGING_DAYS`) → `open` (open commitments, none aging) → `quiet`
+  (≥ `HISTORY_DAYS` days of contact, silent ≥ `QUIET_DAYS`, not archived) → `active` (seen within
+  `QUIET_DAYS`) → `dormant`. Two rules that look like bugs and are not: archived people can never
+  be `quiet` (filing them was the decision), and `HISTORY_DAYS` gates quiet on having a history to
+  lapse *from* — without it the list fills with names that came up once. `HISTORY_DAYS` is 2 because
+  this journal links people sparingly; raising it silences the very relationships the page exists to
+  catch, so re-probe real data before changing it. The `UNASSIGNED` bucket is data, not a person:
+  `missingPage` is always false for it and it never appears in `summarize().people`/`.active`/
+  `.quiet` or the resting section.
+- `ContactStat` lives in `Commitments.ts`, not `CommitmentIndex.ts`, purely so `PeopleDashboard` can
+  import it without pulling in `AppLike`/`FileIO` and breaking D7. `CommitmentIndex` re-exports it
+  for callers that already depend on the index.
+- The view splits visible rows into **Outstanding / Gone quiet / In touch** plus a folded resting
+  section. The full syntax-teaching empty state renders only when there are *no rows at all*; once
+  contact history fills the table it shrinks to a one-line hint, because at that point promises are
+  a feature the page is missing rather than the reason it exists.
 - `PeopleView.setDone()` only flips `[ ]`→`[x]` on the exact matched line (`lines.indexOf(c.raw)`);
   if the line has changed since the last scan, the write is abandoned and the note opens instead —
   never guess which line to edit.

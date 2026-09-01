@@ -61,6 +61,21 @@ export interface CommitmentSighting {
 	raw: string;
 }
 
+/**
+ * How often, and how recently, one person shows up in the journal.
+ *
+ * Lives here rather than beside the scanner because the dashboard model is
+ * pure (D7) and needs the shape; the scanner is the only thing that fills it.
+ */
+export interface ContactStat {
+	/** Journal days that mention them. One note per day, so this is days of contact. */
+	days: number;
+	/** Earliest journal date mentioning them. */
+	firstSeen: string;
+	/** Most recent journal date mentioning them. */
+	lastSeen: string;
+}
+
 /** One promise, resolved across every day it appeared. */
 export interface Commitment {
 	direction: Direction;
@@ -82,21 +97,59 @@ const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
 
 /**
+ * Notes that live under People/ but are not a person.
+ *
+ * The folder accumulated iteration notes, an overview page and a couple of
+ * test files over the years, and `[[People/EELS-W33-iteration]]` links to
+ * them are still scattered through the journal. Treated as people they
+ * outnumbered the humans on the dashboard, which is the fastest way to make
+ * a review page unreadable.
+ *
+ * Digits are the strongest single signal — no one in this vault has a number
+ * in their name, while every iteration, year and test note does.
+ */
+const NOT_A_PERSON_RE = /overview|index|template|dashboard|iteration|meeting|backlog|planning|deliveries|\d/i;
+
+/**
+ * Whether a note name reads as a human being.
+ *
+ * Deliberately a name test rather than a frontmatter test: the stale links
+ * point at notes that in many cases no longer exist, so there is no
+ * frontmatter left to read. A false negative costs one missing row the user
+ * can fix by renaming; a false positive costs the dashboard its credibility.
+ */
+export function looksLikePerson(name: string): boolean {
+	const trimmed = name.trim();
+	if (!trimmed || trimmed.length > 40) return false;
+	// `Норвегия.Деньги` and friends — a dot means a path or a topic, not a name.
+	if (trimmed.includes('.')) return false;
+	return !NOT_A_PERSON_RE.test(trimmed);
+}
+
+/**
  * A link is a person if it points into the People folder, or is a bare name
  * that matches a known person. The vault contains all three spellings —
  * `[[Frederik Stray]]`, `[[People/Frederik Stray]]` and archived people under
  * `People/Archive/` — and missing any one of them would silently lose about
  * half the mentions.
+ *
+ * A `People/` path still has to look like a person: the folder holds stale
+ * links to notes that never were one, and a path prefix is not evidence of
+ * humanity. A bare name that already has a page is trusted as-is — the page
+ * existing is the stronger signal, and the folder scan applies the same test
+ * before it builds that set.
  */
-function personFrom(target: string, known: ReadonlySet<string>): string | null {
+export function personFrom(target: string, known: ReadonlySet<string>): string | null {
 	const trimmed = target.trim();
 	if (!trimmed) return null;
 
 	const name = trimmed.replace(/\.md$/i, '').replace(/^.*\//, '');
-	const isPeoplePath = /(^|\/)People\//i.test(trimmed);
+	if (known.has(name.toLowerCase())) return name;
 
-	if (isPeoplePath) return name;
-	return known.has(name.toLowerCase()) ? name : null;
+	const isPeoplePath = /(^|\/)People\//i.test(trimmed);
+	// Meetings live under People/ but are events, not attendees.
+	if (isPeoplePath && /(^|\/)Meetings\//i.test(trimmed)) return null;
+	return isPeoplePath && looksLikePerson(name) ? name : null;
 }
 
 function peopleIn(line: string, known: ReadonlySet<string>): string[] {

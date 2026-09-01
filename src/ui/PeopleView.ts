@@ -1,9 +1,9 @@
 import { App, Notice, TFile } from 'obsidian';
 import { FileIO, AppLike } from '../utilities/FileIO';
-import { scanCommitments, CommitmentCache } from '../utilities/CommitmentIndex';
+import { scanCommitments, isPersonPage, CommitmentCache } from '../utilities/CommitmentIndex';
 import {
 	PeopleDashboard, PersonRow, CommitmentRow, PeopleSummary,
-	PERSON_HEALTH_LABEL, PERSON_HEALTH_HINT,
+	PERSON_HEALTH_LABEL, PERSON_HEALTH_HINT, QUIET_DAYS,
 } from '../components/PeopleDashboard';
 import { PersonPage } from '../components/PeopleDashboard';
 import { DIRECTION_LABEL, UNASSIGNED, Direction } from '../components/Commitments';
@@ -23,8 +23,8 @@ export interface CacheAccess {
 
 type DirectionFilter = 'all' | Direction;
 
-const COLUMN_WIDTHS = ['30%', '10%', '10%', '16%', '16%', '18%'];
-const COLUMN_LABELS = ['Person', 'I owe', 'Waiting on', 'Oldest', 'Last seen', 'Status'];
+const COLUMN_WIDTHS = ['26%', '9%', '9%', '13%', '14%', '14%', '15%'];
+const COLUMN_LABELS = ['Person', 'I owe', 'Waiting on', 'Oldest', 'Contact', 'Last seen', 'Status'];
 
 /**
  * Live People dashboard rendered into a `2ndbrain-people` code block.
@@ -65,7 +65,7 @@ export class PeopleView {
 
 		const rows = this.dashboard.buildRows({
 			commitments: scan.commitments,
-			lastSeen: scan.lastSeen,
+			contact: scan.contact,
 			pages: this.personPages(),
 			today,
 		});
@@ -73,23 +73,57 @@ export class PeopleView {
 
 		this.renderSummary(container, today, summary, scan.scanned);
 
-		if (summary.owed + summary.waiting === 0 && rows.every(r => r.commitments.length === 0)) {
-			this.renderEmptyState(container);
-		}
+		// The syntax lesson earns a whole box only when there is nothing else
+		// to look at. Once contact history fills the table, promises are a
+		// feature the page is missing, not the reason it exists — so the
+		// teaching shrinks to one line and gets out of the way.
+		if (rows.length === 0) this.renderEmptyState(container);
+		else if (summary.owed + summary.waiting === 0) this.renderSyntaxHint(container);
 
 		this.renderFilters(container, rows);
 
 		const visible = rows.filter(r => this.matches(r));
-		const active = visible.filter(r => r.commitments.length > 0 || r.health === 'quiet');
-		const resting = visible.filter(r => !active.includes(r));
 
-		if (active.length > 0) {
-			const table = this.renderTable(container);
-			for (const row of active) this.renderPerson(table, row);
-		}
+		// Three questions, in the order a review asks them: who is waiting on
+		// something, who has gone quiet, and who am I actually in touch with.
+		// Everyone else is an address book entry, and goes behind a fold.
+		const outstanding = visible.filter(r => r.commitments.length > 0);
+		const quiet = visible.filter(r => r.commitments.length === 0 && r.health === 'quiet');
+		const active = visible.filter(r => r.commitments.length === 0 && r.health === 'active');
+		const resting = visible.filter(r =>
+			!outstanding.includes(r) && !quiet.includes(r) && !active.includes(r)
+		);
+
+		this.renderSection(container, outstanding, 'Outstanding',
+			'Promises open in either direction');
+		this.renderSection(container, quiet, 'Gone quiet',
+			`No mention in the last ${QUIET_DAYS} days`);
+		this.renderSection(container, active, 'In touch',
+			`Mentioned in the last ${QUIET_DAYS} days`);
 
 		this.renderMissingPages(container, rows);
 		this.renderResting(container, resting);
+	}
+
+	/**
+	 * One titled table, or nothing at all when the group is empty.
+	 *
+	 * Headed sections rather than one sorted table because the three groups
+	 * answer different questions — a status pill in a long list makes you
+	 * scan for the boundary the heading states outright.
+	 */
+	private renderSection(
+		container: HTMLElement, rows: PersonRow[], title: string, hint: string
+	): void {
+		if (rows.length === 0) return;
+
+		const head = container.createDiv({ cls: 'twobrain-people-section-head' });
+		head.createSpan({ cls: 'twobrain-people-section-title', text: title });
+		head.createSpan({ cls: 'twobrain-people-section-count', text: String(rows.length) });
+		head.createSpan({ cls: 'twobrain-people-section-hint', text: hint });
+
+		const table = this.renderTable(container);
+		for (const row of rows) this.renderPerson(table, row);
 	}
 
 	// ── Data ─────────────────────────────────────────────────────────────────
@@ -100,10 +134,9 @@ export class PeopleView {
 	 * just declines to nag about their silence.
 	 */
 	private personPages(): PersonPage[] {
-		const folder = this.settings.peopleFolder + '/';
 		const pages: PersonPage[] = [];
 		for (const file of this.app.vault.getFiles()) {
-			if (!file.path.startsWith(folder) || !file.path.endsWith('.md')) continue;
+			if (!isPersonPage(file.path, this.settings.peopleFolder)) continue;
 			pages.push({
 				name: file.basename,
 				path: file.path,
@@ -133,20 +166,29 @@ export class PeopleView {
 	): void {
 		const bar = container.createDiv({ cls: 'twobrain-people-summary' });
 
+		// Lead with whatever carries signal. Before any promise is tagged
+		// "0 promises are aging" is the largest number on the page and says
+		// nothing; how many relationships are live always says something.
+		const leadWithPromises = s.owed + s.waiting > 0;
+		const count = leadWithPromises ? s.aging : s.active;
+		const label = leadWithPromises
+			? (s.aging === 1 ? 'promise is aging' : 'promises are aging')
+			: (s.active === 1 ? 'person in touch' : 'people in touch');
+
 		const main = bar.createDiv({ cls: 'twobrain-people-summary-main' });
-		main.createSpan({ cls: 'twobrain-people-summary-count', text: String(s.aging) });
-		main.createSpan({
-			cls: 'twobrain-people-summary-label',
-			text: s.aging === 1 ? 'promise is aging' : 'promises are aging',
-		});
+		main.createSpan({ cls: 'twobrain-people-summary-count', text: String(count) });
+		main.createSpan({ cls: 'twobrain-people-summary-label', text: label });
 
 		bar.createSpan({ cls: 'twobrain-people-summary-date', text: today });
 
 		const meta = bar.createDiv({ cls: 'twobrain-people-summary-meta' });
-		meta.createSpan({ text: `${s.owed} ${DIRECTION_LABEL.owed.toLowerCase()}` });
-		meta.createSpan({ text: `${s.waiting} ${DIRECTION_LABEL.waiting.toLowerCase()}` });
+		if (leadWithPromises) {
+			meta.createSpan({ text: `${s.owed} ${DIRECTION_LABEL.owed.toLowerCase()}` });
+			meta.createSpan({ text: `${s.waiting} ${DIRECTION_LABEL.waiting.toLowerCase()}` });
+		}
 		meta.createSpan({ text: `${s.people} people` });
 		if (s.quiet > 0) meta.createSpan({ text: `${s.quiet} gone quiet` });
+		if (s.missingPages > 0) meta.createSpan({ text: `${s.missingPages} without a page` });
 		meta.createSpan({
 			cls: 'twobrain-people-scanned',
 			text: `${scanned} journal notes`,
@@ -177,6 +219,19 @@ export class PeopleView {
 			text: 'A promise under a heading that names someone is attributed to them too, '
 				+ 'so you only have to write the name once.',
 		});
+	}
+
+	/**
+	 * The one-line form, for when the table already has contact history to
+	 * show. Still names both tags — a hint nobody can act on is decoration.
+	 */
+	private renderSyntaxHint(container: HTMLElement): void {
+		const hint = container.createDiv({ cls: 'twobrain-people-syntax-hint' });
+		hint.createSpan({ text: 'No promises tracked yet — tag a todo with ' });
+		hint.createEl('code', { text: '@owed' });
+		hint.createSpan({ text: ' or ' });
+		hint.createEl('code', { text: '@waiting' });
+		hint.createSpan({ text: ' in a daily note and it shows up here.' });
 	}
 
 	private renderFilters(container: HTMLElement, rows: PersonRow[]): void {
@@ -264,6 +319,21 @@ export class PeopleView {
 		const oldest = tr.createEl('td', { cls: 'twobrain-people-age' });
 		oldest.setText(row.open === 0 ? '·' : relativeAge(row.oldestOpen));
 		if (row.open === 0) oldest.addClass('twobrain-people-zero');
+
+		const days = tr.createEl('td', { cls: 'twobrain-people-num' });
+		days.addClass('twobrain-people-contact');
+		if (row.days === 0) {
+			days.addClass('twobrain-people-zero');
+			days.setText('·');
+			days.setAttribute('title', 'Never mentioned in a daily note');
+		} else {
+			days.setText(row.days === 1 ? '1 day' : `${row.days} days`);
+			days.setAttribute(
+				'title',
+				`Mentioned on ${row.days} journal ${row.days === 1 ? 'day' : 'days'}`
+					+ (row.firstSeen ? `, first on ${row.firstSeen}` : '')
+			);
+		}
 
 		const seen = tr.createEl('td', { cls: 'twobrain-people-age' });
 		seen.setText(relativeAge(row.daysSinceSeen));

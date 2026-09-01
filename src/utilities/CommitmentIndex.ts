@@ -1,7 +1,7 @@
 import { AppLike, FileIO } from './FileIO';
 import {
-	Commitment, CommitmentSighting,
-	parseSightings, foldCommitments,
+	Commitment, CommitmentSighting, ContactStat,
+	parseSightings, foldCommitments, personFrom, looksLikePerson,
 } from '../components/Commitments';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -41,17 +41,23 @@ export interface CommitmentCache {
  * Bump when the parser's output shape or semantics change, so a stale cache
  * from an older build is discarded instead of quietly serving results the
  * current code would never have produced.
+ *
+ * v2 dropped non-people (iteration notes, overviews, test files) from the
+ * mention set, so v1 entries would keep them alive for every unchanged file.
  */
-export const CACHE_VERSION = 1;
+export const CACHE_VERSION = 2;
 
 export function emptyCache(): CommitmentCache {
 	return { version: CACHE_VERSION, entries: {} };
 }
 
+/** How often, and how recently, one person shows up in the journal. */
+export type { ContactStat } from '../components/Commitments';
+
 export interface ScanResult {
 	commitments: Commitment[];
-	/** Person → the most recent journal date they were mentioned on. */
-	lastSeen: Map<string, string>;
+	/** Person → how often and how recently the journal mentions them. */
+	contact: Map<string, ContactStat>;
 	/** The cache to persist. Same object identity as the input when nothing changed. */
 	cache: CommitmentCache;
 	/** True when at least one file had to be re-read — worth persisting the cache. */
@@ -70,15 +76,26 @@ const LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
  * `[[AT Commands]]`. Archived people stay in the set deliberately: they are
  * still real people, and a promise to one of them is still a promise — the
  * dashboard decides what to do about their archived status separately.
+ *
+ * Meeting notes and the folder's overview page are filtered out here rather
+ * than downstream, so nothing that isn't a person ever enters the pipeline.
  */
 export function knownPeople(app: AppLike, peopleFolder: string): Set<string> {
 	const names = new Set<string>();
 	for (const file of app.vault.getFiles()) {
-		if (!file.path.startsWith(peopleFolder + '/')) continue;
-		if (!file.path.endsWith('.md')) continue;
+		if (!isPersonPage(file.path, peopleFolder)) continue;
 		names.add(file.basename.toLowerCase());
 	}
 	return names;
+}
+
+/** Whether a vault path is a People page describing an actual person. */
+export function isPersonPage(path: string, peopleFolder: string): boolean {
+	if (!path.startsWith(peopleFolder + '/') || !path.endsWith('.md')) return false;
+	// Meetings live under People/ but are events, not attendees.
+	if (/(^|\/)Meetings\//i.test(path)) return false;
+	const name = path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '');
+	return looksLikePerson(name);
 }
 
 /** Person mentions anywhere in a note, for contact recency. */
@@ -87,12 +104,8 @@ function mentionsIn(text: string, known: ReadonlySet<string>): string[] {
 	LINK_RE.lastIndex = 0;
 	let m: RegExpExecArray | null;
 	while ((m = LINK_RE.exec(text)) !== null) {
-		const target = m[1]!.trim();
-		const name = target.replace(/\.md$/i, '').replace(/^.*\//, '');
-		const isPeoplePath = /(^|\/)People\//i.test(target);
-		if ((isPeoplePath || known.has(name.toLowerCase())) && !found.includes(name)) {
-			found.push(name);
-		}
+		const name = personFrom(m[1]!, known);
+		if (name && !found.includes(name)) found.push(name);
 	}
 	return found;
 }
@@ -136,7 +149,7 @@ export async function scanCommitments(
 
 	const usable = cache && cache.version === CACHE_VERSION ? cache : emptyCache();
 	const next: Record<string, CacheEntry> = {};
-	const lastSeen = new Map<string, string>();
+	const contact = new Map<string, ContactStat>();
 	const all: CommitmentSighting[] = [];
 	let changed = false;
 
@@ -172,9 +185,20 @@ export async function scanCommitments(
 
 		next[file.path] = entry;
 		for (const s of entry.sightings) all.push(s);
+		// One journal note is one day, so a name appearing in it — however
+		// many times — is one day of contact. Counting raw link occurrences
+		// instead would let a single note with a long attendee list outrank a
+		// person mentioned every week for a year.
 		for (const name of entry.mentions) {
-			const prev = lastSeen.get(name);
-			if (!prev || prev < file.basename) lastSeen.set(name, file.basename);
+			const date = file.basename;
+			const prev = contact.get(name);
+			if (!prev) {
+				contact.set(name, { days: 1, firstSeen: date, lastSeen: date });
+				continue;
+			}
+			prev.days += 1;
+			if (date < prev.firstSeen) prev.firstSeen = date;
+			if (date > prev.lastSeen) prev.lastSeen = date;
 		}
 	}
 
@@ -183,7 +207,7 @@ export async function scanCommitments(
 
 	return {
 		commitments: foldCommitments(all),
-		lastSeen,
+		contact,
 		cache: { version: CACHE_VERSION, entries: next },
 		changed,
 		scanned: files.length,

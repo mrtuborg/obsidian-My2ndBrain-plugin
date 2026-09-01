@@ -234,8 +234,11 @@ describe('HomeView health signals', () => {
 	});
 
 	it('surfaces a quiet relationship as a health signal', async () => {
+		// Two notes, not one: a single mention is below the history floor and
+		// is deliberately treated as a name that came up, not a lapse.
 		const { root } = await renderWith({
 			[`Journal/${daysAgo(70)}.md`]: '- [x] Send the BOM @owed [[Ida Haugland]]',
+			[`Journal/${daysAgo(80)}.md`]: 'Kicked off the BOM with [[Ida Haugland]]',
 			'People/Ida Haugland.md': '---\n---\n',
 		});
 		const signal = root.withClass('twobrain-home-signal').find(s => s.text === '1 gone quiet');

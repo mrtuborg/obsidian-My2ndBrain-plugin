@@ -1,6 +1,6 @@
 import {
 	parseSightings, foldCommitments, ageOf, daysBetween,
-	UNASSIGNED, DIRECTION_LABEL, JournalSource,
+	UNASSIGNED, DIRECTION_LABEL, JournalSource, looksLikePerson, personFrom,
 } from '../src/components/Commitments';
 
 const KNOWN = new Set(['ida haugland', 'frederik stray', 'andre kleven', 'tuva moxnes']);
@@ -234,5 +234,53 @@ describe('DIRECTION_LABEL', () => {
 	it('spells out what the terse tags mean', () => {
 		expect(DIRECTION_LABEL.owed).toBe('I owe');
 		expect(DIRECTION_LABEL.waiting).toBe('Waiting on');
+	});
+});
+
+describe('looksLikePerson', () => {
+	it('accepts an ordinary name', () => {
+		expect(looksLikePerson('Ida Haugland')).toBe(true);
+		expect(looksLikePerson('Alexander Lepperød')).toBe(true);
+		expect(looksLikePerson("Lluís Miquel Martínez-Campos")).toBe(true);
+	});
+
+	// The People folder accumulated notes that are about people rather than
+	// being a person. Without this every one of them became a dashboard row.
+	it.each([
+		'EELS-W33-iteration',
+		'Eels-w34 Iteration planning',
+		'2025 pilot team deliveries',
+		'Communications-overview',
+		'Test-2',
+		'Норвегия.Деньги',
+		'Person Template',
+	])('rejects %s', name => {
+		expect(looksLikePerson(name)).toBe(false);
+	});
+
+	it('rejects the empty and the implausibly long', () => {
+		expect(looksLikePerson('   ')).toBe(false);
+		expect(looksLikePerson('x'.repeat(41))).toBe(false);
+	});
+});
+
+describe('personFrom', () => {
+	it('resolves a bare name only when a page exists', () => {
+		expect(personFrom('Ida Haugland', KNOWN)).toBe('Ida Haugland');
+		expect(personFrom('Some Stranger', KNOWN)).toBeNull();
+	});
+
+	it('resolves a People path without needing a known page', () => {
+		expect(personFrom('People/Odin', KNOWN)).toBe('Odin');
+		expect(personFrom('People/Archive/Frode', KNOWN)).toBe('Frode');
+	});
+
+	it('refuses a People path that is not a person', () => {
+		expect(personFrom('People/EELS-W33-iteration', KNOWN)).toBeNull();
+		expect(personFrom('People/Meetings/Standup', KNOWN)).toBeNull();
+	});
+
+	it('ignores links outside the People folder', () => {
+		expect(personFrom('Activities/Radio spec', KNOWN)).toBeNull();
 	});
 });

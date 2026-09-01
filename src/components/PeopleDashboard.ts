@@ -8,7 +8,7 @@
  * address book, not a dashboard.
  */
 
-import { Commitment, Direction, UNASSIGNED, daysBetween } from './Commitments';
+import { Commitment, ContactStat, Direction, UNASSIGNED, daysBetween } from './Commitments';
 
 /**
  * Days an open promise can sit before it counts as aging.
@@ -24,39 +24,63 @@ export const AGING_DAYS = 14;
 export const QUIET_DAYS = 60;
 
 /**
+ * Days of contact a person needs before their silence is worth reporting.
+ *
+ * Someone named once eighteen months ago is not a relationship that lapsed —
+ * they are a name that came up. Without this floor the "gone quiet" list fills
+ * with one-off mentions and the genuine lapses are lost in it.
+ *
+ * Two, not more: this journal links people sparingly — the most-mentioned
+ * person in four hundred notes appears on nine days — so a higher floor
+ * silences the very relationships the page exists to catch.
+ */
+export const HISTORY_DAYS = 2;
+
+/**
  * What this person needs from you, in the order a review should consider it.
  * Same idea as ProjectHealth — the state is what the dashboard sorts and
  * colours by, because a row of numbers alone never says who to deal with first.
+ *
+ * The two contact states exist because this vault had no promise tags at all
+ * when the dashboard shipped, and a page that says nothing until you adopt a
+ * new syntax teaches you only to stop opening it. Contact recency is derived
+ * from links that are already there, so the dashboard is useful on day one and
+ * gets sharper as promises are tagged.
  */
 export type PersonHealth =
 	/** An open promise has passed the aging threshold. Deal with this first. */
 	| 'aging'
 	/** Open promises, none of them old yet. */
 	| 'open'
-	/** No mention in QUIET_DAYS, and a page that is not archived. */
+	/** Real history, no page archive, and nothing in QUIET_DAYS. A lapse. */
 	| 'quiet'
-	/** Nothing open, seen recently. Nothing to decide. */
-	| 'clear';
+	/** Mentioned within QUIET_DAYS. A live relationship. */
+	| 'active'
+	/** Archived, or too thin a history to read anything into the silence. */
+	| 'dormant';
 
 const HEALTH_RANK: Record<PersonHealth, number> = {
 	aging: 0,
 	open: 1,
 	quiet: 2,
-	clear: 3,
+	active: 3,
+	dormant: 4,
 };
 
 export const PERSON_HEALTH_LABEL: Record<PersonHealth, string> = {
 	aging: 'Aging',
 	open: 'Open',
 	quiet: 'Quiet',
-	clear: 'Clear',
+	active: 'Active',
+	dormant: 'Dormant',
 };
 
 export const PERSON_HEALTH_HINT: Record<PersonHealth, string> = {
 	aging: `Something has been open longer than ${AGING_DAYS} days`,
 	open: 'Open promises, none of them old yet',
 	quiet: `No mention in the last ${QUIET_DAYS} days`,
-	clear: 'Nothing outstanding',
+	active: `Mentioned in the last ${QUIET_DAYS} days`,
+	dormant: 'Archived, or barely mentioned',
 };
 
 /** A person's page, as the dashboard needs to know about it. */
@@ -92,6 +116,10 @@ export interface PersonRow {
 	open: number;
 	done: number;
 	oldestOpen: number;
+	/** Journal days mentioning them — the weight of the relationship. */
+	days: number;
+	/** First journal date they were mentioned on. '' if never. */
+	firstSeen: string;
 	/** Last journal date they were mentioned on. '' if never. */
 	lastSeen: string;
 	/** Days since `lastSeen`. Null when they have never been mentioned. */
@@ -105,33 +133,40 @@ export interface PeopleSummary {
 	waiting: number;
 	aging: number;
 	people: number;
+	active: number;
 	quiet: number;
 	missingPages: number;
 }
 
 export interface PeopleDashboardInput {
 	commitments: Commitment[];
-	/** Person → most recent journal date mentioning them. */
-	lastSeen: Map<string, string>;
+	/** Person → how often and how recently the journal mentions them. */
+	contact: Map<string, ContactStat>;
 	pages: PersonPage[];
 	today: string;
 }
 
 function healthOf(
-	open: number, oldestOpen: number, daysSinceSeen: number | null, archived: boolean
+	open: number,
+	oldestOpen: number,
+	daysSinceSeen: number | null,
+	days: number,
+	archived: boolean
 ): PersonHealth {
 	if (oldestOpen >= AGING_DAYS) return 'aging';
 	if (open > 0) return 'open';
+	if (daysSinceSeen === null) return 'dormant';
+	if (daysSinceSeen < QUIET_DAYS) return 'active';
 	// An archived person is not "quiet" — you filed them on purpose, and
-	// nagging about a relationship you deliberately closed is noise.
-	if (!archived && daysSinceSeen !== null && daysSinceSeen >= QUIET_DAYS) return 'quiet';
-	return 'clear';
+	// nagging about a relationship you deliberately closed is noise. Neither
+	// is someone you barely mentioned: there was no rhythm to break.
+	return !archived && days >= HISTORY_DAYS ? 'quiet' : 'dormant';
 }
 
 export class PeopleDashboard {
 
 	buildRows(input: PeopleDashboardInput): PersonRow[] {
-		const { commitments, lastSeen, pages, today } = input;
+		const { commitments, contact, pages, today } = input;
 
 		const pageByName = new Map<string, PersonPage>();
 		for (const page of pages) pageByName.set(page.name.toLowerCase(), page);
@@ -149,14 +184,18 @@ export class PeopleDashboard {
 		};
 
 		for (const page of pages) remember(page.name);
-		for (const name of lastSeen.keys()) remember(name);
+		for (const name of contact.keys()) remember(name);
 		for (const c of commitments) groups.get(remember(c.person))!.push(c);
+
+		const contactByKey = new Map<string, ContactStat>();
+		for (const [name, stat] of contact) contactByKey.set(name.toLowerCase(), stat);
 
 		const rows: PersonRow[] = [];
 		for (const [key, group] of groups.entries()) {
 			const name = displayName.get(key)!;
 			const page = pageByName.get(key) ?? null;
-			const seen = lastSeen.get(name) ?? '';
+			const stat = contactByKey.get(key) ?? null;
+			const seen = stat?.lastSeen ?? '';
 			const daysSinceSeen = seen ? Math.max(0, daysBetween(seen, today)) : null;
 
 			const commitmentRows: CommitmentRow[] = group
@@ -198,11 +237,16 @@ export class PeopleDashboard {
 				open: open.length,
 				done: commitmentRows.length - open.length,
 				oldestOpen,
+				days: stat?.days ?? 0,
+				firstSeen: stat?.firstSeen ?? '',
 				lastSeen: seen,
 				daysSinceSeen,
 				health: isBucket
-					? (oldestOpen >= AGING_DAYS ? 'aging' : open.length ? 'open' : 'clear')
-					: healthOf(open.length, oldestOpen, daysSinceSeen, page?.archived ?? false),
+					? (oldestOpen >= AGING_DAYS ? 'aging' : open.length ? 'open' : 'dormant')
+					: healthOf(
+						open.length, oldestOpen, daysSinceSeen,
+						stat?.days ?? 0, page?.archived ?? false
+					),
 				commitments: commitmentRows,
 			});
 		}
@@ -212,17 +256,23 @@ export class PeopleDashboard {
 			if (rank !== 0) return rank;
 			if (b.oldestOpen !== a.oldestOpen) return b.oldestOpen - a.oldestOpen;
 			if (b.open !== a.open) return b.open - a.open;
+			// Within a contact state, the person you deal with most comes
+			// first — days of contact is the closest thing to "how much this
+			// relationship weighs" the journal can tell us.
+			if (b.days !== a.days) return b.days - a.days;
 			return a.name.localeCompare(b.name);
 		});
 	}
 
 	summarize(rows: PersonRow[]): PeopleSummary {
+		const people = rows.filter(r => r.name !== UNASSIGNED);
 		return {
 			owed: rows.reduce((n, r) => n + r.owed, 0),
 			waiting: rows.reduce((n, r) => n + r.waiting, 0),
 			aging: rows.reduce((n, r) => n + r.commitments.filter(c => c.aging).length, 0),
-			people: rows.filter(r => r.name !== UNASSIGNED).length,
-			quiet: rows.filter(r => r.health === 'quiet').length,
+			people: people.length,
+			active: people.filter(r => r.health === 'active').length,
+			quiet: people.filter(r => r.health === 'quiet').length,
 			missingPages: rows.filter(r => r.missingPage).length,
 		};
 	}

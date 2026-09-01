@@ -1468,6 +1468,10 @@ a.twobrain-home-recent-link:hover {
 	box-shadow: inset 2px 0 0 var(--color-orange);
 }
 
+.twobrain-people-table tr.twobrain-person-active td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-green);
+}
+
 .twobrain-people-name {
 	overflow: hidden;
 }
@@ -1559,9 +1563,45 @@ a.twobrain-home-recent-link:hover {
 	background-color: color-mix(in srgb, var(--color-orange) 10%, transparent);
 }
 
-.twobrain-pill-clear {
+.twobrain-pill-dormant {
 	color: var(--text-faint);
 	border-color: var(--background-modifier-border);
+}
+
+/* ── Section heads ────────────────────────────────────────────────────────
+ * The table is split by what each group asks of you — outstanding, gone
+ * quiet, in touch — because a single flat list reads as one undifferentiated
+ * pile and the sort order alone doesn't say why someone is near the top. */
+
+.twobrain-people-section-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-4-2);
+	margin: var(--size-4-4) 0 var(--size-2-2);
+	padding-bottom: var(--size-2-1);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-people-section-head:first-child {
+	margin-top: 0;
+}
+
+.twobrain-people-section-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.twobrain-people-section-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-section-hint {
+	margin-left: auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
 }
 
 /* ── Commitment detail rows ───────────────────────────────────────────── */
@@ -1733,4 +1773,18 @@ button.twobrain-people-chip:disabled {
 
 .twobrain-people-resting .twobrain-people-chips {
 	margin-top: var(--size-2-3);
+}
+
+/* One-line syntax reminder, shown once the table has contact history and the
+ * full teaching box would be in the way. */
+.twobrain-people-syntax-hint {
+	margin-bottom: var(--size-4-3);
+	padding: var(--size-2-2) var(--size-4-2);
+	border-left: 2px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-syntax-hint code {
+	font-size: var(--font-smaller);
 }

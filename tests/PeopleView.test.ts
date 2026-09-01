@@ -112,9 +112,9 @@ async function renderWith(files: Record<string, string>) {
 
 describe('PeopleView', () => {
 	it('shows the syntax-teaching empty state when nothing has been tracked yet', async () => {
-		const { root } = await renderWith({
-			'People/Ida Haugland.md': '---\n---\n',
-		});
+		// Genuinely nothing to show: no journal history and no person pages.
+		// A vault with pages has rows, and rows get the one-line hint instead.
+		const { root } = await renderWith({});
 		expect(root.withClass('twobrain-people-empty')).toHaveLength(1);
 		expect(root.find('code').map(c => c.text)).toEqual([
 			'- [ ] Send the BOM @owed [[Ida Haugland]]',
@@ -263,6 +263,44 @@ describe('PeopleView', () => {
 
 		expect(root2.withClass('twobrain-people-owed')[0]!.text).toBe('1');
 		void store;
+	});
+});
+
+describe('PeopleView contact reporting', () => {
+	// The whole point of the rework: a vault that never adopted @owed/@waiting
+	// must still get a useful page out of the [[Person]] links it already has.
+	it('reports people from plain mentions even with no commitments at all', async () => {
+		const { root } = await renderWith({
+			...Object.fromEntries([journalLine(daysAgo(1), 'Synced with [[Ida Haugland]]')]),
+			...Object.fromEntries([journalLine(daysAgo(3), 'Kickoff with [[Ida Haugland]]')]),
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		expect(root.withClass('twobrain-people-empty')).toHaveLength(0);
+		expect(root.withClass('twobrain-people-contact')[0]!.text).toBe('2 days');
+	});
+
+	it('splits gone-quiet from in-touch so the two never read as one pile', async () => {
+		const { root } = await renderWith({
+			...Object.fromEntries([journalLine(daysAgo(1), 'Synced with [[Ida Haugland]]')]),
+			...Object.fromEntries([journalLine(daysAgo(3), 'Kickoff with [[Ida Haugland]]')]),
+			...Object.fromEntries([journalLine(daysAgo(90), 'Chat with [[Frederik Stray]]')]),
+			...Object.fromEntries([journalLine(daysAgo(95), 'Intro to [[Frederik Stray]]')]),
+			'People/Ida Haugland.md': '---\n---\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		const titles = root.withClass('twobrain-people-section-title').map(e => e.text);
+		expect(titles).toEqual(['Gone quiet', 'In touch']);
+	});
+
+	it('keeps a note that is about people rather than a person out of the table', async () => {
+		const { root } = await renderWith({
+			...Object.fromEntries([journalLine(daysAgo(1),
+				'Ran [[People/EELS-W33-iteration]] with [[Ida Haugland]]')]),
+			'People/EELS-W33-iteration.md': '---\n---\n',
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		const names = root.withClass('twobrain-people-name').map(e => e.text || e.children[0]?.text);
+		expect(names).toEqual(['Ida Haugland']);
 	});
 });
 

@@ -89,8 +89,32 @@ describe('scanCommitments', () => {
 		v.set('Journal/2026-07-01.md', 'Met [[Frederik Stray]]');
 
 		const res = await scanCommitments(v.app(), 'Journal', 'People', null);
-		expect(res.lastSeen.get('Ida Haugland')).toBe('2026-08-20');
-		expect(res.lastSeen.get('Frederik Stray')).toBe('2026-07-01');
+		expect(res.contact.get('Ida Haugland')?.lastSeen).toBe('2026-08-20');
+		expect(res.contact.get('Frederik Stray')?.lastSeen).toBe('2026-07-01');
+	});
+
+	it('counts one day of contact per note, not per mention', async () => {
+		const v = vaultWithPeople();
+		v.set('Journal/2026-08-01.md', '[[Ida Haugland]] and [[Ida Haugland]] again');
+		v.set('Journal/2026-08-20.md', 'Talked to [[Ida Haugland]]');
+
+		const res = await scanCommitments(v.app(), 'Journal', 'People', null);
+		expect(res.contact.get('Ida Haugland')).toEqual({
+			days: 2, firstSeen: '2026-08-01', lastSeen: '2026-08-20',
+		});
+	});
+
+	it('ignores People notes that are clearly not people', async () => {
+		const v = vaultWithPeople();
+		v.set('People/EELS-W33-iteration.md', '');
+		v.set('People/Communications-overview.md', '');
+		v.set('People/Meetings/Standup.md', '');
+		v.set('Journal/2026-08-01.md',
+			'[[People/EELS-W33-iteration]] [[People/Communications-overview]] ' +
+			'[[People/Meetings/Standup]] [[Ida Haugland]]');
+
+		const res = await scanCommitments(v.app(), 'Journal', 'People', null);
+		expect([...res.contact.keys()]).toEqual(['Ida Haugland']);
 	});
 
 	it('folds a carried-forward promise across notes into one', async () => {
@@ -131,7 +155,7 @@ describe('caching', () => {
 		const cold = await scanCommitments(v.app(), 'Journal', 'People', null);
 		const warm = await scanCommitments(v.app(), 'Journal', 'People', cold.cache);
 		expect(warm.commitments).toEqual(cold.commitments);
-		expect([...warm.lastSeen]).toEqual([...cold.lastSeen]);
+		expect([...warm.contact]).toEqual([...cold.contact]);
 	});
 
 	it('keeps contact recency for people who were only ever mentioned, on a cache hit', async () => {
@@ -142,7 +166,7 @@ describe('caching', () => {
 
 		const cold = await scanCommitments(v.app(), 'Journal', 'People', null);
 		const warm = await scanCommitments(v.app(), 'Journal', 'People', cold.cache);
-		expect(warm.lastSeen.get('Frederik Stray')).toBe('2026-08-01');
+		expect(warm.contact.get('Frederik Stray')?.lastSeen).toBe('2026-08-01');
 	});
 
 	it('re-reads only the file whose mtime moved', async () => {

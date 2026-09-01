@@ -4,7 +4,7 @@ import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { loadProjectRecords } from '../utilities/ProjectIndex';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import { PeopleDashboard } from '../components/PeopleDashboard';
-import { scanCommitments, CommitmentCache } from '../utilities/CommitmentIndex';
+import { scanCommitments, isPersonPage, CommitmentCache } from '../utilities/CommitmentIndex';
 import {
 	HomeDashboard, HomeSummary, RoleStat, HealthSignal, greeting, longDate,
 } from '../components/HomeDashboard';
@@ -329,9 +329,8 @@ export class HomeView {
 			);
 			if (scan.changed) this.cache.save(scan.cache);
 
-			const folder = this.settings.peopleFolder + '/';
 			const pages = this.app.vault.getFiles()
-				.filter(f => f.path.startsWith(folder) && f.path.endsWith('.md'))
+				.filter(f => isPersonPage(f.path, this.settings.peopleFolder))
 				.map(f => ({
 					name: f.basename,
 					path: f.path,
@@ -339,7 +338,7 @@ export class HomeView {
 				}));
 
 			const rows = this.people.buildRows({
-				commitments: scan.commitments, lastSeen: scan.lastSeen, pages, today,
+				commitments: scan.commitments, contact: scan.contact, pages, today,
 			});
 			const summary = this.people.summarize(rows);
 			return { aging: summary.aging, quiet: summary.quiet };
