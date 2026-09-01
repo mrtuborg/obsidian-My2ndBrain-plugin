@@ -363,3 +363,64 @@ describe('HomeView consistency grid', () => {
 		expect(root.withClass('twobrain-radar-value')[0]!.text).toBe('1');
 	});
 });
+
+describe('HomeView people strip', () => {
+	it('names who I am in touch with, not just a count', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(1)}.md`]: 'Synced with [[Ida Haugland]]',
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		const names = root.withClass('twobrain-home-person').map(e => e.text);
+		expect(names).toContain('Ida Haugland');
+		expect(root.one('twobrain-home-people')).toBeDefined();
+	});
+
+	it('shows the strip even when nothing is wrong', async () => {
+		// The health signals above only fire on a problem. Relationships must
+		// not vanish from Home on a good week — that is when drift starts.
+		const { root } = await renderWith({
+			[`Journal/${TODAY}.md`]: 'Coffee with [[Ida Haugland]]',
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		expect(root.withClass('twobrain-home-signal')
+			.some(s => s.text.includes('quiet') || s.text.includes('aging'))).toBe(false);
+		expect(root.one('twobrain-home-people')).toBeDefined();
+		expect(root.one('twobrain-home-people-count')!.text).toBe('1 in touch · 0 drifting');
+	});
+
+	it('separates people I owe from people I am merely in touch with', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(1)}.md`]:
+				'- [ ] Send the BOM @owed [[Ida Haugland]]\nCoffee with [[Frederik Stray]]',
+			'People/Ida Haugland.md': '---\n---\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		const labels = root.withClass('twobrain-home-people-line-label').map(e => e.text);
+		expect(labels).toEqual(['Owe', 'In touch']);
+		expect(root.withClass('is-owing').map(e => e.text)).toEqual(['Ida Haugland']);
+		expect(root.withClass('is-active').map(e => e.text)).toEqual(['Frederik Stray']);
+	});
+
+	it('flags a drifting relationship by name', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(70)}.md`]: 'Chat with [[Frederik Stray]]',
+			[`Journal/${daysAgo(80)}.md`]: 'Intro to [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		expect(root.withClass('is-quiet').map(e => e.text)).toEqual(['Frederik Stray']);
+	});
+
+	it('links a name straight to their page', async () => {
+		const { root, opened } = await renderWith({
+			[`Journal/${daysAgo(1)}.md`]: 'Synced with [[Ida Haugland]]',
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		root.click('twobrain-home-person');
+		expect(opened).toContain('People/Ida Haugland.md');
+	});
+
+	it('leaves the strip out entirely when there are no people at all', async () => {
+		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: 'Quiet day' });
+		expect(root.one('twobrain-home-people')).toBeUndefined();
+	});
+});

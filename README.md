@@ -205,6 +205,7 @@ page is readable in one glance in landscape on a phone.
 | Banner | Greeting, today's date, and how many activities you have taken to work out of everything open |
 | Role cards | Per role: `taken / open`, a bar for the share you committed to today, and a badge counting that role's projects needing a decision. The name links to today's Context page when it exists |
 | Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role, promises aging, people gone quiet. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
+| People | Who you owe, who you're in touch with, and who's drifting — by name, each linking to their page. Unconditional: the health signals above only fire when something is wrong, and a good week must not make relationships disappear from Home, because that is exactly when a drift starts. Hover a name for what's outstanding and when you last wrote about them |
 | Life balance | A radar with an axis per role, showing how many days each one showed up in your journal over the last 12 months. Normalized against your busiest role, so the shape reads as balance rather than volume — round is even, a spike is a year spent on one thing. A dashed ring marks your own average |
 | Consistency | A year of days, one cell each, shaded by how full the day was relative to your typical day. Current streak, longest streak, and total active days. Click any day to open it |
 | Next steps | Today's note, Plan (matrix), Projects, People, Inbox — plus the last few days for a glance back |
@@ -259,7 +260,7 @@ Two things to check after switching:
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (623 tests)
+npm test        # Jest unit tests (629 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

@@ -958,6 +958,103 @@ a.twobrain-home-signal.is-quiet-people {
 	color: var(--zen-faint);
 }
 
+/* ── People: who you're actually in touch with ────────────────────────────
+ * Unconditional, unlike the health signals above — a good week must not make
+ * relationships disappear from Home, since that's when drift starts. */
+
+.twobrain-home-people {
+	margin-bottom: 10px;
+	padding: 10px 12px;
+	background-color: var(--zen-surface);
+	border: 1px solid var(--zen-line);
+	border-radius: 6px;
+}
+
+.twobrain-home-people-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.twobrain-home-people-label {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--zen-soft);
+}
+
+.twobrain-home-people-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-home-people-line {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 3px 0;
+}
+
+.twobrain-home-people-line-label {
+	flex: 0 0 4.5em;
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+}
+
+.twobrain-home-people-names {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 6px;
+}
+
+.twobrain-home-person {
+	padding: 1px 7px;
+	border-radius: 10px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.6;
+	text-decoration: none;
+	color: var(--zen-ink);
+	background-color: color-mix(in srgb, var(--zen-line) 60%, transparent);
+	cursor: pointer;
+}
+
+.twobrain-home-person:hover {
+	text-decoration: none;
+	background-color: var(--zen-line);
+}
+
+.twobrain-home-person.is-owing {
+	color: var(--zen-alert);
+	background-color: color-mix(in srgb, var(--zen-alert) 14%, transparent);
+}
+
+.twobrain-home-person.is-active {
+	color: var(--zen-accent);
+	background-color: color-mix(in srgb, var(--zen-accent) 14%, transparent);
+}
+
+.twobrain-home-person.is-quiet {
+	color: var(--zen-warn);
+	background-color: color-mix(in srgb, var(--zen-warn) 14%, transparent);
+}
+
+.twobrain-home-people-more {
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-home-people-none {
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	color: var(--zen-faint);
+}
+
 /* ── The long view: balance + consistency ─────────────────────────────── */
 
 .twobrain-home-charts {

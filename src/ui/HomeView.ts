@@ -3,7 +3,8 @@ import { FileIO, AppLike } from '../utilities/FileIO';
 import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { loadProjectRecords } from '../utilities/ProjectIndex';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
-import { PeopleDashboard } from '../components/PeopleDashboard';
+import { PeopleDashboard, PersonRow } from '../components/PeopleDashboard';
+import { UNASSIGNED, DIRECTION_LABEL } from '../components/Commitments';
 import { scanCommitments, isPersonPage, CommitmentCache } from '../utilities/CommitmentIndex';
 import {
 	HomeDashboard, HomeSummary, RoleStat, HealthSignal, greeting, longDate,
@@ -16,6 +17,26 @@ import {
 import { ROLES } from '../roles';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Names per line on Home. Enough to recognise the shape of a week, few enough
+ * that the strip stays a glance — the People page is where the full list lives.
+ */
+const PEOPLE_ON_HOME = 6;
+
+/** Why this name is on Home, for the hover — the strip itself stays wordless. */
+function personHint(row: PersonRow): string {
+	const parts: string[] = [];
+	if (row.owed > 0) parts.push(`${DIRECTION_LABEL.owed}: ${row.owed}`);
+	if (row.waiting > 0) parts.push(`${DIRECTION_LABEL.waiting}: ${row.waiting}`);
+	parts.push(row.daysSinceSeen === null
+		? 'never mentioned in the journal'
+		: row.daysSinceSeen === 0
+			? 'mentioned today'
+			: `last mentioned ${row.daysSinceSeen}d ago`);
+	if (row.days > 0) parts.push(`${row.days} ${row.days === 1 ? 'day' : 'days'} of contact`);
+	return parts.join(' · ');
+}
 
 export interface HomeViewSettings {
 	activitiesFolder: string;
@@ -79,7 +100,7 @@ export class HomeView {
 			)
 			.map(f => ({ path: f.path, basename: f.basename }));
 
-		const peopleSignals = await this.buildPeopleSignals(app, today);
+		const people = await this.buildPeopleSignals(app, today);
 
 		const summary = this.dashboard.buildSummary(
 			today,
@@ -91,12 +112,13 @@ export class HomeView {
 			rows.map(r => ({ role: r.role, health: r.health })),
 			journalFiles,
 			4,
-			peopleSignals
+			people.signals
 		);
 
 		this.renderBanner(container, summary);
 		this.renderRoles(container, summary);
 		this.renderSignals(container, summary);
+		this.renderPeople(container, people.rows);
 		this.renderCharts(container, allFiles, today);
 		this.renderFooter(container, summary);
 	}
@@ -263,6 +285,76 @@ export class HomeView {
 		return { days: [...byDate.values()], paths };
 	}
 
+	/**
+	 * Who you're actually in touch with, by name.
+	 *
+	 * The health signals above only fire when something is wrong, so on a good
+	 * week relationships vanished from Home entirely — which is exactly when a
+	 * quiet drift starts. This strip is unconditional: names, not counts,
+	 * because a name is something you can act on and "2 in touch" isn't.
+	 *
+	 * It stays a strip and not a third dashboard. Two short lists, capped, each
+	 * name a link. Anything more belongs on the People page.
+	 */
+	private renderPeople(container: HTMLElement, rows: PersonRow[]): void {
+		const people = rows.filter(r => r.name !== UNASSIGNED);
+		if (people.length === 0) return;
+
+		const owing = people.filter(r => r.commitments.length > 0);
+		const inTouch = people.filter(r => r.health === 'active');
+		const quiet = people.filter(r => r.health === 'quiet');
+
+		const box = container.createDiv({ cls: 'twobrain-home-people' });
+		const head = box.createDiv({ cls: 'twobrain-home-people-head' });
+		head.createSpan({ cls: 'twobrain-home-people-label', text: 'People' });
+		head.createSpan({
+			cls: 'twobrain-home-people-count',
+			text: `${inTouch.length} in touch · ${quiet.length} drifting`,
+		});
+
+		this.peopleLine(box, 'Owe', owing, 'is-owing');
+		this.peopleLine(box, 'In touch', inTouch, 'is-active');
+		this.peopleLine(box, 'Drifting', quiet, 'is-quiet');
+
+		// Every list empty means people exist but none are recent, outstanding
+		// or lapsed — say so rather than leaving three blank rows.
+		if (owing.length + inTouch.length + quiet.length === 0) {
+			box.createDiv({
+				cls: 'twobrain-home-people-none',
+				text: 'No one recent, owed or drifting.',
+			});
+		}
+	}
+
+	private peopleLine(
+		box: HTMLElement, label: string, rows: PersonRow[], cls: string
+	): void {
+		if (rows.length === 0) return;
+		const line = box.createDiv({ cls: 'twobrain-home-people-line' });
+		line.createSpan({ cls: 'twobrain-home-people-line-label', text: label });
+
+		const names = line.createDiv({ cls: 'twobrain-home-people-names' });
+		for (const row of rows.slice(0, PEOPLE_ON_HOME)) {
+			const chip = names.createEl('a', {
+				cls: 'twobrain-home-person',
+				text: row.name,
+				href: row.path ?? this.targetPath('people'),
+			});
+			chip.addClass(cls);
+			chip.setAttribute('title', personHint(row));
+			chip.addEventListener('click', evt => {
+				evt.preventDefault();
+				this.open(row.path ?? this.targetPath('people'));
+			});
+		}
+		if (rows.length > PEOPLE_ON_HOME) {
+			names.createSpan({
+				cls: 'twobrain-home-people-more',
+				text: `+${rows.length - PEOPLE_ON_HOME}`,
+			});
+		}
+	}
+
 	/** Where to go next: today's note, planning, review, and a glance back. */
 	private renderFooter(container: HTMLElement, summary: HomeSummary): void {
 		const nav = container.createDiv({ cls: 'twobrain-home-nav' });
@@ -322,7 +414,7 @@ export class HomeView {
 	 */
 	private async buildPeopleSignals(
 		app: AppLike, today: string
-	): Promise<{ aging: number; quiet: number }> {
+	): Promise<{ signals: { aging: number; quiet: number }; rows: PersonRow[] }> {
 		try {
 			const scan = await scanCommitments(
 				app, this.settings.journalFolder, this.settings.peopleFolder, this.cache.load()
@@ -341,12 +433,12 @@ export class HomeView {
 				commitments: scan.commitments, contact: scan.contact, pages, today,
 			});
 			const summary = this.people.summarize(rows);
-			return { aging: summary.aging, quiet: summary.quiet };
+			return { signals: { aging: summary.aging, quiet: summary.quiet }, rows };
 		} catch (e) {
 			// Relationship signals are a bonus, not core to Home — a parse
 			// failure here shouldn't take down the whole landing page.
 			console.error('[2ndBrain] people signals failed:', e);
-			return { aging: 0, quiet: 0 };
+			return { signals: { aging: 0, quiet: 0 }, rows: [] };
 		}
 	}
 

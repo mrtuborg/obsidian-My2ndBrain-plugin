@@ -170,6 +170,12 @@ Rules that must not drift:
 - `PeopleView.setDone()` only flips `[ ]`→`[x]` on the exact matched line (`lines.indexOf(c.raw)`);
   if the line has changed since the last scan, the write is abandoned and the note opens instead —
   never guess which line to edit.
+- Home's people strip (`HomeView.renderPeople`) is **unconditional** — it renders whenever any person
+  exists, unlike the health signals which only fire on a problem. That asymmetry is the point: a good
+  week previously erased relationships from Home entirely, which is precisely when drift begins. It
+  shows *names* (capped at `PEOPLE_ON_HOME`, each linking to the person's page), never counts alone,
+  because a name is actionable and "2 in touch" is not. It must stay a strip — three short lines —
+  or it becomes the third dashboard Home is explicitly not.
 - Home's two relationship signals (`aging-promises`, `quiet-people` in `HomeDashboard.buildSignals`)
   reuse the same `Commitments`/`PeopleDashboard`/shared-cache path via `HomeView.buildPeopleSignals()`,
   wrapped in try/catch — a parsing bug there must never break Home's core render, per the same
