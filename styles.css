@@ -73,3 +73,12 @@ If your plugin does not need CSS, delete this file.
 .twobrain-matrix-select option[value=''] {
 	color: var(--text-faint);
 }
+
+.twobrain-matrix-date {
+	padding: var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	background-color: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+}

@@ -56,9 +56,13 @@ The plugin renders the live, editable matrix into it. Each row has:
 | Control | Writes |
 |---|---|
 | **Take to work** / **Drop** | `takeToWork` (taking also sets `stage: doing`) |
-| **📅** | `takeToWorkDate` |
+| **Planned** date field | `takeToWorkDate` — when you intend to pick it up |
 | **Role**, **Project**, **Priority** dropdowns | the matching frontmatter field |
 | **Stage** dropdown | `stage` — choosing `done` or `backlog` also clears `takeToWork` |
+
+**Planned** is scratch space for forward planning: the daily note never reads it, and the only thing that
+consults it is the sort order inside a quadrant (soonest first). Setting it does **not** put an activity in
+a daily note — only **Take to work** does that.
 
 Changing **Priority** moves the row between quadrants. The **Project** list is built from your
 `Projects/` folder — subfolders and top-level notes both count — plus anything your activities already
@@ -76,7 +80,7 @@ devices planning different activities never collide in Obsidian Sync.
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (382 tests)
+npm test        # Jest unit tests (385 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

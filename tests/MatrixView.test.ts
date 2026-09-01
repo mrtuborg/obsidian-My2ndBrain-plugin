@@ -11,6 +11,7 @@ class FakeEl {
 	attrs: Record<string, string> = {};
 	text = '';
 	value = '';
+	type = '';
 	selected = false;
 	listeners: Record<string, Array<(evt: any) => void>> = {};
 
@@ -48,6 +49,8 @@ class FakeEl {
 		for (const cb of this.listeners['change'] ?? []) cb({ preventDefault() {} });
 	}
 	options(): string[] { return this.find('option').map(o => o.value); }
+	/** Type into an input and fire 'change'. */
+	fill(value: string) { this.choose(value); }
 	selectedValue(): string {
 		return this.find('option').find(o => o.selected)?.value ?? '';
 	}
@@ -83,6 +86,15 @@ const SETTINGS = {
 	archiveFolder: 'Activities/Archive',
 	projectsFolder: 'Projects',
 };
+
+/** The date input on the row for `displayName`. */
+function dateFor(root: FakeEl, displayName: string): FakeEl {
+	const row = root.find('tr').find(r => r.all().some(c => c.text === displayName));
+	if (!row) throw new Error(`No row rendered for ${displayName}`);
+	const input = row.find('input')[0];
+	if (!input) throw new Error(`No date input on row ${displayName}`);
+	return input;
+}
 
 /** The dropdown labelled `label` on the row for `displayName`. */
 function selectFor(root: FakeEl, displayName: string, label: string): FakeEl {
@@ -161,7 +173,7 @@ describe('MatrixView', () => {
 		const root = new FakeEl('div');
 		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
 
-		expect(buttonsFor(root, 'planned').map(b => b.text)).toEqual(['Drop', '📅']);
+		expect(buttonsFor(root, 'planned').map(b => b.text)).toEqual(['Drop']);
 
 		selectFor(root, 'planned', 'Stage').choose('done');
 		await new Promise(r => setTimeout(r, 0));
@@ -288,5 +300,57 @@ describe('MatrixView', () => {
 		const saved = store.get('Activities/idle.md')!;
 		expect(saved).toContain('stage: doing');
 		expect(saved).toContain('takeToWork: false');
+	});
+
+	// ── Planned date ─────────────────────────────────────────────────────
+
+	it('edits the plan date inline rather than behind a modal', async () => {
+		const { app, store } = makeApp({
+			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		const date = dateFor(root, 'planned');
+		expect(date.type).toBe('date');
+		expect(date.value).toBe('');
+
+		date.fill('2026-09-10');
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(store.get('Activities/planned.md')!).toContain('takeToWorkDate: 2026-09-10');
+		expect(dateFor(root, 'planned').value).toBe('2026-09-10');
+	});
+
+	it('clearing the plan date removes the field entirely', async () => {
+		const { app, store } = makeApp({
+			'Activities/planned.md': activityFile('p', [
+				'stage: doing', 'takeToWork: true', 'priority: urgent-important',
+				'takeToWorkDate: 2026-09-10',
+			]),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		expect(dateFor(root, 'planned').value).toBe('2026-09-10');
+
+		dateFor(root, 'planned').fill('');
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(store.get('Activities/planned.md')!).not.toContain('takeToWorkDate:');
+	});
+
+	it('a plan date never pulls an activity into the daily note by itself', async () => {
+		// The date is sort/display metadata only — takeToWork stays the gate.
+		const { app, store } = makeApp({
+			'Activities/idle.md': activityFile('i', ['stage: backlog', 'takeToWork: false', 'priority: urgent-important']),
+		});
+		const root = new FakeEl('div');
+		await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+		dateFor(root, 'idle').fill('2026-09-10');
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(store.get('Activities/idle.md')!).toContain('takeToWork: false');
 	});
 });

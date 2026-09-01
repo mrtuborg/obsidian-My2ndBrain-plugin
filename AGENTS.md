@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 382 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 385 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ deciding whether the activity is rendered into today's daily note.
 | Field | Owner | Effect |
 |---|---|---|
 | `takeToWork` | user, via matrix button | Daily note inclusion. Mandatory on every Activity |
-| `takeToWorkDate` | user, via matrix button | **Matrix display/sort only.** Never consulted by the daily note |
+| `takeToWorkDate` | user, via the matrix's inline date field | **Matrix display/sort only.** Never consulted by the daily note |
 | `remind`, `snoozeUntil` | user, hand-written | **Matrix visibility only.** They no longer gate the daily note |
 
 Rules that must not drift:
@@ -63,7 +63,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 382 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 385 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

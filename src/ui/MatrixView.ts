@@ -3,7 +3,6 @@ import { FileIO, AppLike } from '../utilities/FileIO';
 import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { EisenhowerMatrix, MatrixActivity, MatrixQuadrant } from '../components/EisenhowerMatrix';
 import { TAKE_TO_WORK_FIELD, TAKE_TO_WORK_DATE_FIELD } from '../utilities/TakeToWork';
-import { PlanDateModal } from './PlanDateModal';
 import {
 	SelectOption,
 	stageOptions,
@@ -115,7 +114,7 @@ export class MatrixView {
 			if (file instanceof TFile) void this.app.workspace.getLeaf(false).openFile(file);
 		});
 
-		row.createEl('td', { text: activity.takeToWorkDate || '—' });
+		this.renderPlannedDate(row, activity);
 
 		this.renderSelect(row, 'Role', roleOptions(activity.role), activity.role,
 			value => this.applyFields(activity, { role: value || null }));
@@ -142,10 +141,6 @@ export class MatrixView {
 				: 'Show in today\'s daily note and set stage to doing'
 		);
 		toggle.addEventListener('click', () => void this.toggleTakeToWork(activity));
-
-		const plan = actions.createEl('button', { text: '📅' });
-		plan.setAttribute('aria-label', 'Set a plan date (matrix only)');
-		plan.addEventListener('click', () => void this.planDate(activity));
 	}
 
 	/**
@@ -207,14 +202,24 @@ export class MatrixView {
 		);
 	}
 
-	private async planDate(activity: MatrixActivity): Promise<void> {
-		const chosen = await new PlanDateModal(
-			this.app, activity.displayName, activity.takeToWorkDate
-		).openAndGetValue();
-		if (chosen === null) return;
+	/**
+	 * `takeToWorkDate` — when the user intends to pick this up. It is planning
+	 * scratch space: the daily note never reads it, and the only thing that
+	 * consults it is the sort inside a quadrant (soonest first). Editing it
+	 * inline rather than through a modal keeps it consistent with every other
+	 * editable column; clearing the field removes it from the frontmatter.
+	 */
+	private renderPlannedDate(row: HTMLElement, activity: MatrixActivity): void {
+		const cell = row.createEl('td');
+		const input = cell.createEl('input', { cls: 'twobrain-matrix-date' });
+		input.type = 'date';
+		input.value = activity.takeToWorkDate;
+		input.setAttribute('aria-label', 'Planned');
 
-		await this.applyFields(activity, {
-			[TAKE_TO_WORK_DATE_FIELD]: chosen === '' ? null : chosen,
+		input.addEventListener('change', () => {
+			const next = input.value.trim();
+			if (next === activity.takeToWorkDate) return;
+			void this.applyFields(activity, { [TAKE_TO_WORK_DATE_FIELD]: next || null });
 		});
 	}
 
