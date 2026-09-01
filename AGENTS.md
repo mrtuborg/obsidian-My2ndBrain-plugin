@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 489 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 511 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -84,6 +84,17 @@ Rules that must not drift:
   the dark theme.
 - `loadProjectRecords` (`utilities/ProjectIndex.ts`) is the one place the `Projects/<slug>.md` vs
   `Projects/<slug>/Project.md` resolution lives; `ProjectsView` and `HomeView` both use it.
+- `LifeStats` derives a year of history from vault *metadata only* — filename dates, which Context pages
+  sit beside a daily note, and `TFile.stat.size`. Home re-renders on every open, so reading 365 notes to
+  draw two small charts is not an option; that budget is what the numbers are allowed to mean. Don't add a
+  metric here that needs file contents — put it behind a command instead.
+- The radar normalizes against the user's own busiest role, never an absolute target. The question is "is
+  my life lopsided", and a fixed target would just make a quiet year look like a failure. A role at zero
+  still gets an axis and a hollow dot — that's the most useful thing the chart can say.
+- Consistency levels are quantiles of the user's own days, not byte thresholds. A template that grows would
+  make absolute cutoffs drift into lying.
+- The streak survives today being unwritten. A streak that resets each morning only punishes you for
+  checking Home early.
 - **Nothing written into a daily note or Context page is ever deleted by the plugin** (D1). A rebuild keeps
   every existing activity block that has content beneath its heading — even for an activity that is now
   dropped or done — and merges genuinely new todos in rather than replacing the user's lines
@@ -99,7 +110,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 489 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 511 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

@@ -30,6 +30,10 @@ class FakeEl {
 	}
 	createDiv(opts?: { cls?: string; text?: string }) { return this.createEl('div', opts); }
 	createSpan(opts?: { cls?: string; text?: string }) { return this.createEl('span', opts); }
+	// Obsidian puts createSvg on Node, so it works the same on both.
+	createSvg(tag: string, opts?: { cls?: string }) { return this.createEl(tag, opts); }
+	get textContent() { return this.text; }
+	set textContent(v: string) { this.text = v; }
 
 	all(): FakeEl[] { return this.children.flatMap(c => [c, ...c.all()]); }
 	find(tag: string): FakeEl[] { return this.all().filter(e => e.tag === tag); }
@@ -82,6 +86,8 @@ function makeApp(files: Record<string, string>) {
 		path: p,
 		name: p.split('/').pop()!,
 		basename: p.split('/').pop()!.replace(/\.md$/, ''),
+		// The consistency grid reads size straight off the vault index.
+		stat: { size: (store.get(p) ?? '').length, ctime: 0, mtime: 0 },
 	});
 	const app = {
 		vault: {
@@ -255,5 +261,77 @@ describe('HomeView scope', () => {
 		expect(root.withClass('twobrain-matrix-table')).toHaveLength(0);
 		expect(root.withClass('twobrain-projects-table')).toHaveLength(0);
 		expect(root.find('table')).toHaveLength(0);
+	});
+});
+
+describe('HomeView life balance radar', () => {
+	it('draws an axis per role, labelled with its days of attention', async () => {
+		const { root } = await renderWith({
+			[`Journal/${TODAY}.md`]: '# Journal',
+			[`Journal/Contexts/${TODAY}-Engineer.md`]: '# Engineer',
+			[`Journal/${daysAgo(1)}.md`]: '# Journal',
+			[`Journal/Contexts/${daysAgo(1)}-Engineer.md`]: '# Engineer',
+			[`Journal/Contexts/${daysAgo(1)}-Family.md`]: '# Family',
+		});
+
+		expect(root.withClass('twobrain-radar-label').map(l => l.text))
+			.toEqual(['Family', 'Engineer', 'TechLead', 'Entrepreneur', 'Selfcare']);
+		expect(root.withClass('twobrain-radar-value').map(l => l.text))
+			.toEqual(['1', '2', '0', '0', '0']);
+	});
+
+	it('marks a role with no attention at all rather than hiding it', async () => {
+		const { root } = await renderWith({
+			[`Journal/${TODAY}.md`]: '# Journal',
+			[`Journal/Contexts/${TODAY}-Engineer.md`]: '# Engineer',
+		});
+		expect(root.withClass('twobrain-radar-dot')).toHaveLength(5);
+		expect(root.withClass('is-empty')).toHaveLength(4);
+	});
+
+	it('explains itself instead of drawing an empty shape with no history', async () => {
+		const { root } = await renderWith({});
+		expect(root.withClass('twobrain-home-radar')).toHaveLength(0);
+		expect(root.one('twobrain-home-panel-empty')!.text).toMatch(/No role history yet/);
+	});
+});
+
+describe('HomeView consistency grid', () => {
+	it('renders a year of days as Sunday-first week columns', async () => {
+		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: '# Journal' });
+		const weeks = root.withClass('twobrain-home-grid-week');
+		expect(weeks.length).toBeGreaterThanOrEqual(52);
+		expect(weeks.every(w => w.children.length === 7)).toBe(true);
+	});
+
+	it('reports the current streak', async () => {
+		const { root } = await renderWith({
+			[`Journal/${TODAY}.md`]: '# Journal',
+			[`Journal/${daysAgo(1)}.md`]: '# Journal',
+			[`Journal/${daysAgo(2)}.md`]: '# Journal',
+			[`Journal/${daysAgo(9)}.md`]: '# Journal',
+		});
+		expect(root.one('twobrain-home-streak-num')!.text).toBe('3');
+	});
+
+	it('opens the day behind a cell that has a note, and ignores empty ones', async () => {
+		const { app, opened } = makeApp({ [`Journal/${TODAY}.md`]: '# Journal' });
+		const root = new FakeEl('div');
+		await new HomeView(app as any, SETTINGS).render(root as unknown as HTMLElement);
+
+		const written = root.withClass('twobrain-home-grid-cell')
+			.filter(c => c.classes.has('is-open'));
+		expect(written).toHaveLength(1);
+
+		for (const cb of written[0]!.listeners['click'] ?? []) cb({ preventDefault() {} });
+		expect(opened).toEqual([`Journal/${TODAY}.md`]);
+	});
+
+	it('counts context pages toward a day even at a nested journal path', async () => {
+		const { root } = await renderWith({
+			[`Journal/2026/09.September/${TODAY}.md`]: '# Journal',
+			[`Journal/2026/09.September/Contexts/${TODAY}-Family.md`]: '# Family',
+		});
+		expect(root.withClass('twobrain-radar-value')[0]!.text).toBe('1');
 	});
 });

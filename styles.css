@@ -943,6 +943,233 @@ a.twobrain-home-signal.is-no-next-action {
 	color: var(--zen-faint);
 }
 
+/* ── The long view: balance + consistency ─────────────────────────────── */
+
+.twobrain-home-charts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.twobrain-home-panel {
+	padding: 8px 12px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--zen-line);
+	background-color: var(--zen-surface);
+}
+
+.twobrain-home-panel.is-radar {
+	flex: 0 0 auto;
+}
+
+/* Takes the rest of the row, and may shrink below its content — the grid
+   inside scrolls rather than pushing the radar off the page. */
+.twobrain-home-panel.is-consistency {
+	flex: 1 1 300px;
+	min-width: 0;
+}
+
+.twobrain-home-panel-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.twobrain-home-panel-title {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--zen-soft);
+}
+
+.twobrain-home-panel-sub {
+	font-size: 10px;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-panel-empty {
+	max-width: 190px;
+	padding: 12px 0 16px;
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	line-height: 1.4;
+	color: var(--zen-faint);
+}
+
+/* ── Radar ─────────────────────────────────────────────────────────────── */
+
+.twobrain-home-radar {
+	display: block;
+	width: 236px;
+	height: 166px;
+}
+
+.twobrain-radar-ring {
+	fill: none;
+	stroke: var(--zen-line);
+	stroke-width: 1;
+}
+
+.twobrain-radar-spoke {
+	stroke: var(--zen-line);
+	stroke-width: 1;
+}
+
+/* Your own average, dashed so it reads as a reference rather than data. */
+.twobrain-radar-mean {
+	fill: none;
+	stroke: var(--zen-faint);
+	stroke-width: 1;
+	stroke-dasharray: 2 3;
+	opacity: 0.7;
+}
+
+.twobrain-radar-shape {
+	fill: color-mix(in srgb, var(--zen-accent) 26%, transparent);
+	stroke: var(--zen-accent);
+	stroke-width: 1.6;
+	stroke-linejoin: round;
+}
+
+.twobrain-radar-dot {
+	fill: var(--zen-accent);
+}
+
+/* A role at zero sits on the centre point; hollow so it doesn't read as data. */
+.twobrain-radar-dot.is-empty {
+	fill: var(--zen-surface);
+	stroke: var(--zen-alert);
+	stroke-width: 1.2;
+}
+
+.twobrain-radar-label {
+	font-size: 8.5px;
+	fill: var(--zen-soft);
+}
+
+.twobrain-radar-value {
+	font-size: 8px;
+	font-weight: 600;
+	fill: var(--zen-faint);
+}
+
+/* ── Consistency grid ──────────────────────────────────────────────────── */
+
+.twobrain-home-streak {
+	display: flex;
+	align-items: baseline;
+	gap: 5px;
+	margin-bottom: 6px;
+}
+
+.twobrain-home-streak-num {
+	font-size: 22px;
+	font-weight: 300;
+	line-height: 1;
+	color: var(--zen-accent);
+}
+
+.twobrain-home-streak-label {
+	font-size: 10px;
+	color: var(--zen-faint);
+}
+
+/* A year never fits a phone, so it scrolls sideways like a calendar strip. */
+.twobrain-home-grid-scroll {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: 2px;
+}
+
+.twobrain-home-grid {
+	display: inline-block;
+}
+
+.twobrain-home-grid-months {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 9px;
+	height: 11px;
+}
+
+.twobrain-home-grid-month {
+	font-size: 8px;
+	line-height: 1;
+	white-space: nowrap;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-grid-cells {
+	display: flex;
+	gap: 2px;
+}
+
+.twobrain-home-grid-week {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.twobrain-home-grid-cell {
+	width: 7px;
+	height: 7px;
+	border-radius: 1.5px;
+	background-color: var(--zen-line);
+}
+
+.twobrain-home-grid-cell.is-pad {
+	background-color: transparent;
+}
+
+.twobrain-home-grid-cell.is-l1 {
+	background-color: color-mix(in srgb, var(--zen-accent) 25%, var(--zen-line));
+}
+
+.twobrain-home-grid-cell.is-l2 {
+	background-color: color-mix(in srgb, var(--zen-accent) 50%, var(--zen-line));
+}
+
+.twobrain-home-grid-cell.is-l3 {
+	background-color: color-mix(in srgb, var(--zen-accent) 75%, var(--zen-line));
+}
+
+.twobrain-home-grid-cell.is-l4 {
+	background-color: var(--zen-accent);
+}
+
+.twobrain-home-grid-cell.is-open {
+	cursor: pointer;
+}
+
+.twobrain-home-grid-cell.is-open:hover {
+	outline: 1px solid var(--zen-ink);
+	outline-offset: 0;
+}
+
+.twobrain-home-legend {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	margin-top: 6px;
+}
+
+.twobrain-home-legend-label {
+	font-size: 9px;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-legend-label:first-child {
+	margin-right: 2px;
+}
+
+.twobrain-home-legend-label:last-child {
+	margin-left: 2px;
+}
+
 /* ── Next steps ───────────────────────────────────────────────────────── */
 
 .twobrain-home-nav {

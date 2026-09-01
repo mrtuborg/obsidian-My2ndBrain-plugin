@@ -126,10 +126,16 @@ page is readable in one glance in landscape on a phone.
 | Banner | Greeting, today's date, and how many activities you have taken to work out of everything open |
 | Role cards | Per role: `taken / open`, a bar for the share you committed to today, and a badge counting that role's projects needing a decision. The name links to today's Context page when it exists |
 | Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
+| Life balance | A radar with an axis per role, showing how many days each one showed up in your journal over the last 12 months. Normalized against your busiest role, so the shape reads as balance rather than volume — round is even, a spike is a year spent on one thing. A dashed ring marks your own average |
+| Consistency | A year of days, one cell each, shaded by how full the day was relative to your typical day. Current streak, longest streak, and total active days. Click any day to open it |
 | Next steps | Today's note, Plan (matrix), Projects, Inbox — plus the last few days for a glance back |
 
 A role card is highlighted only when it owns open work and **none of it** is planned for today. A role with
 nothing open is *clear*, not neglected, and recedes instead of nagging.
+
+Both charts are built from file metadata alone — the date in a journal filename, which role Context pages
+sit beside it, and the note's size on disk. Nothing is re-read, so a year of history costs nothing to draw.
+Today's note missing doesn't break the streak; at 9am you simply haven't written it yet.
 
 Home never creates anything. If today's daily note or a role's Context page doesn't exist yet, it shows a
 plain label rather than a link — creating those stays owned by opening them directly.
@@ -141,7 +147,7 @@ plain label rather than a link — creating those stays owned by opening them di
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (489 tests)
+npm test        # Jest unit tests (511 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

@@ -6,8 +6,14 @@ import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import {
 	HomeDashboard, HomeSummary, RoleStat, HealthSignal, greeting, longDate,
 } from '../components/HomeDashboard';
-import { contextsFolderForNote, contextPagePath, matchContextPagePath } from '../utilities/ContextPaths';
+import { JournalDay, buildLifeBalance, buildConsistency } from '../components/LifeStats';
+import { renderRadar, renderConsistency } from './HomeCharts';
+import {
+	contextsFolderForNote, contextPagePath, matchContextPagePath, parseContextPageFilename,
+} from '../utilities/ContextPaths';
 import { ROLES } from '../roles';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface HomeViewSettings {
 	activitiesFolder: string;
@@ -73,6 +79,7 @@ export class HomeView {
 		this.renderBanner(container, summary);
 		this.renderRoles(container, summary);
 		this.renderSignals(container, summary);
+		this.renderCharts(container, allFiles, today);
 		this.renderFooter(container, summary);
 	}
 
@@ -178,6 +185,64 @@ export class HomeView {
 			evt.preventDefault();
 			this.open(target);
 		});
+	}
+
+	/**
+	 * The long view: role balance and whether the habit is holding. These are
+	 * the only things on the page that aren't about today, and the only
+	 * reason Home is worth opening on a day you've already planned.
+	 */
+	private renderCharts(container: HTMLElement, files: TFile[], today: string): void {
+		const { days, paths } = this.collectJournalDays(files);
+		const charts = container.createDiv({ cls: 'twobrain-home-charts' });
+
+		renderRadar(charts, buildLifeBalance(today, days, ROLES as readonly string[]));
+		renderConsistency(charts, buildConsistency(today, days), date => {
+			const path = paths.get(date);
+			if (path) this.open(path);
+		});
+	}
+
+	/**
+	 * A year of history from file metadata alone — no note is opened. The date
+	 * comes from the filename, the roles from the Context pages sitting beside
+	 * it, and the depth from the size on disk.
+	 */
+	private collectJournalDays(
+		files: TFile[]
+	): { days: JournalDay[]; paths: Map<string, string> } {
+		const journalFolder = this.settings.journalFolder;
+		const roles = ROLES as readonly string[];
+		const byDate = new Map<string, JournalDay>();
+		const paths = new Map<string, string>();
+
+		const journal = files.filter(f => f.path.startsWith(journalFolder + '/'));
+
+		for (const file of journal) {
+			if (matchContextPagePath(file.path, journalFolder, roles)) continue;
+			if (!DATE_RE.test(file.basename)) continue;
+			byDate.set(file.basename, {
+				date: file.basename,
+				roles: [],
+				size: file.stat?.size ?? 0,
+			});
+			paths.set(file.basename, file.path);
+		}
+
+		for (const file of journal) {
+			if (!matchContextPagePath(file.path, journalFolder, roles)) continue;
+			const parsed = parseContextPageFilename(file.name, roles);
+			// A Context page whose daily note was deleted still counts as
+			// attention — the work happened even if the day's note didn't survive.
+			if (!parsed) continue;
+			const day = byDate.get(parsed.date)
+				?? { date: parsed.date, roles: [], size: 0 };
+			day.roles.push(parsed.role);
+			day.size += file.stat?.size ?? 0;
+			byDate.set(parsed.date, day);
+		}
+
+		return { days: [...byDate.values()], paths };
 	}
 
 	/** Where to go next: today's note, planning, review, and a glance back. */
