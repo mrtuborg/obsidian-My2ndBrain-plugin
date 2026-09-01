@@ -83,12 +83,7 @@ export class MatrixView {
 			(n, q) => n + q.activities.filter(a => a.takeToWork).length, 0
 		);
 
-		const summary = container.createDiv({ cls: 'twobrain-matrix-summary' });
-		summary.setText(
-			total === 0
-				? 'No open activities found.'
-				: `${inWork} of ${total} open activities taken to work today (${today}).`
-		);
+		this.renderSummary(container, today, inWork, total);
 
 		for (const quadrant of quadrants) {
 			this.renderQuadrant(container, quadrant);
@@ -97,17 +92,59 @@ export class MatrixView {
 
 	// ── Private ──────────────────────────────────────────────────────────────
 
+	/** Header strip: the day, and how much of it is already committed. */
+	private renderSummary(
+		container: HTMLElement, today: string, inWork: number, total: number
+	): void {
+		const bar = container.createDiv({ cls: 'twobrain-matrix-summary' });
+
+		const left = bar.createDiv({ cls: 'twobrain-matrix-summary-main' });
+		left.createSpan({ cls: 'twobrain-matrix-summary-count', text: String(inWork) });
+		left.createSpan({
+			cls: 'twobrain-matrix-summary-label',
+			text: total === 0
+				? 'No open activities'
+				: `taken to work today, of ${total} open`,
+		});
+
+		bar.createSpan({ cls: 'twobrain-matrix-summary-date', text: today });
+
+		// A quiet progress rail reads faster than the numbers alone.
+		const rail = bar.createDiv({ cls: 'twobrain-matrix-progress' });
+		const fill = rail.createDiv({ cls: 'twobrain-matrix-progress-fill' });
+		const pct = total === 0 ? 0 : Math.round((inWork / total) * 100);
+		fill.setAttribute('style', `width: ${pct}%`);
+	}
+
 	private renderQuadrant(container: HTMLElement, quadrant: MatrixQuadrant): void {
-		container.createEl('h3', { text: quadrant.heading });
+		const section = container.createDiv({
+			cls: `twobrain-matrix-quadrant twobrain-q-${quadrant.key}`,
+		});
+
+		const header = section.createDiv({ cls: 'twobrain-matrix-quadrant-header' });
+		header.createSpan({ cls: 'twobrain-matrix-quadrant-title', text: quadrant.heading });
+		header.createSpan({
+			cls: 'twobrain-matrix-quadrant-count',
+			text: String(quadrant.activities.length),
+		});
 
 		if (quadrant.activities.length === 0) {
-			container.createEl('p', { text: 'Nothing here.', cls: 'twobrain-matrix-empty' });
+			section.createEl('p', { text: 'Nothing here.', cls: 'twobrain-matrix-empty' });
 			return;
 		}
 
-		const table = container.createEl('table', { cls: 'twobrain-matrix-table' });
+		const table = section.createEl('table', { cls: 'twobrain-matrix-table' });
+
+		// Fixed widths so every quadrant's columns line up with the others —
+		// auto layout sizes each table to its own content and the page reads
+		// as four unrelated tables.
+		const cols = table.createEl('colgroup');
+		for (const width of ['24%', '11%', '12%', '16%', '15%', '11%', '11%']) {
+			cols.createEl('col').setAttribute('style', `width: ${width}`);
+		}
+
 		const head = table.createEl('thead').createEl('tr');
-		for (const label of ['', 'Activity', 'Planned', 'Role', 'Project', 'Priority', 'Stage', 'Actions']) {
+		for (const label of ['Activity', 'Planned', 'Role', 'Project', 'Priority', 'Stage', '']) {
 			head.createEl('th', { text: label });
 		}
 
@@ -121,14 +158,14 @@ export class MatrixView {
 		const row = body.createEl('tr');
 		if (activity.takeToWork) row.addClass('twobrain-matrix-inwork');
 
-		row.createEl('td', { text: activity.takeToWork ? '✅' : '', cls: 'twobrain-matrix-flag' });
-
-		const nameCell = row.createEl('td');
+		const nameCell = row.createEl('td', { cls: 'twobrain-matrix-name' });
 		const link = nameCell.createEl('a', {
 			text: activity.displayName,
 			cls: 'internal-link',
 			href: activity.path,
 		});
+		// The cell clips long names, so the full one lives in the tooltip.
+		link.setAttribute('title', activity.displayName);
 		link.addEventListener('click', evt => {
 			evt.preventDefault();
 			const file = this.app.vault.getAbstractFileByPath(activity.path);
@@ -154,6 +191,9 @@ export class MatrixView {
 
 		const toggle = actions.createEl('button', {
 			text: activity.takeToWork ? 'Drop' : 'Take to work',
+			cls: activity.takeToWork
+				? 'twobrain-matrix-btn twobrain-matrix-btn-quiet'
+				: 'twobrain-matrix-btn twobrain-matrix-btn-cta',
 		});
 		toggle.setAttribute(
 			'aria-label',
@@ -292,6 +332,15 @@ export class MatrixView {
 		input.type = 'date';
 		input.value = activity.takeToWorkDate;
 		input.setAttribute('aria-label', 'Planned');
+		input.setAttribute(
+			'title',
+			activity.takeToWorkDate
+				? `Takes itself to work on ${activity.takeToWorkDate}`
+				: 'Plan a day for this activity'
+		);
+		// An unset date is the common case; dimming it keeps dozens of empty
+		// dd/mm/yyyy placeholders from shouting over the real content.
+		if (!activity.takeToWorkDate) input.addClass('twobrain-matrix-date-empty');
 
 		input.addEventListener('change', () => {
 			const next = input.value.trim();

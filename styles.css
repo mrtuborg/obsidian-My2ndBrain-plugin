@@ -7,65 +7,233 @@ If your plugin does not need CSS, delete this file.
 
 */
 
-/* ── Eisenhower Matrix live view (```2ndbrain-matrix code block) ───────── */
+/* ── Eisenhower Matrix live view (```2ndbrain-matrix code block) ─────────
+ *
+ * Built entirely on Obsidian's own CSS variables so the matrix inherits the
+ * user's theme (light/dark, accent colour, font scale) instead of imposing
+ * its own palette.
+ */
+
+.twobrain-matrix {
+	--tb-quadrant: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* ── Summary bar ──────────────────────────────────────────────────────── */
 
 .twobrain-matrix-summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-3) var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-matrix-summary-main {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+}
+
+.twobrain-matrix-summary-count {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: var(--text-accent);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-summary-label {
 	color: var(--text-muted);
-	font-size: var(--font-ui-small);
-	margin-bottom: var(--size-4-3);
+}
+
+.twobrain-matrix-summary-date {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-progress {
+	flex-basis: 100%;
+	margin-top: var(--size-2-1);
+	height: 3px;
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.twobrain-matrix-progress-fill {
+	height: 100%;
+	border-radius: inherit;
+	background-color: var(--text-accent);
+	transition: width 160ms ease-out;
+}
+
+/* ── Quadrants ────────────────────────────────────────────────────────── */
+
+.twobrain-matrix-quadrant {
+	margin-bottom: var(--size-4-6);
+}
+
+/* Each quadrant gets its own hue so the four sections are distinguishable
+ * at a glance while scrolling, without colouring whole rows. */
+.twobrain-matrix .twobrain-q-urgent-important { --tb-quadrant: var(--color-red); }
+.twobrain-matrix .twobrain-q-not-urgent-important { --tb-quadrant: var(--color-blue); }
+.twobrain-matrix .twobrain-q-urgent-not-important { --tb-quadrant: var(--color-orange); }
+.twobrain-matrix .twobrain-q-not-urgent-not-important { --tb-quadrant: var(--text-faint); }
+
+.twobrain-matrix-quadrant-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	padding-left: var(--size-2-3);
+	margin-bottom: var(--size-2-3);
+	border-left: 3px solid var(--tb-quadrant);
+}
+
+.twobrain-matrix-quadrant-title {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.twobrain-matrix-quadrant-count {
+	padding: 0 var(--size-2-2);
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
 }
 
 .twobrain-matrix-empty {
+	margin: 0 0 0 var(--size-4-3);
 	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
 	font-style: italic;
 }
 
+/* ── Table ────────────────────────────────────────────────────────────── */
+
 .twobrain-matrix-table {
 	width: 100%;
+	table-layout: fixed;
 	border-collapse: collapse;
 }
 
 .twobrain-matrix-table th,
 .twobrain-matrix-table td {
-	padding: var(--size-2-2) var(--size-2-3);
+	padding: var(--size-2-1) var(--size-2-2);
 	text-align: left;
 	vertical-align: middle;
+	border: none;
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .twobrain-matrix-table th {
-	color: var(--text-muted);
+	padding-bottom: var(--size-2-2);
+	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
 	font-weight: var(--font-medium);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
-.twobrain-matrix-flag {
-	width: 1.6em;
-	text-align: center;
-}
-
-.twobrain-matrix-inwork {
+.twobrain-matrix-table tbody tr:hover {
 	background-color: var(--background-modifier-hover);
 }
 
-.twobrain-matrix-actions {
-	white-space: nowrap;
+.twobrain-matrix-table tbody tr:last-child td {
+	border-bottom: none;
 }
 
-.twobrain-matrix-actions button {
-	margin-left: var(--size-2-2);
-	padding: var(--size-2-1) var(--size-2-3);
+/* Committed for today: marked with an accent rail rather than a tinted row,
+ * which stays legible against any theme. */
+.twobrain-matrix-inwork td {
+	/* Fallback first for engines without color-mix. */
+	background-color: var(--background-secondary);
+	background-color: color-mix(in srgb, var(--interactive-accent) 7%, transparent);
+}
+
+.twobrain-matrix-table tbody tr.twobrain-matrix-inwork:hover td {
+	background-color: var(--background-modifier-hover);
+	background-color: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
+.twobrain-matrix-inwork td:first-child {
+	box-shadow: inset 2px 0 0 var(--text-accent);
+}
+
+.twobrain-matrix-inwork .twobrain-matrix-name a {
+	font-weight: var(--font-semibold);
+}
+
+.twobrain-matrix-name {
+	overflow: hidden;
+}
+
+.twobrain-matrix-name a {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+	text-decoration: none;
+}
+
+.twobrain-matrix-name a:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────── */
+
+/* Fields read as plain text until the row is hovered — a screen of boxed
+ * inputs buries the activity names that actually matter. */
+.twobrain-matrix-select,
+.twobrain-matrix-date {
+	width: 100%;
+	height: auto;
+	padding: var(--size-2-1) var(--size-2-2);
 	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	color: var(--text-normal);
+	background-color: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .twobrain-matrix-select {
-	max-width: 12em;
-	padding: var(--size-2-1) var(--size-2-2);
-	font-size: var(--font-ui-smaller);
+	appearance: none;
+	-webkit-appearance: none;
+	padding-right: var(--size-4-3);
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+		linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+	background-position: right 0.75em top 55%, right 0.5em top 55%;
+	background-size: 4px 4px, 4px 4px;
+	background-repeat: no-repeat;
+	text-overflow: ellipsis;
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-select,
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-date {
 	background-color: var(--background-modifier-form-field);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	color: var(--text-normal);
+	border-color: var(--background-modifier-border);
+}
+
+.twobrain-matrix-select:focus,
+.twobrain-matrix-date:focus {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--interactive-accent);
+	outline: none;
 }
 
 /* An unset field should read as absent, not as a real choice. */
@@ -75,10 +243,86 @@ If your plugin does not need CSS, delete this file.
 }
 
 .twobrain-matrix-date {
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-date-empty::-webkit-datetime-edit {
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-date-empty::-webkit-datetime-edit,
+.twobrain-matrix-date-empty:focus::-webkit-datetime-edit {
+	opacity: 0.55;
+}
+
+.twobrain-matrix-date::-webkit-calendar-picker-indicator {
+	opacity: 0.3;
+	cursor: pointer;
+	transition: opacity 120ms ease;
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-date::-webkit-calendar-picker-indicator {
+	opacity: 0.7;
+}
+
+/* A date that is actually set is content, so it always reads at full strength. */
+.twobrain-matrix-date:not(.twobrain-matrix-date-empty) {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────── */
+
+.twobrain-matrix-actions {
+	white-space: nowrap;
+	text-align: right;
+}
+
+.twobrain-matrix-btn {
+	width: 100%;
 	padding: var(--size-2-1) var(--size-2-2);
 	font-size: var(--font-ui-smaller);
-	background-color: var(--background-modifier-form-field);
-	border: 1px solid var(--background-modifier-border);
+	font-family: inherit;
+	line-height: 1.4;
 	border-radius: var(--radius-s);
-	color: var(--text-normal);
+	border: 1px solid transparent;
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.twobrain-matrix-btn-cta {
+	background-color: transparent;
+	border-color: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-btn-cta {
+	background-color: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.twobrain-matrix-btn-quiet {
+	background-color: transparent;
+	border-color: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.twobrain-matrix-btn-quiet:hover {
+	background-color: var(--background-modifier-error-hover, var(--background-modifier-hover));
+	color: var(--text-error);
+}
+
+/* ── Narrow panes ─────────────────────────────────────────────────────── */
+
+/* Scroll rather than hide: with a fixed colgroup, display:none on cells
+ * leaves their width reserved and the columns stop lining up. */
+.twobrain-matrix-quadrant {
+	overflow-x: auto;
+}
+
+.twobrain-matrix-table {
+	min-width: 640px;
 }

@@ -33,6 +33,7 @@ class FakeEl {
 		return el as unknown as HTMLElement;
 	}
 	createDiv(opts?: { cls?: string }) { return this.createEl('div', opts); }
+	createSpan(opts?: { cls?: string; text?: string }) { return this.createEl('span', opts); }
 
 	/** Depth-first flatten, for assertions. */
 	all(): FakeEl[] {
@@ -139,7 +140,10 @@ describe('MatrixView', () => {
 		expect(names).not.toContain('finished');
 
 		const summary = root.find('div').find(d => d.classes.has('twobrain-matrix-summary'))!;
-		expect(summary.text).toContain('1 of 2');
+		const count = summary.all().find(e => e.classes.has('twobrain-matrix-summary-count'))!;
+		const label = summary.all().find(e => e.classes.has('twobrain-matrix-summary-label'))!;
+		expect(count.text).toBe('1');
+		expect(label.text).toContain('of 2');
 	});
 
 	it('take to work sets the flag and moves a backlog activity to doing', async () => {
