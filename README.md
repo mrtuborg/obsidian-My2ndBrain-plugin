@@ -110,6 +110,62 @@ of the standard vocabulary, so editing one column never quietly rewrites another
 Every control writes a single frontmatter line on one activity file — the smallest possible write, so two
 devices planning different activities never collide in Obsidian Sync.
 
+### The people dashboard
+
+`Dashboards/People.md` holds a fenced block too:
+
+````markdown
+```2ndbrain-people
+```
+````
+
+It tracks promises in both directions — what you owe people, and what you're waiting on from
+them — by scanning `Journal/**/*.md` for two inline tags on an ordinary todo line:
+
+```markdown
+- [ ] Send the BOM @owed [[Ida Haugland]]
+- [ ] Radio spec @waiting [[Frederik Stray]]
+```
+
+| Tag | Meaning | Dashboard label |
+|---|---|---|
+| `@owed` | I owe them | **I owe** |
+| `@waiting` | They owe me | **Waiting on** |
+
+Only the Journal is scanned — Activities and People pages mirror journal content, so reading them
+too would double-count every commitment. The dashboard therefore **starts empty**; it fills up as
+you use the tags going forward, and its own empty state shows the syntax above so you don't have
+to remember it.
+
+**Person resolution**, tried in order: a person link on the line itself, then a person link on the
+nearest enclosing heading (the `### Topic [[Person]]` pattern already used in this vault), then —
+if neither names anyone — the commitment is kept and shown under **Unassigned** rather than
+dropped. A line naming two people is one commitment owed to both. Both bare links (`[[Frederik
+Stray]]`) and folder-qualified links (`[[People/Frederik Stray]]`, `[[People/Archive/...]]`)
+resolve; a bare link only matches an existing page, so mentioning someone who has no People page
+yet always shows up under **Mentioned but no page**, with a one-click create button — the actual
+fix for a People folder that has gone dark.
+
+**Age, not deadlines.** There is no due-date syntax. A commitment is born on the date of the daily
+note it first appears in; carrying it forward on later days doesn't reset that. Its age is
+`today − born`, and a person's status is the oldest thing they're waiting on:
+
+| Status | Means |
+|---|---|
+| **Aging** | Has a commitment open past the aging threshold (14 days) |
+| **Open** | Has open commitments, none aging yet |
+| **Quiet** | Active (non-archived) page with no mention in 60 days |
+| **Clear** | Nothing open |
+
+Checking a commitment off writes `[x]` back onto the exact matched line in the daily note — the
+journal stays the source of truth, so this is precisely the edit you'd make by hand. If that line
+has changed since the dashboard last scanned (edited, reordered), the write is abandoned and the
+note opens instead, rather than risk touching the wrong line.
+
+Journal scanning is mtime-cached (per file, persisted in the plugin's data), so re-opening the
+dashboard only re-reads notes that changed since the last scan — the same budget rule Home
+depends on (below).
+
 ### Home
 
 `Home.md` (vault root) holds a fenced ` ```2ndbrain-home ` block. Open it with **2ndBrain: Open home** —
@@ -125,7 +181,7 @@ page is readable in one glance in landscape on a phone.
 |---|---|
 | Banner | Greeting, today's date, and how many activities you have taken to work out of everything open |
 | Role cards | Per role: `taken / open`, a bar for the share you committed to today, and a badge counting that role's projects needing a decision. The name links to today's Context page when it exists |
-| Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
+| Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role, promises aging, people gone quiet. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
 | Life balance | A radar with an axis per role, showing how many days each one showed up in your journal over the last 12 months. Normalized against your busiest role, so the shape reads as balance rather than volume — round is even, a spike is a year spent on one thing. A dashed ring marks your own average |
 | Consistency | A year of days, one cell each, shaded by how full the day was relative to your typical day. Current streak, longest streak, and total active days. Click any day to open it |
 | Next steps | Today's note, Plan (matrix), Projects, Inbox — plus the last few days for a glance back |
@@ -180,7 +236,7 @@ Two things to check after switching:
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (511 tests)
+npm test        # Jest unit tests (602 tests)
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

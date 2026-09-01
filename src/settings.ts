@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import TwoBrainPlugin from './main';
 import { ROLES, Role } from './roles';
+import { CommitmentCache } from './utilities/CommitmentIndex';
 
 export { ROLES };
 export type { Role };
@@ -28,6 +29,12 @@ export interface PluginSettings {
 	syncGraceSeconds: number;
 	// Last role picked from the status bar — used only to preselect the picker.
 	currentRole: Role | null;
+	/**
+	 * Cached parse of journal promises (@owed/@waiting), keyed by file mtime.
+	 * Not user-facing — persisted purely so the People dashboard and Home
+	 * don't have to re-read every journal note on each render.
+	 */
+	commitmentCache?: CommitmentCache;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {

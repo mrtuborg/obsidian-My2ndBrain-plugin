@@ -4,10 +4,12 @@ import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
 import { ContextPageComposer } from './composers/ContextPageComposer';
 import { ProjectsDashboardComposer, PROJECTS_CODE_BLOCK_LANG } from './composers/ProjectsDashboardComposer';
+import { PeopleDashboardComposer, PEOPLE_CODE_BLOCK_LANG } from './composers/PeopleDashboardComposer';
 import { HomeComposer, HOME_CODE_BLOCK_LANG } from './composers/HomeComposer';
 import { EisenhowerMatrixComposer, MATRIX_CODE_BLOCK_LANG } from './composers/EisenhowerMatrixComposer';
 import { MatrixView } from './ui/MatrixView';
 import { ProjectsView } from './ui/ProjectsView';
+import { PeopleView } from './ui/PeopleView';
 import { HomeView } from './ui/HomeView';
 import { backfillTakeToWork } from './commands/BackfillTakeToWork';
 import { AppLike } from './utilities/FileIO';
@@ -19,6 +21,7 @@ const DAILY_NOTE_ITEM = '📓 Daily Note' as const;
 type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
 
 const PROJECTS_DASHBOARD_FILENAME = 'Projects.md';
+const PEOPLE_DASHBOARD_FILENAME = 'People.md';
 const EISENHOWER_MATRIX_FILENAME = 'Eisenhower Matrix.md';
 // At the vault root, not under Dashboards/ — a landing page is where you
 // land, not one more thing to navigate to.
@@ -62,6 +65,7 @@ export default class TwoBrainPlugin extends Plugin {
 	private dailyNoteComposer!: DailyNoteComposer;
 	private contextPageComposer!: ContextPageComposer;
 	private projectsDashboardComposer!: ProjectsDashboardComposer;
+	private peopleDashboardComposer = new PeopleDashboardComposer();
 	private eisenhowerMatrixComposer!: EisenhowerMatrixComposer;
 	private homeComposer = new HomeComposer();
 	private inboxActivitiesComposer!: InboxActivitiesComposer;
@@ -90,6 +94,12 @@ export default class TwoBrainPlugin extends Plugin {
 			id: 'open-projects-dashboard',
 			name: 'Open projects dashboard',
 			callback: () => void this.openProjectsDashboard(),
+		});
+
+		this.addCommand({
+			id: 'open-people-dashboard',
+			name: 'Open people dashboard',
+			callback: () => void this.openPeopleDashboard(),
 		});
 
 		this.addCommand({
@@ -148,6 +158,23 @@ export default class TwoBrainPlugin extends Plugin {
 			}
 		});
 
+		// Live for a third reason beyond the other two: this view writes back
+		// to journal lines and creates People pages, so it has to be
+		// interactive by nature.
+		this.registerMarkdownCodeBlockProcessor(PEOPLE_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new PeopleView(this.app, {
+				journalFolder: this.settings.journalFolder,
+				peopleFolder: this.settings.peopleFolder,
+				archiveFolder: this.settings.archiveFolder,
+			}, this.commitmentCacheAccess());
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render people dashboard — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
+
 		// The home page is a glance, not a third dashboard — it links to the
 		// matrix and projects views rather than repeating their rows.
 		this.registerMarkdownCodeBlockProcessor(HOME_CODE_BLOCK_LANG, async (_src, el) => {
@@ -157,7 +184,8 @@ export default class TwoBrainPlugin extends Plugin {
 				projectsFolder: this.settings.projectsFolder,
 				journalFolder: this.settings.journalFolder,
 				dashboardsFolder: this.settings.dashboardsFolder,
-			});
+				peopleFolder: this.settings.peopleFolder,
+			}, this.commitmentCacheAccess());
 			try {
 				await view.render(el);
 			} catch (e) {
@@ -335,8 +363,27 @@ export default class TwoBrainPlugin extends Plugin {
 		});
 	}
 
+	/**
+	 * Shared load/save closures for the journal commitment cache, used by
+	 * both the People dashboard and Home so a warm scan in one benefits
+	 * the other instead of each keeping its own copy.
+	 */
+	private commitmentCacheAccess() {
+		return {
+			load: () => this.settings.commitmentCache ?? null,
+			save: (cache: PluginSettings['commitmentCache']) => {
+				this.settings.commitmentCache = cache;
+				void this.saveSettings();
+			},
+		};
+	}
+
 	private projectsDashboardPath(): string {
 		return `${this.settings.dashboardsFolder}/${PROJECTS_DASHBOARD_FILENAME}`;
+	}
+
+	private peopleDashboardPath(): string {
+		return `${this.settings.dashboardsFolder}/${PEOPLE_DASHBOARD_FILENAME}`;
 	}
 
 	private eisenhowerMatrixPath(): string {
@@ -409,6 +456,11 @@ export default class TwoBrainPlugin extends Plugin {
 	/** Ensures the Eisenhower Matrix dashboard note exists and opens it. */
 	async openEisenhowerMatrix(): Promise<void> {
 		await this.openDashboard(this.eisenhowerMatrixPath());
+	}
+
+	/** Ensures the People dashboard note exists and opens it. */
+	async openPeopleDashboard(): Promise<void> {
+		await this.openDashboard(this.peopleDashboardPath());
 	}
 
 	/** Ensures the Home landing page exists and opens it. */
@@ -555,12 +607,15 @@ export default class TwoBrainPlugin extends Plugin {
 		const isPeople = file.path.startsWith(settings.peopleFolder + '/');
 		const isProject = file.path.startsWith(settings.projectsFolder + '/');
 		const isProjectsDashboard = file.path === this.projectsDashboardPath();
+		const isPeopleDashboard = file.path === this.peopleDashboardPath();
 		const isEisenhowerMatrix = file.path === this.eisenhowerMatrixPath();
 		const isHome = file.path === this.homePath();
 
 		try {
 			if (isProjectsDashboard) {
 				await this.projectsDashboardComposer.refresh(this.app as any, file.path);
+			} else if (isPeopleDashboard) {
+				await this.peopleDashboardComposer.refresh(this.app as any, file.path);
 			} else if (isEisenhowerMatrix) {
 				await this.eisenhowerMatrixComposer.refresh(this.app as any, file.path);
 			} else if (isHome) {

@@ -3,6 +3,8 @@ import { FileIO, AppLike } from '../utilities/FileIO';
 import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { loadProjectRecords } from '../utilities/ProjectIndex';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
+import { PeopleDashboard } from '../components/PeopleDashboard';
+import { scanCommitments, CommitmentCache } from '../utilities/CommitmentIndex';
 import {
 	HomeDashboard, HomeSummary, RoleStat, HealthSignal, greeting, longDate,
 } from '../components/HomeDashboard';
@@ -21,6 +23,13 @@ export interface HomeViewSettings {
 	projectsFolder: string;
 	journalFolder: string;
 	dashboardsFolder: string;
+	peopleFolder: string;
+}
+
+/** How Home reaches the commitment cache the plugin persists — shared with PeopleView. */
+export interface CacheAccess {
+	load(): CommitmentCache | null;
+	save(cache: CommitmentCache): void;
 }
 
 /**
@@ -38,8 +47,13 @@ export class HomeView {
 	private fileIO = new FileIO();
 	private dashboard = new HomeDashboard();
 	private projects = new ProjectsDashboard();
+	private people = new PeopleDashboard();
 
-	constructor(private app: App, private settings: HomeViewSettings) {}
+	constructor(
+		private app: App,
+		private settings: HomeViewSettings,
+		private cache: CacheAccess
+	) {}
 
 	async render(container: HTMLElement): Promise<void> {
 		container.empty();
@@ -65,6 +79,8 @@ export class HomeView {
 			)
 			.map(f => ({ path: f.path, basename: f.basename }));
 
+		const peopleSignals = await this.buildPeopleSignals(app, today);
+
 		const summary = this.dashboard.buildSummary(
 			today,
 			dailyNote?.path ?? null,
@@ -73,7 +89,9 @@ export class HomeView {
 				role: a.role, project: a.project, stage: a.stage, takeToWork: a.takeToWork,
 			})),
 			rows.map(r => ({ role: r.role, health: r.health })),
-			journalFiles
+			journalFiles,
+			4,
+			peopleSignals
 		);
 
 		this.renderBanner(container, summary);
@@ -292,7 +310,44 @@ export class HomeView {
 		const { dashboardsFolder, projectsFolder } = this.settings;
 		if (target === 'inbox') return `${projectsFolder}/Inbox.md`;
 		if (target === 'matrix') return `${dashboardsFolder}/Eisenhower Matrix.md`;
+		if (target === 'people') return `${dashboardsFolder}/People.md`;
 		return `${dashboardsFolder}/Projects.md`;
+	}
+
+	/**
+	 * Reuses the same mtime-cached scan the People dashboard runs, so Home
+	 * never pays the cost of re-reading the journal — only a warm cache
+	 * lookup once the dashboard (or an earlier Home render) has primed it.
+	 */
+	private async buildPeopleSignals(
+		app: AppLike, today: string
+	): Promise<{ aging: number; quiet: number }> {
+		try {
+			const scan = await scanCommitments(
+				app, this.settings.journalFolder, this.settings.peopleFolder, this.cache.load()
+			);
+			if (scan.changed) this.cache.save(scan.cache);
+
+			const folder = this.settings.peopleFolder + '/';
+			const pages = this.app.vault.getFiles()
+				.filter(f => f.path.startsWith(folder) && f.path.endsWith('.md'))
+				.map(f => ({
+					name: f.basename,
+					path: f.path,
+					archived: /\/Archive\//i.test(f.path),
+				}));
+
+			const rows = this.people.buildRows({
+				commitments: scan.commitments, lastSeen: scan.lastSeen, pages, today,
+			});
+			const summary = this.people.summarize(rows);
+			return { aging: summary.aging, quiet: summary.quiet };
+		} catch (e) {
+			// Relationship signals are a bonus, not core to Home — a parse
+			// failure here shouldn't take down the whole landing page.
+			console.error('[2ndBrain] people signals failed:', e);
+			return { aging: 0, quiet: 0 };
+		}
 	}
 
 	private findDailyNote(files: TFile[], today: string): TFile | null {

@@ -75,6 +75,7 @@ const SETTINGS = {
 	projectsFolder: 'Projects',
 	journalFolder: 'Journal',
 	dashboardsFolder: 'Dashboards',
+	peopleFolder: 'People',
 };
 
 function makeApp(files: Record<string, string>) {
@@ -105,10 +106,15 @@ function makeApp(files: Record<string, string>) {
 	return { app, opened };
 }
 
+function makeCacheStore() {
+	let cache: any = null;
+	return { load: () => cache, save: (c: any) => { cache = c; } };
+}
+
 async function renderWith(files: Record<string, string>) {
 	const { app, opened } = makeApp(files);
 	const root = new FakeEl('div');
-	await new HomeView(app as any, SETTINGS).render(root as unknown as HTMLElement);
+	await new HomeView(app as any, SETTINGS, makeCacheStore()).render(root as unknown as HTMLElement);
 	return { root, opened };
 }
 
@@ -216,6 +222,25 @@ describe('HomeView health signals', () => {
 		expect(byText('1 untriaged').attrs['href']).toBe('Projects/Inbox.md');
 		expect(byText('1 no role').attrs['href']).toBe('Dashboards/Eisenhower Matrix.md');
 	});
+
+	it('surfaces an aging promise as a health signal linking to People', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(20)}.md`]: '- [ ] Send the BOM @owed [[Ida Haugland]]',
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		const signal = root.withClass('twobrain-home-signal').find(s => s.text === '1 promises aging');
+		expect(signal).toBeDefined();
+		expect(signal!.attrs['href']).toBe('Dashboards/People.md');
+	});
+
+	it('surfaces a quiet relationship as a health signal', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(70)}.md`]: '- [x] Send the BOM @owed [[Ida Haugland]]',
+			'People/Ida Haugland.md': '---\n---\n',
+		});
+		const signal = root.withClass('twobrain-home-signal').find(s => s.text === '1 gone quiet');
+		expect(signal).toBeDefined();
+	});
 });
 
 describe('HomeView next steps', () => {
@@ -317,7 +342,7 @@ describe('HomeView consistency grid', () => {
 	it('opens the day behind a cell that has a note, and ignores empty ones', async () => {
 		const { app, opened } = makeApp({ [`Journal/${TODAY}.md`]: '# Journal' });
 		const root = new FakeEl('div');
-		await new HomeView(app as any, SETTINGS).render(root as unknown as HTMLElement);
+		await new HomeView(app as any, SETTINGS, makeCacheStore()).render(root as unknown as HTMLElement);
 
 		const written = root.withClass('twobrain-home-grid-cell')
 			.filter(c => c.classes.has('is-open'));

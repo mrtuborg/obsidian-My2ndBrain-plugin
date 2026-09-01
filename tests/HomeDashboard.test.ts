@@ -15,6 +15,7 @@ function build(opts: {
 	journal?: Array<{ path: string; basename: string }>;
 	today?: string;
 	limit?: number;
+	people?: { aging: number; quiet: number };
 }) {
 	return dashboard.buildSummary(
 		opts.today ?? '2026-09-05',
@@ -23,7 +24,8 @@ function build(opts: {
 		opts.activities ?? [],
 		opts.projects ?? [],
 		opts.journal ?? [],
-		opts.limit
+		opts.limit,
+		opts.people
 	);
 }
 
@@ -146,6 +148,20 @@ describe('HomeDashboard health signals', () => {
 	it('is not all-clear when any signal fires', () => {
 		const summary = build({ projects: [{ role: 'Engineer', health: 'stalled' }] });
 		expect(summary.allClear).toBe(false);
+	});
+
+	it('surfaces aging promises and quiet people as their own signals', () => {
+		const summary = build({ people: { aging: 2, quiet: 1 } });
+		expect(summary.signals).toEqual([
+			{ id: 'aging-promises', label: 'promises aging', count: 2, target: 'people' },
+			{ id: 'quiet-people', label: 'gone quiet', count: 1, target: 'people' },
+		]);
+		expect(summary.allClear).toBe(false);
+	});
+
+	it('omits the relationship signals when there is nothing to report', () => {
+		const summary = build({ people: { aging: 0, quiet: 0 } });
+		expect(summary.signals.some(s => s.target === 'people')).toBe(false);
 	});
 });
 

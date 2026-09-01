@@ -44,11 +44,11 @@ export interface RoleStat {
 }
 
 export interface HealthSignal {
-	id: 'stalled' | 'no-next-action' | 'untriaged' | 'unroled';
+	id: 'stalled' | 'no-next-action' | 'untriaged' | 'unroled' | 'aging-promises' | 'quiet-people';
 	label: string;
 	count: number;
 	/** Where to go to resolve it. */
-	target: 'projects' | 'inbox' | 'matrix';
+	target: 'projects' | 'inbox' | 'matrix' | 'people';
 }
 
 export interface HomeSummary {
@@ -66,6 +66,13 @@ export interface HomeSummary {
 	recentJournal: HomeJournalFile[];
 }
 
+export interface HomePeopleSignals {
+	/** Open promises past the People dashboard's aging threshold. */
+	aging: number;
+	/** People whose page is active but who haven't been mentioned in a while. */
+	quiet: number;
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Health values that mean "this project is waiting on a decision from you". */
@@ -79,7 +86,8 @@ export class HomeDashboard {
 		activities: HomeActivity[],
 		projects: HomeProject[],
 		journalFiles: HomeJournalFile[],
-		recentLimit = 4
+		recentLimit = 4,
+		people: HomePeopleSignals = { aging: 0, quiet: 0 }
 	): HomeSummary {
 		const open = activities.filter(a => a.stage !== 'done');
 		// A lingering flag on a finished activity is not a plan for today.
@@ -101,7 +109,7 @@ export class HomeDashboard {
 			};
 		});
 
-		const signals = this.buildSignals(open, projects);
+		const signals = this.buildSignals(open, projects, people);
 
 		return {
 			today,
@@ -122,7 +130,9 @@ export class HomeDashboard {
 	 * Ordered most-pressing first — stalled work is the most expensive thing
 	 * to leave alone, an unroled activity the cheapest.
 	 */
-	private buildSignals(open: HomeActivity[], projects: HomeProject[]): HealthSignal[] {
+	private buildSignals(
+		open: HomeActivity[], projects: HomeProject[], people: HomePeopleSignals
+	): HealthSignal[] {
 		const countHealth = (h: string) => projects.filter(p => p.health === h).length;
 
 		const untriaged = open.filter(a => {
@@ -141,6 +151,18 @@ export class HomeDashboard {
 			},
 			{ id: 'untriaged', label: 'untriaged', count: untriaged, target: 'inbox' },
 			{ id: 'unroled', label: 'no role', count: unroled, target: 'matrix' },
+			{
+				id: 'aging-promises',
+				label: 'promises aging',
+				count: people.aging,
+				target: 'people',
+			},
+			{
+				id: 'quiet-people',
+				label: 'gone quiet',
+				count: people.quiet,
+				target: 'people',
+			},
 		];
 		return all.filter(s => s.count > 0);
 	}

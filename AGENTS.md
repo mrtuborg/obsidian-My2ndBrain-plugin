@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 511 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 602 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -116,14 +116,48 @@ Rules that must not drift:
   via a `Notice`. Empty/non-empty is the whole rule: see `src/utilities/DailyNoteSection.ts`.
 - Matrix buttons write via `FileIO.updateFrontmatterFields`, which does pure line-level surgery
   (`upsertFrontmatterField`) rather than a YAML round-trip, so hand-written field order survives.
+- The People dashboard (```` ```2ndbrain-people ````, `PeopleView`, `PeopleDashboardComposer`
+  installing `Dashboards/People.md`) tracks promises in both directions by scanning **only**
+  `Journal/**/*.md` for two inline tags on a todo line: `@owed [[Person]]` (I owe them) and
+  `@waiting [[Person]]` (they owe me). Activities and People pages are never scanned — they mirror
+  journal content, so scanning them too would double-count every commitment (same rule as D1).
+- `Commitments.ts` (pure, D7) resolves the person for a tagged line in order: link on the line
+  itself, then a link on the nearest enclosing heading (the existing `### Topic [[Person]]`
+  pattern), then — if neither names anyone — the commitment is kept under an `UNASSIGNED` bucket
+  rather than dropped (D9). It also applies the same born/done state-transition rule as
+  `MentionsProcessor` (D4): first open occurrence sets the "born" date, first `[x]` closes it,
+  carry-forward repeats don't reset the clock. There is deliberately no due-date syntax — a
+  commitment's only time signal is its age, never a deadline the system would have to invent.
+- Person resolution accepts a bare link (`[[Frederik Stray]]`) only when that page already exists
+  (`knownPeople()`), and a folder-qualified link (`[[People/Name]]`, `[[People/Archive/Name]]`)
+  unconditionally. This asymmetry is intentional and is the only way "mentioned but no page"
+  detection can ever fire — don't unify the two paths.
+- `CommitmentIndex` mtime-caches parsed commitments per journal file, persisted on
+  `settings.commitmentCache` (round-trips through the existing `loadData`/`saveData`, no separate
+  storage). `TwoBrainPlugin.commitmentCacheAccess()` is the one shared accessor — both `PeopleView`
+  and `HomeView` must go through it so a warm scan from either view benefits the other.
+- `PeopleDashboard.buildRows()` (pure, D7) computes a `health` per person: `aging` (oldest open
+  commitment ≥ 14 days) beats `open` (has open commitments, none aging) beats `quiet` (no page
+  mention in 60 days, and not archived) beats `clear`. Archived people can never be `quiet` — quiet
+  is a warning about neglect, not a status for a relationship you deliberately filed away. The
+  `UNASSIGNED` bucket is data, not a person: `missingPage` is always false for it and it never
+  appears in `summarize().people` or the resting/collapsed section.
+- `PeopleView.setDone()` only flips `[ ]`→`[x]` on the exact matched line (`lines.indexOf(c.raw)`);
+  if the line has changed since the last scan, the write is abandoned and the note opens instead —
+  never guess which line to edit.
+- Home's two relationship signals (`aging-promises`, `quiet-people` in `HomeDashboard.buildSignals`)
+  reuse the same `Commitments`/`PeopleDashboard`/shared-cache path via `HomeView.buildPeopleSignals()`,
+  wrapped in try/catch — a parsing bug there must never break Home's core render, per the same
+  "Home is a glance page, not a third dashboard" rule above. No new chart or radar axis was added
+  for relationships; a list of names is a list problem, not a chart one.
 
 **Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 511 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 602 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
-**Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
+**Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer, EisenhowerMatrix, ProjectsDashboard, HomeDashboard, LifeStats, Commitments, CommitmentIndex, PeopleDashboard.
 
 ### Install
 

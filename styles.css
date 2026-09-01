@@ -942,6 +942,16 @@ a.twobrain-home-signal.is-no-next-action {
 	border-color: color-mix(in srgb, var(--zen-warn) 35%, transparent);
 }
 
+a.twobrain-home-signal.is-aging-promises {
+	color: var(--zen-alert);
+	border-color: color-mix(in srgb, var(--zen-alert) 35%, transparent);
+}
+
+a.twobrain-home-signal.is-quiet-people {
+	color: var(--zen-warn);
+	border-color: color-mix(in srgb, var(--zen-warn) 35%, transparent);
+}
+
 .twobrain-home-allclear {
 	font-size: var(--font-ui-smaller);
 	font-style: italic;
@@ -1261,4 +1271,466 @@ a.twobrain-home-recent-link:hover {
 	.twobrain-home-bignum {
 		font-size: 24px;
 	}
+}
+
+/* ── People dashboard live view (```2ndbrain-people code block) ───────────
+ *
+ * Same table language as the Projects dashboard, plus an expandable detail
+ * row per person for the individual promises — a plain table cannot show a
+ * variable number of commitments per row without either truncating them or
+ * inflating every row to the tallest person's count.
+ */
+
+.twobrain-people {
+	font-size: var(--font-ui-small);
+}
+
+/* ── Summary bar ──────────────────────────────────────────────────────── */
+
+.twobrain-people-summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-3) var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-people-summary-main {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+}
+
+.twobrain-people-summary-count {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: var(--color-orange);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-summary-label {
+	color: var(--text-muted);
+}
+
+.twobrain-people-summary-date {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-summary-meta {
+	flex-basis: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-scanned {
+	margin-left: auto;
+	font-style: italic;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+
+/* The convention is new, so the dashboard starts empty by design — this has
+ * to teach the syntax rather than just say "nothing here". */
+.twobrain-people-empty {
+	padding: var(--size-4-3);
+	margin-bottom: var(--size-4-4);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	color: var(--text-muted);
+}
+
+.twobrain-people-examples {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-2);
+	margin: var(--size-2-3) 0;
+}
+
+.twobrain-people-example {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	flex-wrap: wrap;
+}
+
+.twobrain-people-example code {
+	padding: 2px var(--size-2-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-example-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+}
+
+.twobrain-people-empty-note {
+	margin-top: var(--size-2-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+/* ── Filters ──────────────────────────────────────────────────────────── */
+
+.twobrain-people-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+}
+
+.twobrain-people-filter {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.twobrain-people-filter-label {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-select {
+	padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	color: var(--text-normal);
+	background-color: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.twobrain-people-toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+
+.twobrain-people-table {
+	width: 100%;
+	min-width: 640px;
+	table-layout: fixed;
+	border-collapse: collapse;
+	margin-bottom: var(--size-4-4);
+}
+
+.twobrain-people-table th,
+.twobrain-people-table td {
+	padding: var(--size-2-1) var(--size-2-2);
+	text-align: left;
+	vertical-align: middle;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-people-table th {
+	padding-bottom: var(--size-2-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.twobrain-people-table tbody tr:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+/* A rail on the people asking for something, so they're findable while
+ * scrolling without tinting whole rows. */
+.twobrain-people-table tr.twobrain-person-aging td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-red);
+}
+
+.twobrain-people-table tr.twobrain-person-quiet td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-orange);
+}
+
+.twobrain-people-name {
+	overflow: hidden;
+}
+
+.twobrain-people-name a {
+	color: var(--text-normal);
+	text-decoration: none;
+}
+
+.twobrain-people-name a:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.twobrain-people-orphan {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* The catch-all bucket for a promise whose line named nobody — real, but
+ * not a person you can open a page for. */
+.twobrain-people-bucket {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.twobrain-people-tag {
+	margin-left: var(--size-2-2);
+	padding: 0 var(--size-2-1);
+	border-radius: var(--radius-s);
+	background-color: var(--background-modifier-border);
+	color: var(--text-faint);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.twobrain-people-num,
+.twobrain-people-age {
+	font-variant-numeric: tabular-nums;
+	color: var(--text-muted);
+}
+
+/* Zero is the common case; it should recede rather than read as data. */
+.twobrain-people-zero {
+	color: var(--text-faint);
+}
+
+.twobrain-people-owed {
+	color: var(--color-red);
+	font-weight: var(--font-semibold);
+}
+
+.twobrain-people-waiting {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+}
+
+/* ── Status pills ─────────────────────────────────────────────────────── */
+
+.twobrain-people-pill {
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.twobrain-pill-aging {
+	color: var(--color-red);
+	border-color: var(--color-red);
+	background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+
+.twobrain-pill-open {
+	color: var(--text-accent);
+	border-color: transparent;
+	background-color: color-mix(in srgb, var(--text-accent) 10%, transparent);
+}
+
+.twobrain-pill-quiet {
+	color: var(--color-orange);
+	border-color: var(--color-orange);
+	background-color: color-mix(in srgb, var(--color-orange) 10%, transparent);
+}
+
+.twobrain-pill-clear {
+	color: var(--text-faint);
+	border-color: var(--background-modifier-border);
+}
+
+/* ── Commitment detail rows ───────────────────────────────────────────── */
+
+.twobrain-people-detail-row td {
+	padding-top: 0;
+	padding-bottom: var(--size-2-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-people-commitments {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	padding-left: var(--size-4-2);
+}
+
+.twobrain-people-commitment {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	flex-wrap: wrap;
+	padding: var(--size-2-1) 0;
+}
+
+.twobrain-people-commitment.is-aging {
+	color: var(--color-red);
+}
+
+.twobrain-people-commitment.is-done {
+	opacity: 0.55;
+}
+
+.twobrain-people-commitment.is-done .twobrain-people-commitment-text {
+	text-decoration: line-through;
+}
+
+.twobrain-people-check {
+	cursor: pointer;
+}
+
+.twobrain-people-direction {
+	flex-shrink: 0;
+	padding: 0 var(--size-2-1);
+	border-radius: var(--radius-s);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.twobrain-dir-owed {
+	color: var(--color-red);
+	background-color: color-mix(in srgb, var(--color-red) 12%, transparent);
+}
+
+.twobrain-dir-waiting {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--text-accent) 12%, transparent);
+}
+
+.twobrain-people-commitment-text {
+	flex: 1 1 auto;
+	min-width: 120px;
+	color: var(--text-normal);
+}
+
+.twobrain-people-activity {
+	flex-shrink: 0;
+	padding: 0 var(--size-2-2);
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-commitment-age {
+	flex-shrink: 0;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-jump {
+	flex-shrink: 0;
+	color: var(--text-faint);
+	text-decoration: none;
+}
+
+.twobrain-people-jump:hover {
+	color: var(--text-accent);
+}
+
+/* ── Missing pages ────────────────────────────────────────────────────── */
+
+.twobrain-people-missing {
+	margin-bottom: var(--size-4-4);
+}
+
+.twobrain-people-missing h4 {
+	margin: 0 0 var(--size-2-3);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.twobrain-people-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+}
+
+.twobrain-people-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+a.twobrain-people-chip:hover {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}
+
+button.twobrain-people-chip {
+	font-family: inherit;
+}
+
+button.twobrain-people-chip:hover:not(:disabled) {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}
+
+button.twobrain-people-chip:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.twobrain-people-chip-plus {
+	color: var(--text-faint);
+	font-weight: var(--font-bold);
+}
+
+/* ── Resting people ───────────────────────────────────────────────────── */
+
+.twobrain-people-resting {
+	margin-top: var(--size-4-4);
+	padding: var(--size-2-3) var(--size-4-3);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-people-resting summary {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	list-style-position: outside;
+}
+
+.twobrain-people-resting summary:hover {
+	color: var(--text-muted);
+}
+
+.twobrain-people-resting .twobrain-people-chips {
+	margin-top: var(--size-2-3);
 }
