@@ -726,17 +726,22 @@ a.twobrain-projects-chip:hover {
  * It also runs its own calm palette rather than the sharper accent colours
  * the matrix and projects views use — this is the page you open first, and
  * it should read as a quiet room, not a control panel.
+ *
+ * Each colour defers to a `--tb-*` token first. The Zen 2ndBrain theme
+ * defines those vault-wide, so with it installed Home matches every other
+ * note instead of being an island; the literals here are the fallback that
+ * keeps the page looking right under any other theme.
  */
 
 .twobrain-home {
-	--zen-ink: #33413c;
-	--zen-soft: #6d7f78;
-	--zen-faint: #9aa8a2;
-	--zen-surface: #f4f1ec;
-	--zen-line: #e2ded6;
-	--zen-accent: #6f9285;
-	--zen-warn: #c08a52;
-	--zen-alert: #b4705f;
+	--zen-ink: var(--tb-ink, #33413c);
+	--zen-soft: var(--tb-soft, #6d7f78);
+	--zen-faint: var(--tb-faint, #9aa8a2);
+	--zen-surface: var(--tb-surface, #f4f1ec);
+	--zen-line: var(--tb-line, #e2ded6);
+	--zen-accent: var(--tb-accent, #6f9285);
+	--zen-warn: var(--tb-warn, #c08a52);
+	--zen-alert: var(--tb-alert, #b4705f);
 
 	max-width: 860px;
 	font-size: var(--font-ui-small);
@@ -744,14 +749,14 @@ a.twobrain-projects-chip:hover {
 }
 
 .theme-dark .twobrain-home {
-	--zen-ink: #d8e0dc;
-	--zen-soft: #9dada7;
-	--zen-faint: #6f7d78;
-	--zen-surface: #23282a;
-	--zen-line: #333a3c;
-	--zen-accent: #85ab9c;
-	--zen-warn: #d3a273;
-	--zen-alert: #cc8878;
+	--zen-ink: var(--tb-ink, #d8e0dc);
+	--zen-soft: var(--tb-soft, #9dada7);
+	--zen-faint: var(--tb-faint, #6f7d78);
+	--zen-surface: var(--tb-surface, #23282a);
+	--zen-line: var(--tb-line, #333a3c);
+	--zen-accent: var(--tb-accent, #85ab9c);
+	--zen-warn: var(--tb-warn, #d3a273);
+	--zen-alert: var(--tb-alert, #cc8878);
 }
 
 /* ── Banner ───────────────────────────────────────────────────────────── */

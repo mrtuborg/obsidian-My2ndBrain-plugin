@@ -84,6 +84,17 @@ Rules that must not drift:
   the dark theme.
 - `loadProjectRecords` (`utilities/ProjectIndex.ts`) is the one place the `Projects/<slug>.md` vs
   `Projects/<slug>/Project.md` resolution lives; `ProjectsView` and `HomeView` both use it.
+- `theme/` is the Zen 2ndBrain Obsidian theme, shipped alongside the plugin but installed separately (it
+  goes to `.obsidian/themes/`, not `.obsidian/plugins/`). It exists so the plugin's views and the rest of
+  the vault share one palette. The matrix and projects views already use Obsidian's standard variables, so
+  they inherit it for free — **keep it that way**: a hardcoded colour in a view is a colour the theme can
+  no longer unify.
+- Home is the exception, because its calm palette predates the theme. Its `--zen-*` values now read
+  `var(--tb-*, <literal>)`, so the theme drives them when installed and the literals keep Home correct
+  under any other theme. New Home colours must follow the same two-level pattern.
+- The theme is system-font only on purpose. SF Pro/SF Mono are already on the user's Mac and iPhone, need
+  no licence to embed, and `-apple-system` switches optical sizes automatically. Don't add a webfont
+  without a reason that survives the phone.
 - `LifeStats` derives a year of history from vault *metadata only* — filename dates, which Context pages
   sit beside a daily note, and `TFile.stat.size`. Home re-renders on every open, so reading 365 notes to
   draw two small charts is not an option; that budget is what the numbers are allowed to mean. Don't add a

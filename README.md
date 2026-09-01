@@ -141,6 +141,33 @@ Home never creates anything. If today's daily note or a role's Context page does
 plain label rather than a link — creating those stays owned by opening them directly.
 
 
+## Theme
+
+`theme/` holds **Zen 2ndBrain**, an Obsidian theme that gives the whole vault one palette instead of
+letting the plugin's views look like a separate tool bolted onto someone else's colours.
+
+Install it by copying `theme/` to `<Vault>/.obsidian/themes/Zen 2ndBrain/`, then pick it under
+**Settings → Appearance → Themes**.
+
+**Colour.** Warm stone and sage: paper rather than white, ink rather than black, and one desaturated
+green as the only accent. Nothing is fully saturated — in a system you look at every day, saturation is a
+budget, and it's spent on the two or three states that genuinely have to interrupt you (overdue, stalled).
+Everything is defined through Obsidian's own variables, so the matrix and projects views — which already
+read `--text-normal`, `--color-green` and friends — pick the palette up with no changes. Home reads a
+small set of `--tb-*` tokens the theme defines, and falls back to its own literals under any other theme.
+
+**Type.** System fonts only. `-apple-system` resolves to SF Pro on macOS and iOS, `ui-monospace` to SF
+Mono — both already installed, hinted for those exact screens, and identical on a phone with nothing to
+sync. `-apple-system` also switches between SF Pro Text and Display by size, which no webfont can do.
+Body sits at 16px/1.62 over a 40rem measure (~68 characters), and every surface uses tabular figures so
+counts in a column line up and a changing number doesn't shuffle the layout beside it.
+
+Two things to check after switching:
+
+- **Settings → Appearance → Monospace font** — clear it if it's set, or it overrides the theme's SF Mono.
+- The `headers-size` CSS snippet sets its own heading scale and will win over the theme's. Disable it
+  unless you want it to.
+
 ## Plugin development
 
 ### Commands
