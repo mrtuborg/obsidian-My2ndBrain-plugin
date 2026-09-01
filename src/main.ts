@@ -50,7 +50,13 @@ class ContextRoleSuggestModal extends FuzzySuggestModal<SwitcherItem> {
 	}
 }
 
+/** Gaps between startup re-open attempts, in ms. Short enough that a human
+ *  who has deliberately navigated away won't be interrupted. */
+const STARTUP_REASSERT_MS = [150, 500, 1200];
+
 export default class TwoBrainPlugin extends Plugin {
+	private startupTimers: number[] = [];
+
 	settings: PluginSettings;
 	private activityComposer!: ActivityComposer;
 	private dailyNoteComposer!: DailyNoteComposer;
@@ -423,6 +429,7 @@ export default class TwoBrainPlugin extends Plugin {
 		const mode = this.settings.openHomeOnStartup;
 		if (mode === 'off') return;
 
+		const home = this.homePath();
 		try {
 			if (mode === 'only') {
 				// Only the main area — a markdown note pinned in a sidebar is
@@ -432,9 +439,40 @@ export default class TwoBrainPlugin extends Plugin {
 				for (const leaf of leaves) leaf.detach();
 			}
 			await this.openHome();
+			console.info('[2ndBrain] Startup: opened home in mode', mode);
 		} catch (e) {
 			console.error('[2ndBrain] Could not open home on startup:', e);
+			return;
 		}
+
+		// Obsidian restores tabs lazily and activates the previously focused
+		// one after layout-ready, so a single open can be silently undone a
+		// few frames later. Re-assert briefly, and stop the moment Home is
+		// showing so we never fight a user who has already clicked away.
+		for (const delay of STARTUP_REASSERT_MS) {
+			await this.sleep(delay);
+			if (this.app.workspace.getActiveFile()?.path === home) return;
+			try {
+				await this.openHome();
+				console.info('[2ndBrain] Startup: re-opened home after', delay, 'ms');
+			} catch (e) {
+				console.error('[2ndBrain] Could not re-open home on startup:', e);
+				return;
+			}
+		}
+	}
+
+	onunload(): void {
+		for (const id of this.startupTimers) window.clearTimeout(id);
+		this.startupTimers = [];
+	}
+
+	/** Cancellable on unload, so a reload mid-startup doesn't leave timers behind. */
+	private sleep(ms: number): Promise<void> {
+		return new Promise(resolve => {
+			const id = window.setTimeout(resolve, ms);
+			this.startupTimers.push(id);
+		});
 	}
 
 	/** One-shot migration: stamp the mandatory takeToWork field everywhere. */
