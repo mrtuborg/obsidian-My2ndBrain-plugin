@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 385 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 421 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ deciding whether the activity is rendered into today's daily note.
 | Field | Owner | Effect |
 |---|---|---|
 | `takeToWork` | user, via matrix button | Daily note inclusion. Mandatory on every Activity |
-| `takeToWorkDate` | user, via the matrix's inline date field | **Matrix display/sort only.** Never consulted by the daily note |
+| `takeToWorkDate` | user, via the matrix's inline date field | A one-shot alarm: on that day the activity is auto-taken to work and the date is cleared |
 | `remind`, `snoozeUntil` | user, hand-written | **Matrix visibility only.** They no longer gate the daily note |
 
 Rules that must not drift:
@@ -56,6 +56,18 @@ Rules that must not drift:
   otherwise yesterday's carried-forward journal would silently resurrect everything the user dropped.
 - The matrix is a live view rendered from a ```` ```2ndbrain-matrix ```` code block, not generated markdown —
   static tables cannot carry buttons. `EisenhowerMatrixComposer.refresh` only installs the block if absent.
+- `takeToWorkDate` fires through `PlanDateActivation`, run before the Activities section is built and again
+  on every matrix render. It **always clears the date**. A date left in the frontmatter would re-take the
+  activity on every render, making it impossible to drop for as long as the date stayed in the past. A
+  `done` activity has its stale date cleared but is never revived.
+- **Nothing written into a daily note or Context page is ever deleted by the plugin** (D1). A rebuild keeps
+  every existing activity block that has content beneath its heading — even for an activity that is now
+  dropped or done — and merges genuinely new todos in rather than replacing the user's lines
+  (`ActivitiesInProgress.mergeWithWritten`). Because the fresh section absorbs those blocks verbatim,
+  `DailyNoteComposer` strips the originals first (`stripActivityBlocks`) or they would appear twice.
+- **Drop** and the `done`/`backlog` stages also prune the activity's block from today's daily note and
+  Context pages — but only when that block is **empty**. A block with content stays, and the user is told so
+  via a `Notice`. Empty/non-empty is the whole rule: see `src/utilities/DailyNoteSection.ts`.
 - Matrix buttons write via `FileIO.updateFrontmatterFields`, which does pure line-level surgery
   (`upsertFrontmatterField`) rather than a YAML round-trip, so hand-written field order survives.
 
@@ -63,7 +75,7 @@ Rules that must not drift:
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 385 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 421 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
 

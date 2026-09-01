@@ -2,6 +2,15 @@ import { FileIO, AppLike, VaultFile } from '../utilities/FileIO';
 import { NoteBlocksParser } from './NoteBlocksParser';
 import { TAKE_TO_WORK_FIELD, resolveTakeToWork } from '../utilities/TakeToWork';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
+import { parseActivityBlocks, blockHasContent } from '../utilities/DailyNoteSection';
+
+/** One activity as it will be written into the note. */
+interface RenderedActivity {
+	path: string;
+	displayName: string;
+	/** Lines under the heading, already merged and deduplicated. */
+	body: string[];
+}
 
 const ACTIVITIES_FOLDER = 'Activities';
 const ARCHIVE_FOLDER = 'Activities/Archive';
@@ -45,17 +54,28 @@ export class ActivitiesInProgress {
 	 * linked project, or whose linked project has no `role:` set. Role-tagged
 	 * activities live in their Contexts/<Role>/YYYY-MM-DD.md page instead —
 	 * see runForRole().
+	 *
+	 * Whatever is already written under an activity in the note is preserved
+	 * (D1: the Journal is the source of truth). An activity that has picked up
+	 * content is never dropped from the section, even if it no longer
+	 * qualifies — a day's record outlives the plan that produced it.
 	 */
-	async run(app: AppLike, _existingPageContent: string): Promise<string> {
+	async run(app: AppLike, existingPageContent: string): Promise<string> {
 		const today = this.fileIO.todayDate();
 		const activities = await this.loadEligibleActivities(app, today);
-		if (activities.length === 0) return '';
+		const written = this.collectWrittenBlocks(existingPageContent);
 
-		const roleByActivity = await this.computeRoles(app, activities);
-		const unrolled = activities.filter(({ file }) => (roleByActivity.get(file.path) ?? []).length === 0);
-		if (unrolled.length === 0) return '';
+		const roleByActivity = activities.length > 0
+			? await this.computeRoles(app, activities)
+			: new Map<string, string[]>();
+		const unrolled = activities.filter(
+			({ file }) => (roleByActivity.get(file.path) ?? []).length === 0
+		);
 
-		return this.renderSection(unrolled);
+		const rendered = this.mergeWithWritten(unrolled, written);
+		if (rendered.length === 0) return '';
+
+		return this.renderSection(rendered);
 	}
 
 	/**
@@ -66,16 +86,22 @@ export class ActivitiesInProgress {
 	 * heading already provides that context, and the marker is only needed
 	 * as a freeze sentinel on the daily note itself.
 	 */
-	async runForRole(app: AppLike, role: string): Promise<string> {
+	async runForRole(app: AppLike, role: string, existingPageContent = ''): Promise<string> {
 		const today = this.fileIO.todayDate();
 		const activities = await this.loadEligibleActivities(app, today);
-		if (activities.length === 0) return '';
+		const written = this.collectWrittenBlocks(existingPageContent);
 
-		const roleByActivity = await this.computeRoles(app, activities);
-		const matched = activities.filter(({ file }) => (roleByActivity.get(file.path) ?? []).includes(role));
-		if (matched.length === 0) return '';
+		const roleByActivity = activities.length > 0
+			? await this.computeRoles(app, activities)
+			: new Map<string, string[]>();
+		const matched = activities.filter(
+			({ file }) => (roleByActivity.get(file.path) ?? []).includes(role)
+		);
 
-		return this.renderSection(matched, { includeHeader: false });
+		const rendered = this.mergeWithWritten(matched, written);
+		if (rendered.length === 0) return '';
+
+		return this.renderSection(rendered, { includeHeader: false });
 	}
 
 	/**
@@ -292,7 +318,7 @@ export class ActivitiesInProgress {
 	}
 
 	private renderSection(
-		activities: Array<{ file: VaultFile; openTodos: string[] }>,
+		activities: RenderedActivity[],
 		opts?: { includeHeader?: boolean }
 	): string {
 		const includeHeader = opts?.includeHeader ?? true;
@@ -300,15 +326,81 @@ export class ActivitiesInProgress {
 			? ['----', '', ACTIVITIES_BUILT_MARKER, '----']
 			: ['----'];
 
-		for (const { file, openTodos } of activities) {
-			const displayName = file.basename;
-			lines.push(`##### [[${file.path}|${displayName}]]`);
-			for (const todo of openTodos) {
-				lines.push(todo);
+		for (const { path, displayName, body } of activities) {
+			lines.push(`##### [[${path}|${displayName}]]`);
+			for (const line of body) {
+				lines.push(line);
 			}
 			lines.push('----');
 		}
 
 		return lines.join('\n');
 	}
+
+	/**
+	 * Indexes the activity blocks the note already carries that have something
+	 * written under them. Empty blocks are ignored: they hold nothing worth
+	 * protecting, so the planning flags alone decide their fate.
+	 */
+	private collectWrittenBlocks(existingPageContent: string): Map<string, RenderedActivity> {
+		const written = new Map<string, RenderedActivity>();
+		for (const block of parseActivityBlocks(existingPageContent ?? '')) {
+			if (!blockHasContent(block)) continue;
+			written.set(block.path.toLowerCase(), {
+				path: block.path,
+				displayName: block.name,
+				// Trailing blank lines are rendering noise, not content.
+				body: trimTrailingBlanks(block.body),
+			});
+		}
+		return written;
+	}
+
+	/**
+	 * Combines what qualifies today with what the note already says.
+	 *
+	 * For an activity that qualifies, the note's existing lines are kept
+	 * verbatim and any genuinely new open todo is appended — a rebuild adds,
+	 * it never rewrites. An activity that no longer qualifies but already has
+	 * content is carried over unchanged rather than deleted.
+	 */
+	private mergeWithWritten(
+		activities: Array<{ file: VaultFile; openTodos: string[] }>,
+		written: Map<string, RenderedActivity>
+	): RenderedActivity[] {
+		const rendered: RenderedActivity[] = [];
+		const used = new Set<string>();
+
+		for (const { file, openTodos } of activities) {
+			const key = file.path.toLowerCase();
+			const existing = written.get(key);
+			used.add(key);
+
+			if (!existing) {
+				rendered.push({ path: file.path, displayName: file.basename, body: openTodos });
+				continue;
+			}
+
+			const seen = new Set(existing.body.map(l => l.trim()));
+			const additions = openTodos.filter(todo => !seen.has(todo.trim()));
+			rendered.push({
+				path: file.path,
+				displayName: file.basename,
+				body: [...existing.body, ...additions],
+			});
+		}
+
+		// Anything written but no longer planned still belongs to the day.
+		for (const [key, block] of written) {
+			if (!used.has(key)) rendered.push(block);
+		}
+
+		return rendered;
+	}
+}
+
+function trimTrailingBlanks(lines: string[]): string[] {
+	const out = [...lines];
+	while (out.length > 0 && out[out.length - 1]!.trim() === '') out.pop();
+	return out;
 }

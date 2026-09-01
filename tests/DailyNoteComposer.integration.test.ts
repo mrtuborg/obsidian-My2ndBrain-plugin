@@ -676,4 +676,54 @@ describe('DailyNoteComposer — context page links', () => {
 		const activitiesSection = saved.split(ACTIVITIES_BUILT_MARKER)[0]!;
 		expect(activitiesSection).not.toContain('[[Dropped Thing');
 	});
+	describe('a plan date that comes due', () => {
+		const planned = (date: string) => [
+			'---',
+			`startDate: ${PAST}`,
+			'stage: backlog',
+			'takeToWork: false',
+			`takeToWorkDate: ${date}`,
+			'responsible: [Me]',
+			'priority: medium',
+			'project: inbox',
+			'---',
+			'',
+			'## Description',
+			'',
+			'----',
+			'',
+			'## Journal',
+			'',
+			'- [ ] Planned task',
+			'',
+			'----',
+		].join('\n');
+
+		it('pulls the activity into today\'s note and consumes the date', async () => {
+			const app = makeApp({
+				[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+				'Activities/scheduled.md': planned(TODAY),
+			});
+			const composer = new DailyNoteComposer(SETTINGS);
+
+			await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+			expect(app.vault.saves.get(`Journal/${TODAY}.md`)).toContain('scheduled');
+			const activity = app.vault.saves.get('Activities/scheduled.md')!;
+			expect(activity).toContain('takeToWork: true');
+			expect(activity).not.toContain('takeToWorkDate:');
+		});
+
+		it('leaves an activity planned for later out of today\'s note', async () => {
+			const app = makeApp({
+				[`Journal/${TODAY}.md`]: dailyNoteTemplate(),
+				'Activities/scheduled.md': planned('2099-12-31'),
+			});
+			const composer = new DailyNoteComposer(SETTINGS);
+
+			await composer.processDailyNote(app, { path: `Journal/${TODAY}.md`, basename: TODAY });
+
+			expect(app.vault.saves.get(`Journal/${TODAY}.md`)).not.toContain('scheduled');
+		});
+	});
 });

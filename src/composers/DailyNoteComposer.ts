@@ -9,6 +9,8 @@ import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityCo
 import { buildContextLinksLine, upsertContextLinksLine } from '../utilities/ContextLinks';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from '../utilities/ContextPaths';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
+import { parseActivityBlocks, stripActivityBlocks } from '../utilities/DailyNoteSection';
+import { PlanDateActivation } from '../components/PlanDateActivation';
 import { ROLES } from '../roles';
 
 export class DailyNoteComposer {
@@ -20,10 +22,12 @@ export class DailyNoteComposer {
 	private scriptsRemove = new ScriptsRemove();
 	private activityComposer: ActivityComposer;
 	private todoSyncManager: TodoSyncManager;
+	private planDates: PlanDateActivation;
 
 	constructor(private settings: ComposerSettings) {
 		this.activityComposer = new ActivityComposer(settings);
 		this.activitiesIP = new ActivitiesInProgress(settings);
+		this.planDates = new PlanDateActivation(settings);
 		this.todoSyncManager = new TodoSyncManager(
 			(app, file, prebuilt) => this.activityComposer.processActivity(app as AppLike, file, prebuilt),
 			settings
@@ -157,6 +161,13 @@ export class DailyNoteComposer {
 
 		// ── Today-only steps ─────────────────────────────────────────────────
 		if (pageIsToday) {
+			// Plan dates that have come due are fired first, so an activity
+			// planned for today is already taken to work by the time the
+			// Activities section below is built.
+			try { await this.planDates.run(app, today); } catch (e) {
+				console.error('[2ndBrain] planDateActivation failed:', e);
+			}
+
 			// B.2.3: auto-create missing Activity files
 			try { await this.runAutoCreator(app, today); } catch (e) {
 				console.error('[2ndBrain] autoActivityCreator failed:', e);
@@ -172,7 +183,12 @@ export class DailyNoteComposer {
 			try {
 				const activities = await this.activitiesIP.run(app as any, pageContent);
 				if (activities && activities.trim().length > 0) {
-					pageContent = activities + '\n' + (pageContent || '');
+					// The fresh section carries over any block the note already
+					// had content in, so the originals must go or they'd appear
+					// twice.
+					const absorbed = parseActivityBlocks(activities).map(b => b.path);
+					pageContent = stripActivityBlocks(pageContent || '', absorbed);
+					pageContent = activities + '\n' + pageContent;
 				}
 			} catch (e) {
 				console.error('[2ndBrain] activitiesInProgress failed:', e);

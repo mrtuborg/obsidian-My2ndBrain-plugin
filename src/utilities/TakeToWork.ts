@@ -6,9 +6,10 @@
  * normally by clicking a button in the Eisenhower Matrix — rather than being
  * inferred from schedules.
  *
- * `takeToWorkDate` is an optional YYYY-MM-DD companion. It is **matrix
- * metadata only**: it drives ordering/display in the matrix and never affects
- * which activities land in a daily note.
+ * `takeToWorkDate` is an optional YYYY-MM-DD companion: the day the user
+ * intends to pick the activity up. It is a one-shot alarm — when that day
+ * arrives the activity is taken to work automatically and the date is
+ * cleared. Until then it only affects ordering in the matrix.
  *
  * Pure logic, no Obsidian API (D7).
  */
@@ -43,4 +44,20 @@ export function resolveTakeToWork(
 export function normalizeTakeToWorkDate(raw: string | null | undefined): string {
 	const value = (raw ?? '').trim();
 	return DATE_RE.test(value) ? value : '';
+}
+
+/**
+ * Whether a planned date has come due — i.e. it is today or already past.
+ *
+ * The date is a one-shot alarm, not a standing rule: when it fires, the
+ * activity is taken to work and the date is cleared. Leaving it in place
+ * would re-take the activity on every render, so dropping it would be
+ * impossible for as long as the date stayed in the past.
+ */
+export function planDateHasArrived(
+	raw: string | null | undefined,
+	today: string
+): boolean {
+	const date = normalizeTakeToWorkDate(raw);
+	return date !== '' && date <= today;
 }

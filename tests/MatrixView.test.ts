@@ -85,7 +85,17 @@ const SETTINGS = {
 	activitiesFolder: 'Activities',
 	archiveFolder: 'Activities/Archive',
 	projectsFolder: 'Projects',
+	journalFolder: 'Journal',
 };
+
+const flush = () => new Promise(r => setTimeout(r, 0));
+
+const TODAY = new Date().toISOString().slice(0, 10);
+const DAILY_NOTE = `Journal/${TODAY}.md`;
+
+function dailyNoteWith(blocks: string[]): string {
+	return ['---', '---', '----', '', '<!-- 2ndbrain:activities-built -->', '----', ...blocks].join('\n');
+}
 
 /** The date input on the row for `displayName`. */
 function dateFor(root: FakeEl, displayName: string): FakeEl {
@@ -352,5 +362,132 @@ describe('MatrixView', () => {
 		await new Promise(r => setTimeout(r, 0));
 
 		expect(store.get('Activities/idle.md')!).toContain('takeToWork: false');
+	});
+	describe('a plan date that has come due', () => {
+		it('takes the activity to work and consumes the date', async () => {
+			const { app, store } = makeApp({
+				'Activities/later.md': activityFile('l', [
+					'stage: backlog', 'takeToWork: false',
+					'priority: urgent-important', `takeToWorkDate: ${TODAY}`,
+				]),
+			});
+
+			await new MatrixView(app, SETTINGS).render(new FakeEl('div') as unknown as HTMLElement);
+
+			const written = store.get('Activities/later.md')!;
+			expect(written).toContain('takeToWork: true');
+			// Consumed, not kept: a lingering past date would re-take the
+			// activity on every render and make dropping it impossible.
+			expect(written).not.toContain('takeToWorkDate:');
+		});
+
+		it('leaves a future date alone', async () => {
+			const { app, store } = makeApp({
+				'Activities/later.md': activityFile('l', [
+					'stage: backlog', 'takeToWork: false',
+					'priority: urgent-important', 'takeToWorkDate: 2099-12-31',
+				]),
+			});
+
+			await new MatrixView(app, SETTINGS).render(new FakeEl('div') as unknown as HTMLElement);
+
+			const written = store.get('Activities/later.md')!;
+			expect(written).toContain('takeToWork: false');
+			expect(written).toContain('takeToWorkDate: 2099-12-31');
+		});
+
+		it('clears a stale date on a finished activity without reviving it', async () => {
+			const { app, store } = makeApp({
+				'Activities/finished.md': activityFile('f', [
+					'stage: done', 'takeToWork: false',
+					'priority: urgent-important', 'takeToWorkDate: 2020-01-01',
+				]),
+			});
+
+			await new MatrixView(app, SETTINGS).render(new FakeEl('div') as unknown as HTMLElement);
+
+			const written = store.get('Activities/finished.md')!;
+			expect(written).not.toContain('takeToWorkDate:');
+			expect(written).toContain('takeToWork: false');
+		});
+	});
+
+	describe('dropping an activity', () => {
+		it('removes its empty block from today\'s daily note', async () => {
+			const { app, store } = makeApp({
+				'Activities/planned.md': activityFile('p', [
+					'stage: doing', 'takeToWork: true', 'priority: urgent-important',
+				]),
+				[DAILY_NOTE]: dailyNoteWith(['##### [[Activities/planned.md|planned]]', '----']),
+			});
+			const root = new FakeEl('div');
+			await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+			buttonsFor(root, 'planned')[0]!.click();
+			await flush();
+
+			expect(store.get(DAILY_NOTE)!).not.toContain('Activities/planned.md');
+			expect(store.get('Activities/planned.md')!).toContain('takeToWork: false');
+		});
+
+		// The note is the source of truth — a button never deletes the record.
+		it('keeps a block that has notes under it', async () => {
+			const { app, store } = makeApp({
+				'Activities/planned.md': activityFile('p', [
+					'stage: doing', 'takeToWork: true', 'priority: urgent-important',
+				]),
+				[DAILY_NOTE]: dailyNoteWith([
+					'##### [[Activities/planned.md|planned]]',
+					'- [ ] a real thing I noted',
+					'----',
+				]),
+			});
+			const root = new FakeEl('div');
+			await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+			buttonsFor(root, 'planned')[0]!.click();
+			await flush();
+
+			expect(store.get(DAILY_NOTE)!).toContain('- [ ] a real thing I noted');
+			expect(store.get('Activities/planned.md')!).toContain('takeToWork: false');
+		});
+
+		it('leaves other activities in the note untouched', async () => {
+			const { app, store } = makeApp({
+				'Activities/planned.md': activityFile('p', [
+					'stage: doing', 'takeToWork: true', 'priority: urgent-important',
+				]),
+				[DAILY_NOTE]: dailyNoteWith([
+					'##### [[Activities/planned.md|planned]]',
+					'----',
+					'##### [[Activities/other.md|other]]',
+					'----',
+				]),
+			});
+			const root = new FakeEl('div');
+			await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+			buttonsFor(root, 'planned')[0]!.click();
+			await flush();
+
+			expect(store.get(DAILY_NOTE)!).toContain('Activities/other.md');
+			expect(store.get(DAILY_NOTE)!).toContain('<!-- 2ndbrain:activities-built -->');
+		});
+
+		it('prunes the empty block when the stage is moved to done', async () => {
+			const { app, store } = makeApp({
+				'Activities/planned.md': activityFile('p', [
+					'stage: doing', 'takeToWork: true', 'priority: urgent-important',
+				]),
+				[DAILY_NOTE]: dailyNoteWith(['##### [[Activities/planned.md|planned]]', '----']),
+			});
+			const root = new FakeEl('div');
+			await new MatrixView(app, SETTINGS).render(root as unknown as HTMLElement);
+
+			selectFor(root, 'planned', 'Stage').choose('done');
+			await flush();
+
+			expect(store.get(DAILY_NOTE)!).not.toContain('Activities/planned.md');
+		});
 	});
 });

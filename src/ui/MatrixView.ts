@@ -3,6 +3,14 @@ import { FileIO, AppLike } from '../utilities/FileIO';
 import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { EisenhowerMatrix, MatrixActivity, MatrixQuadrant } from '../components/EisenhowerMatrix';
 import { TAKE_TO_WORK_FIELD, TAKE_TO_WORK_DATE_FIELD } from '../utilities/TakeToWork';
+import { PlanDateActivation } from '../components/PlanDateActivation';
+import {
+	parseActivityBlocks,
+	blockHasContent,
+	removeEmptyActivityBlock,
+} from '../utilities/DailyNoteSection';
+import { journalPagesForDate } from '../utilities/ContextPaths';
+import { ROLES } from '../roles';
 import {
 	SelectOption,
 	stageOptions,
@@ -16,6 +24,7 @@ export interface MatrixViewSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
 	projectsFolder: string;
+	journalFolder: string;
 }
 
 /**
@@ -32,8 +41,11 @@ export class MatrixView {
 	private matrix = new EisenhowerMatrix();
 	private container: HTMLElement | null = null;
 	private projectNames: string[] = [];
+	private planDates: PlanDateActivation;
 
-	constructor(private app: App, private settings: MatrixViewSettings) {}
+	constructor(private app: App, private settings: MatrixViewSettings) {
+		this.planDates = new PlanDateActivation(settings);
+	}
 
 	async render(container: HTMLElement): Promise<void> {
 		this.container = container;
@@ -41,6 +53,15 @@ export class MatrixView {
 		container.addClass('twobrain-matrix');
 
 		const today = this.fileIO.todayDate();
+
+		// Fire any plan dates that have come due before reading the records,
+		// so the matrix shows the same picture the daily note will.
+		try {
+			await this.planDates.run(this.app as unknown as AppLike, today);
+		} catch (e) {
+			console.error('[2ndBrain] planDateActivation failed:', e);
+		}
+
 		const activities = await loadActivityRecords(
 			this.app as unknown as AppLike,
 			this.settings.activitiesFolder,
@@ -185,21 +206,77 @@ export class MatrixView {
 	 */
 	private async changeStage(activity: MatrixActivity, stage: string): Promise<void> {
 		const fields: Record<string, string | null> = { stage: stage || null };
-		if (stage === 'done' || stage === 'backlog') fields[TAKE_TO_WORK_FIELD] = 'false';
+		const dropped = stage === 'done' || stage === 'backlog';
+		if (dropped) {
+			fields[TAKE_TO_WORK_FIELD] = 'false';
+			await this.pruneFromToday(activity);
+		}
 		await this.applyFields(activity, fields);
 	}
 
 	/**
 	 * Taking an activity to work also moves it to `stage: doing` — planning
 	 * something for today and leaving it in the backlog is never what the
-	 * user means. Dropping it only clears the flag; the stage stays as-is.
+	 * user means. Dropping it clears the flag, leaves the stage as-is, and
+	 * takes the activity back out of today's pages.
 	 */
 	private async toggleTakeToWork(activity: MatrixActivity): Promise<void> {
-		const next = !activity.takeToWork;
-		await this.applyFields(activity, next
-			? { [TAKE_TO_WORK_FIELD]: 'true', stage: 'doing' }
-			: { [TAKE_TO_WORK_FIELD]: 'false' }
+		if (!activity.takeToWork) {
+			await this.applyFields(activity, { [TAKE_TO_WORK_FIELD]: 'true', stage: 'doing' });
+			return;
+		}
+
+		// Prune before writing frontmatter: applyFields re-renders, and a
+		// re-render mid-prune would work against a stale row.
+		const kept = await this.pruneFromToday(activity);
+		await this.applyFields(activity, { [TAKE_TO_WORK_FIELD]: 'false' });
+
+		if (kept) {
+			new Notice(
+				`2ndBrain: ${activity.displayName} stays in today's note — it already has notes under it.`
+			);
+		}
+	}
+
+	/**
+	 * Removes the activity's block from today's daily note and context pages.
+	 *
+	 * Only empty blocks go. Anything the user wrote under the heading is the
+	 * day's record and the source of truth (D1) — no button deletes that.
+	 * Returns true if some page kept the block because it had content.
+	 */
+	private async pruneFromToday(activity: MatrixActivity): Promise<boolean> {
+		const today = this.fileIO.todayDate();
+		const app = this.app as unknown as AppLike;
+		const pages = journalPagesForDate(
+			this.app.vault.getFiles().map(f => f.path),
+			this.settings.journalFolder,
+			today,
+			ROLES as readonly string[]
 		);
+
+		let kept = false;
+		for (const path of pages) {
+			try {
+				const content = await this.fileIO.loadFile(app, path);
+				if (content === null) continue;
+
+				const block = parseActivityBlocks(content)
+					.find(b => b.path.toLowerCase() === activity.path.toLowerCase());
+				if (!block) continue;
+
+				if (blockHasContent(block)) {
+					kept = true;
+					continue;
+				}
+
+				const pruned = removeEmptyActivityBlock(content, activity.path);
+				if (pruned !== null) await this.fileIO.saveFile(app, path, pruned);
+			} catch (e) {
+				console.error(`[2ndBrain] Could not prune ${activity.path} from ${path}:`, e);
+			}
+		}
+		return kept;
 	}
 
 	/**

@@ -98,6 +98,7 @@ export default class TwoBrainPlugin extends Plugin {
 				activitiesFolder: this.settings.activitiesFolder,
 				archiveFolder: this.settings.archiveFolder,
 				projectsFolder: this.settings.projectsFolder,
+				journalFolder: this.settings.journalFolder,
 			});
 			try {
 				await view.render(el);

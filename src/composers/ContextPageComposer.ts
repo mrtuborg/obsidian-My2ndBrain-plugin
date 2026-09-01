@@ -117,7 +117,7 @@ export class ContextPageComposer {
 
 		let freshSection = '';
 		try {
-			freshSection = await this.activitiesIP.runForRole(app, role);
+			freshSection = await this.activitiesIP.runForRole(app, role, raw);
 		} catch (e) {
 			console.error('[2ndBrain] contextPage activitiesInProgress failed:', e);
 		}

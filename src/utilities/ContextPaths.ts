@@ -70,3 +70,24 @@ export function matchContextPagePath(
 	const parsed = parseContextPageFilename(filename, roles);
 	return parsed ? parsed.role : null;
 }
+
+/**
+ * Every journal-side page that belongs to one date: the daily note itself
+ * plus any Contexts page for that day. These are the pages an activity's
+ * block can appear in, so they are the pages a "drop" has to clean up.
+ */
+export function journalPagesForDate(
+	paths: string[],
+	journalFolder: string,
+	date: string,
+	roles: readonly string[]
+): string[] {
+	return paths.filter(path => {
+		if (!path.startsWith(journalFolder + '/')) return false;
+		const filename = path.split('/').pop() ?? '';
+		if (matchContextPagePath(path, journalFolder, roles)) {
+			return parseContextPageFilename(filename, roles)?.date === date;
+		}
+		return filename === `${date}.md`;
+	});
+}

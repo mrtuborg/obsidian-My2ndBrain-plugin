@@ -552,4 +552,101 @@ describe('ActivitiesInProgress', () => {
 			expect(result).not.toContain('legacy-backlog');
 		});
 	});
+	// The daily note is the source of truth (D1): once something is written
+	// under an activity, no rebuild and no button may take it away.
+	describe('protecting what the note already says', () => {
+		const noteWith = (blocks: string[]) =>
+			['----', '', ACTIVITIES_BUILT_MARKER, '----', ...blocks].join('\n');
+
+		it('keeps a dropped activity that has content written under it', async () => {
+			const app = makeApp([{
+				path: 'Activities/dropped.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, takeToWork: false }),
+			}]);
+			const existing = noteWith([
+				'##### [[Activities/dropped.md|dropped]]',
+				'- [ ] something I actually did',
+				'----',
+			]);
+
+			const result = await aip.run(app, existing);
+			expect(result).toContain('dropped');
+			expect(result).toContain('- [ ] something I actually did');
+		});
+
+		it('keeps a done activity that has content written under it', async () => {
+			const app = makeApp([{
+				path: 'Activities/finished.md',
+				content: makeActivityContent({ stage: 'done', startDate: PAST }),
+			}]);
+			const existing = noteWith([
+				'##### [[Activities/finished.md|finished]]',
+				'Notes from the call.',
+				'----',
+			]);
+
+			const result = await aip.run(app, existing);
+			expect(result).toContain('Notes from the call.');
+		});
+
+		it('lets an empty block of a dropped activity disappear', async () => {
+			const app = makeApp([{
+				path: 'Activities/dropped.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, takeToWork: false }),
+			}]);
+			const existing = noteWith(['##### [[Activities/dropped.md|dropped]]', '----']);
+
+			expect(await aip.run(app, existing)).toBe('');
+		});
+
+		it('preserves hand-written prose under an activity that still qualifies', async () => {
+			const app = makeApp([{
+				path: 'Activities/live.md',
+				content: makeActivityContent({
+					stage: 'doing', startDate: PAST, takeToWork: true, journalTasks: ['Fix bug'],
+				}),
+			}]);
+			const existing = noteWith([
+				'##### [[Activities/live.md|live]]',
+				'Spoke to Anna, she wants the report by Friday.',
+				'----',
+			]);
+
+			const result = await aip.run(app, existing);
+			expect(result).toContain('Spoke to Anna, she wants the report by Friday.');
+			expect(result).toContain('- [ ] Fix bug');
+		});
+
+		it('does not duplicate a todo the note already lists', async () => {
+			const app = makeApp([{
+				path: 'Activities/live.md',
+				content: makeActivityContent({
+					stage: 'doing', startDate: PAST, takeToWork: true, journalTasks: ['Fix bug'],
+				}),
+			}]);
+			const existing = noteWith([
+				'##### [[Activities/live.md|live]]',
+				'- [ ] Fix bug',
+				'----',
+			]);
+
+			const result = await aip.run(app, existing);
+			expect(result.match(/- \[ \] Fix bug/g)).toHaveLength(1);
+		});
+
+		it('renders each retained activity exactly once', async () => {
+			const app = makeApp([{
+				path: 'Activities/live.md',
+				content: makeActivityContent({ stage: 'doing', startDate: PAST, takeToWork: true }),
+			}]);
+			const existing = noteWith([
+				'##### [[Activities/live.md|live]]',
+				'a note',
+				'----',
+			]);
+
+			const result = await aip.run(app, existing);
+			expect(result.match(/##### \[\[Activities\/live\.md/g)).toHaveLength(1);
+		});
+	});
 });
