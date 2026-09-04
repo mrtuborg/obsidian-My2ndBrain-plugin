@@ -11,6 +11,7 @@ import {
 	DEFAULT_OVERDUE_DAYS,
 } from '../components/ContactChecklist';
 import { personStatus, setPersonStatus, isArchivedPath } from '../utilities/PersonStatus';
+import { createTodaysDailyNote } from '../utilities/DailyNoteCreate';
 import {
 	HomeDashboard, HomeSummary, RoleStat, HealthSignal, greeting, longDate,
 } from '../components/HomeDashboard';
@@ -357,15 +358,36 @@ export class HomeView {
 		});
 		if (list.overdue > 0) count.addClass('is-overdue');
 
-		// Say why the boxes are dead. A `title` tooltip explains it on desktop
-		// and nowhere at all on a phone, which is where a missing daily note
-		// is most likely to be noticed first.
+		// Say why the boxes are dead, and offer the one action that fixes it.
+		// A `title` tooltip explains it on desktop and nowhere at all on a
+		// phone, which is where a missing daily note is most likely to be met.
 		if (!dailyNote && list.active.length > 0) {
-			box.createDiv({
-				cls: 'twobrain-home-checklist-note',
-				text: "No note for today yet — open today's daily note to start ticking people off.",
+			const note = box.createDiv({ cls: 'twobrain-home-checklist-note' });
+			note.createSpan({ text: 'No note for today yet, so there is nothing to tick off into. ' });
+
+			const create = note.createEl('button', {
+				cls: 'twobrain-home-checklist-create',
+				text: "Create today's note",
+			});
+			create.setAttribute('title',
+				'Creates it where your daily notes settings put it, then opens it so it gets filled in');
+			create.addEventListener('click', () => {
+				create.disabled = true;
+				void this.createDailyNote();
 			});
 		}
+	}
+
+	/**
+	 * Creates today's daily note, which the plugin then fills on open.
+	 *
+	 * No re-render afterwards: creating the note opens it, so this view is no
+	 * longer the thing on screen, and it rebuilds from scratch the next time
+	 * Home is opened anyway.
+	 */
+	private async createDailyNote(): Promise<void> {
+		const created = await createTodaysDailyNote(this.app, this.settings.journalFolder);
+		if (!created) await this.rerender();
 	}
 
 	/**
@@ -468,7 +490,7 @@ export class HomeView {
 
 		if (!dailyNote) {
 			box.disabled = true;
-			box.setAttribute('title', 'No daily note for today yet — open it first');
+			box.setAttribute('title', "No daily note for today yet — create it from the line above");
 			return;
 		}
 

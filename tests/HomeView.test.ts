@@ -526,6 +526,33 @@ describe('HomeView checklist check-off', () => {
 		expect((box as any).disabled).toBe(true);
 	});
 
+	it('offers to create the missing note rather than just naming the problem', async () => {
+		// A dead checkbox with an explanation is still a dead end. The one
+		// action that fixes it belongs next to the explanation.
+		const { root, app } = await renderWith({
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		let ran = '';
+		app.commands = {
+			commands: { 'daily-notes': {} },
+			executeCommandById: (id: string) => { ran = id; return true; },
+		};
+
+		const create = root.one('twobrain-home-checklist-create');
+		expect(create).toBeDefined();
+		expect(create!.tag).toBe('button');
+		create!.fire('click');
+		await flush();
+
+		expect(ran).toBe('daily-notes');
+	});
+
+	it('says nothing about a missing note when there is nobody to tick off', async () => {
+		const { root } = await renderWith({});
+		expect(root.one('twobrain-home-checklist-note')).toBeUndefined();
+	});
+
 	it('removes only a line the checklist itself wrote', async () => {
 		const { root, store } = await renderWith({
 			[`Journal/${TODAY}.md`]: '## Notes\nReal work\n- Talked to [[Frederik Stray]]\n',

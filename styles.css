@@ -1006,6 +1006,36 @@ a.twobrain-home-signal.is-quiet-people {
 	line-height: 1.4;
 }
 
+/* A button, not a link, because it acts rather than navigates — but drawn as
+ * a link so it reads as part of the sentence it sits inside. */
+button.twobrain-home-checklist-create {
+	display: inline;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: none;
+	color: var(--zen-accent);
+	font-size: inherit;
+	font-family: inherit;
+	line-height: inherit;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+button.twobrain-home-checklist-create:hover {
+	background: none;
+	color: var(--zen-accent);
+	text-decoration-thickness: 2px;
+}
+
+button.twobrain-home-checklist-create:disabled {
+	color: var(--zen-faint);
+	cursor: progress;
+	text-decoration: none;
+}
+
 /* One contact. Flex rather than grid, because the promise badges are optional
  * and a fixed column count either strands them on a second line or leaves two
  * dead columns on every row that has none. The name takes all the slack, so
@@ -1548,6 +1578,14 @@ a.twobrain-home-recent-link:hover {
 		padding: 12px 0;
 		min-height: 44px;
 	}
+
+	/* The create link is inline text, so it cannot be given a 44px box
+	 * without breaking the sentence. Bigger type and a looser line give it a
+	 * usable target instead. */
+	.twobrain-home-checklist-note {
+		font-size: 13px;
+		line-height: 2;
+	}
 }
 
 /* Obsidian mobile, any orientation. Landscape on a phone is wide enough for
@@ -1571,6 +1609,11 @@ a.twobrain-home-recent-link:hover {
 
 .is-mobile summary.twobrain-home-fold-summary {
 	min-height: 44px;
+}
+
+.is-mobile .twobrain-home-checklist-note {
+	font-size: 13px;
+	line-height: 2;
 }
 
 /* ── People dashboard live view (```2ndbrain-people code block) ───────────
