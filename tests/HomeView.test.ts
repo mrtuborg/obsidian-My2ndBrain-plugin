@@ -512,7 +512,7 @@ describe('HomeView checklist check-off', () => {
 		box.fire('change');
 	};
 
-	it("writes a linked bullet into today's note", async () => {
+	it("writes a header block into today's note", async () => {
 		const { root, store } = await renderWith({
 			[`Journal/${TODAY}.md`]: 'Some work\n',
 			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
@@ -520,7 +520,7 @@ describe('HomeView checklist check-off', () => {
 		});
 		check(root, 'Frederik Stray', true);
 		await flush();
-		expect(store.get(`Journal/${TODAY}.md`)).toContain('- Talked to [[Frederik Stray]]');
+		expect(store.get(`Journal/${TODAY}.md`)).toContain('#### Talked to [[People/Frederik Stray]]');
 	});
 
 	it('appends rather than replacing what is already in the note', async () => {
@@ -533,7 +533,8 @@ describe('HomeView checklist check-off', () => {
 		await flush();
 		const text = store.get(`Journal/${TODAY}.md`)!;
 		expect(text).toContain('Something I wrote');
-		expect(text.trimEnd().endsWith('- Talked to [[Frederik Stray]]')).toBe(true);
+		expect(text.trimEnd().endsWith('#### Talked to [[People/Frederik Stray]]\n\n----'.trimEnd()))
+			.toBe(true);
 	});
 
 	it('disables the check when there is no note for today to write into', async () => {
@@ -572,9 +573,9 @@ describe('HomeView checklist check-off', () => {
 		expect(root.one('twobrain-home-checklist-note')).toBeUndefined();
 	});
 
-	it('removes only a line the checklist itself wrote', async () => {
+	it('removes only a block the checklist itself wrote', async () => {
 		const { root, store } = await renderWith({
-			[`Journal/${TODAY}.md`]: '## Notes\nReal work\n- Talked to [[Frederik Stray]]\n',
+			[`Journal/${TODAY}.md`]: '## Notes\nReal work\n#### Talked to [[People/Frederik Stray]]\n\n----\n',
 			'People/Frederik Stray.md': '---\n---\n',
 		});
 		check(root, 'Frederik Stray', false);
@@ -584,16 +585,30 @@ describe('HomeView checklist check-off', () => {
 		expect(text).toContain('Real work');
 	});
 
-	it('refuses to empty the note rather than writing a blank file', async () => {
-		// FileIO guards against blanking a note, so the write would be dropped
-		// on the floor and the checkbox would spring back with no explanation.
+	it('removes notes written inside the block along with it', async () => {
 		const { root, store } = await renderWith({
-			[`Journal/${TODAY}.md`]: '- Talked to [[Frederik Stray]]\n',
+			[`Journal/${TODAY}.md`]:
+				'## Notes\nReal work\n#### Talked to [[People/Frederik Stray]]\n\nCalled about the BOM.\n\n----\n',
 			'People/Frederik Stray.md': '---\n---\n',
 		});
 		check(root, 'Frederik Stray', false);
 		await flush();
-		expect(store.get(`Journal/${TODAY}.md`)).toContain('- Talked to [[Frederik Stray]]');
+		const text = store.get(`Journal/${TODAY}.md`)!;
+		expect(text).not.toContain('Talked to');
+		expect(text).not.toContain('Called about the BOM');
+		expect(text).toContain('Real work');
+	});
+
+	it('refuses to empty the note rather than writing a blank file', async () => {
+		// FileIO guards against blanking a note, so the write would be dropped
+		// on the floor and the checkbox would spring back with no explanation.
+		const { root, store } = await renderWith({
+			[`Journal/${TODAY}.md`]: '#### Talked to [[People/Frederik Stray]]\n\n----\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		check(root, 'Frederik Stray', false);
+		await flush();
+		expect(store.get(`Journal/${TODAY}.md`)).toContain('#### Talked to [[People/Frederik Stray]]');
 	});
 
 	it('leaves a real journal sentence alone when unchecked', async () => {

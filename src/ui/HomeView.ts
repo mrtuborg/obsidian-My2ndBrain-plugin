@@ -457,12 +457,15 @@ export class HomeView {
 	/**
 	 * The check-off itself: one tap says "spoke to them today".
 	 *
-	 * It writes a bullet into today's daily note rather than a date onto the
-	 * person's page, because the journal is the temporal truth (D1) and a
-	 * person's page is a derived view whose `## Journal` section is rewritten
-	 * on every open (D3). The line is a link, so the existing journal scan
-	 * reads it back as contact and the whole vault agrees — no new store, and
-	 * the same number shows up on the People dashboard.
+	 * It writes a `#### Talked to [[Name]]` header block into today's daily
+	 * note rather than a date onto the person's page, because the journal is
+	 * the temporal truth (D1) and a person's page is a derived view whose
+	 * `## Journal` section is rewritten on every open (D3). It is a header,
+	 * not a bullet, because `MentionsProcessor` already gathers anything
+	 * nested under a header naming someone as belonging to them — the same
+	 * mechanism an Activity uses for its own day. Whatever gets typed under
+	 * the header — now, later, or never — is picked up automatically the
+	 * next time the person's page opens, with no extra plumbing.
 	 */
 	private renderCheck(
 		row: HTMLElement, entry: ChecklistEntry, dailyNote: TFile | null
@@ -481,8 +484,8 @@ export class HomeView {
 		}
 
 		box.setAttribute('title', entry.loggedToday
-			? `Logged in ${dailyNote.basename}. Uncheck to remove the line.`
-			: `Add "Talked to ${entry.name}" to ${dailyNote.basename}`);
+			? `Logged in ${dailyNote.basename}. Uncheck to remove the block, notes and all.`
+			: `Add a "Talked to ${entry.name}" block to ${dailyNote.basename} to write notes into`);
 		box.addEventListener('change', () => {
 			box.disabled = true;
 			void this.logContact(entry, dailyNote, box.checked);
@@ -677,7 +680,6 @@ export class HomeView {
 	private async logContact(
 		entry: ChecklistEntry, dailyNote: TFile, checked: boolean
 	): Promise<void> {
-		const line = this.checklist.contactLogLine(entry.name);
 		let refused: string | null = null;
 
 		try {
@@ -685,22 +687,18 @@ export class HomeView {
 			// modify loses one of two contacts checked off in quick succession,
 			// because both callbacks would have read the same note.
 			await this.app.vault.process(dailyNote, content => {
-				if (checked) return this.checklist.appendContactLog(content, line) ?? content;
+				if (checked) return this.checklist.appendContactLog(content, entry.path) ?? content;
 
-				const lines = content.split('\n');
-				const index = lines.indexOf(line);
-				if (index === -1) {
+				const next = this.checklist.removeContactLog(content, entry.path);
+				if (next === null) {
 					refused = `${entry.name} is named in today's note by something this checklist did not write — leaving it alone.`;
 					return content;
 				}
-
-				lines.splice(index, 1);
-				const next = lines.join('\n');
 				// Blanking a note is never what a checkbox meant to do, and a
 				// silently dropped write with the tick springing back is the
 				// one outcome that looks like a broken button.
 				if (next.trim() === '') {
-					refused = `Removing that line would leave ${dailyNote.basename} empty. Edit it directly.`;
+					refused = `Removing that would leave ${dailyNote.basename} empty. Edit it directly.`;
 					return content;
 				}
 				return next;

@@ -177,40 +177,74 @@ describe('ContactChecklist.age', () => {
 });
 
 describe('ContactChecklist contact log', () => {
-	it('writes a plain linked bullet, not a task', () => {
-		// A checkbox would invite the daily-note pipeline to carry it forward
-		// forever; the link is what the journal scan reads back as contact.
-		expect(checklist.contactLogLine('Ida Haugland')).toBe('- Talked to [[Ida Haugland]]');
+	it('writes a header block, not a bullet or a task', () => {
+		// A header, not a task or a bullet: MentionsProcessor already gathers
+		// anything nested under a header naming someone as belonging to them,
+		// so this is how the block invites notes without any engine change.
+		expect(checklist.contactLogHeader('People/Ida Haugland.md'))
+			.toBe('#### Talked to [[People/Ida Haugland]]');
+		expect(checklist.contactLogBlock('People/Ida Haugland.md'))
+			.toBe('#### Talked to [[People/Ida Haugland]]\n\n----');
 	});
 
 	it('appends to the end, leaving existing content untouched', () => {
-		const line = checklist.contactLogLine('Ida');
-		expect(checklist.appendContactLog('## Notes\nSomething\n', line))
-			.toBe('## Notes\nSomething\n- Talked to [[Ida]]\n');
+		expect(checklist.appendContactLog('## Notes\nSomething\n', 'People/Ida.md'))
+			.toBe('## Notes\nSomething\n#### Talked to [[People/Ida]]\n\n----\n');
 	});
 
 	it('does not append twice', () => {
-		const line = checklist.contactLogLine('Ida');
-		expect(checklist.appendContactLog(`Work\n${line}\n`, line)).toBeNull();
+		const block = checklist.contactLogBlock('People/Ida.md');
+		expect(checklist.appendContactLog(`Work\n${block}\n`, 'People/Ida.md')).toBeNull();
+	});
+
+	it('does not append twice even if notes were added under the header', () => {
+		const withNotes = 'Work\n#### Talked to [[People/Ida]]\n\nCalled about the trip.\n\n----\n';
+		expect(checklist.appendContactLog(withNotes, 'People/Ida.md')).toBeNull();
 	});
 
 	it('handles an empty note without leading blank lines', () => {
-		const line = checklist.contactLogLine('Ida');
-		expect(checklist.appendContactLog('', line)).toBe('- Talked to [[Ida]]\n');
+		expect(checklist.appendContactLog('', 'People/Ida.md'))
+			.toBe('#### Talked to [[People/Ida]]\n\n----\n');
 	});
 
 	it('leaves the existing note untouched, including trailing blank lines', () => {
-		const line = checklist.contactLogLine('Ida');
 		// A trailing blank line can be deliberate, and two trailing spaces are
 		// a Markdown hard break. Ticking a checkbox must not rewrite prose.
-		expect(checklist.appendContactLog('Work\n\n\n', line))
-			.toBe('Work\n\n\n- Talked to [[Ida]]\n');
-		expect(checklist.appendContactLog('A line  \n', line))
-			.toBe('A line  \n- Talked to [[Ida]]\n');
+		expect(checklist.appendContactLog('Work\n\n\n', 'People/Ida.md'))
+			.toBe('Work\n\n\n#### Talked to [[People/Ida]]\n\n----\n');
+		expect(checklist.appendContactLog('A line  \n', 'People/Ida.md'))
+			.toBe('A line  \n#### Talked to [[People/Ida]]\n\n----\n');
 	});
 
 	it('adds a newline first when the note does not end with one', () => {
-		const line = checklist.contactLogLine('Ida');
-		expect(checklist.appendContactLog('Work', line)).toBe('Work\n- Talked to [[Ida]]\n');
+		expect(checklist.appendContactLog('Work', 'People/Ida.md'))
+			.toBe('Work\n#### Talked to [[People/Ida]]\n\n----\n');
+	});
+});
+
+describe('ContactChecklist contact log removal', () => {
+	it('removes the whole block, header through the closing separator', () => {
+		const content = 'Work\n#### Talked to [[People/Ida]]\n\n----\n';
+		expect(checklist.removeContactLog(content, 'People/Ida.md')).toBe('Work\n');
+	});
+
+	it('removes any notes written inside the block along with it', () => {
+		const content = 'Work\n#### Talked to [[People/Ida]]\n\nCalled about the trip.\n\n----\n';
+		expect(checklist.removeContactLog(content, 'People/Ida.md')).toBe('Work\n');
+	});
+
+	it('removes only the matching contact, leaving another block untouched', () => {
+		const content = '#### Talked to [[People/Ida]]\n\n----\n#### Talked to [[People/Bo]]\n\n----\n';
+		expect(checklist.removeContactLog(content, 'People/Ida.md'))
+			.toBe('#### Talked to [[People/Bo]]\n\n----\n');
+	});
+
+	it('removes through the end of file when the closing separator is missing', () => {
+		const content = 'Work\n#### Talked to [[People/Ida]]\n\nSome notes without a closing line';
+		expect(checklist.removeContactLog(content, 'People/Ida.md')).toBe('Work');
+	});
+
+	it('returns null when the header is not there to remove', () => {
+		expect(checklist.removeContactLog('Something else entirely\n', 'People/Ida.md')).toBeNull();
 	});
 });

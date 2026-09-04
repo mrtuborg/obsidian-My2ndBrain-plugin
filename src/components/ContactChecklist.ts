@@ -225,32 +225,81 @@ export class ContactChecklist {
 	}
 
 	/**
-	 * The line appended to today's note when a contact is checked off.
+	 * The header that starts a contact's block in today's note.
 	 *
-	 * A plain bullet, not a task: it records something that happened, and a
-	 * checkbox would invite the daily-note pipeline to carry it forward
-	 * forever. The `[[link]]` is the entire point — it is what the journal
-	 * scan reads back as contact, so this needs no storage of its own.
+	 * A header, not a bullet: `MentionsProcessor` already understands
+	 * "everything nested under a header naming X belongs to X" — that is how
+	 * an Activity records its day (`##### [[Activities/Name]]` followed by
+	 * its todos). Reusing that mechanism means whatever gets written under
+	 * this header — a sentence, a list, nothing at all — is automatically
+	 * picked up as this person's journal entry the next time their page is
+	 * opened, with no engine change needed.
+	 *
+	 * The full `People/Name` path rather than the bare name: `MentionsProcessor`
+	 * matches by the file's basename, which the path already contains, and a
+	 * folder-qualified link is what the journal scan already resolves for
+	 * people filed under `People/Archive`.
 	 */
-	contactLogLine(name: string): string {
-		return `- Talked to [[${name}]]`;
+	contactLogHeader(path: string): string {
+		return `#### Talked to [[${path.replace(/\.md$/, '')}]]`;
 	}
 
 	/**
-	 * Appends the line unless it is already there.
+	 * The block appended when a contact is checked off: the header, a blank
+	 * line to write into, and a closing separator so the block can never grow
+	 * to swallow whatever gets typed after it later.
+	 */
+	contactLogBlock(path: string): string {
+		return `${this.contactLogHeader(path)}\n\n----`;
+	}
+
+	/**
+	 * Appends the block unless the header is already there.
 	 *
 	 * The existing note is preserved byte for byte — no trimming. A trailing
 	 * blank line can be deliberate, and two trailing spaces are Markdown's
 	 * hard line break, so "tidying" the end of someone's journal entry as a
 	 * side effect of ticking a checkbox would be an edit they did not ask for.
 	 *
-	 * Idempotent because the button is on a live view that can be clicked
-	 * twice before the first render lands, and because a mention is a
-	 * yes/no fact about a day — logging it twice says nothing new.
+	 * Idempotent on the header alone, not the whole block: the button is on a
+	 * live view that can be clicked twice before the first render lands, and
+	 * by the time it is clicked twice more the block may already contain
+	 * notes the user typed — those must not be duplicated or disturbed.
 	 */
-	appendContactLog(content: string, line: string): string | null {
-		if (content.split('\n').some(l => l.trim() === line)) return null;
+	appendContactLog(content: string, path: string): string | null {
+		const header = this.contactLogHeader(path);
+		if (content.split('\n').some(l => l.trim() === header)) return null;
 		const separator = content === '' || content.endsWith('\n') ? '' : '\n';
-		return `${content}${separator}${line}\n`;
+		return `${content}${separator}${this.contactLogBlock(path)}\n`;
+	}
+
+	/**
+	 * Removes a contact's block, notes and all.
+	 *
+	 * Unchecking means "this log entry was a mistake", not "keep the notes,
+	 * drop the checkbox" — there was no partial-undo for the old single-line
+	 * bullet either.
+	 *
+	 * The block runs from the header to the next `----` line, which is what
+	 * makes it safe to remove one contact's notes without touching a second
+	 * contact logged the same day. If that closing line was itself deleted,
+	 * this removes through the end of the file rather than guessing — better
+	 * to over-remove an unterminated block than to leave half of one behind.
+	 *
+	 * Returns null when the header is not there, so the caller can tell
+	 * "already gone" apart from "removed".
+	 */
+	removeContactLog(content: string, path: string): string | null {
+		const header = this.contactLogHeader(path);
+		const lines = content.split('\n');
+		const start = lines.findIndex(l => l.trim() === header);
+		if (start === -1) return null;
+
+		let end = lines.length - 1;
+		for (let i = start + 1; i < lines.length; i++) {
+			if (lines[i]!.trim() === '----') { end = i; break; }
+		}
+		lines.splice(start, end - start + 1);
+		return lines.join('\n');
 	}
 }

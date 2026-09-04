@@ -238,13 +238,24 @@ default) the age turns amber. **Every active contact is shown** — the list is 
 would hide precisely the people you have neglected longest. You shorten it by filing people, not by
 folding them.
 
-**Checking someone off** appends `- Talked to [[Name]]` to the end of today's daily note. Nothing is
-stamped on their page: the journal is the temporal truth (D1) and a People page's `## Journal` section is
-regenerated on every open (D3), so a date written there would be erased. Because the line is a link, the
-same journal scan that feeds the People dashboard reads it straight back — one number, one source, no new
-store. Unchecking removes that exact line and nothing else; a sentence you wrote yourself that happens to
-name the same person is left alone. If today's note doesn't exist yet the checkbox is disabled, since Home
-never creates anything.
+**Checking someone off** appends a block to the end of today's daily note:
+
+```
+#### Talked to [[People/Name]]
+
+----
+```
+
+Nothing is stamped on their page directly: the journal is the temporal truth (D1) and a People page's
+`## Journal` section is regenerated on every open (D3), so a date written there would be erased. It is a
+header, not a bullet, because the engine already gathers anything written under a header naming someone as
+belonging to them — the same mechanism an Activity uses to collect its own day's notes. That means anything
+you type between the header and the closing `----` — now, later, or never — shows up automatically in that
+person's `## Journal` section the next time their page opens, with nothing else to wire up. Because the
+header itself is a link, the same journal scan that feeds the People dashboard reads it straight back — one
+source, no new store. Unchecking removes the whole block, notes included; a sentence you wrote yourself that
+happens to name the same person elsewhere in the note is left alone. If today's note doesn't exist yet the
+checkbox is disabled, since Home never creates anything.
 
 **Filing someone** moves them between three states:
 
