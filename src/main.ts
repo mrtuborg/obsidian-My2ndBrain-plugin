@@ -185,6 +185,7 @@ export default class TwoBrainPlugin extends Plugin {
 				journalFolder: this.settings.journalFolder,
 				dashboardsFolder: this.settings.dashboardsFolder,
 				peopleFolder: this.settings.peopleFolder,
+				contactOverdueDays: this.settings.contactOverdueDays,
 			}, this.commitmentCacheAccess());
 			try {
 				await view.render(el);

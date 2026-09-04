@@ -992,61 +992,195 @@ a.twobrain-home-signal.is-quiet-people {
 	font-variant-numeric: tabular-nums;
 }
 
-.twobrain-home-people-line {
+.twobrain-home-checklist {
 	display: flex;
-	align-items: baseline;
-	gap: 10px;
-	padding: 3px 0;
+	flex-direction: column;
 }
 
-.twobrain-home-people-line-label {
-	flex: 0 0 4.5em;
-	font-size: var(--font-ui-smaller);
+/* Explains why the checkboxes are dead, in place of a tooltip nobody on a
+ * phone can trigger. */
+.twobrain-home-checklist-note {
+	margin: 2px 0 6px;
 	color: var(--zen-faint);
+	font-size: 11px;
+	line-height: 1.4;
 }
 
-.twobrain-home-people-names {
+/* One contact. Flex rather than grid, because the promise badges are optional
+ * and a fixed column count either strands them on a second line or leaves two
+ * dead columns on every row that has none. The name takes all the slack, so
+ * everything after it is flushed right and lines up down the list anyway. */
+.twobrain-home-contact {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 4px 6px;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	border-top: 1px solid color-mix(in srgb, var(--zen-line) 45%, transparent);
 }
 
-.twobrain-home-person {
-	padding: 1px 7px;
-	border-radius: 10px;
-	font-size: var(--font-ui-smaller);
-	line-height: 1.6;
-	text-decoration: none;
-	color: var(--zen-ink);
-	background-color: color-mix(in srgb, var(--zen-line) 60%, transparent);
+.twobrain-home-contact:first-child {
+	border-top: none;
+}
+
+/* Done for today: still readable, visibly settled. Not hidden — seeing the
+ * list you have already worked through is half of why you keep working it. */
+.twobrain-home-contact.is-logged {
+	opacity: 0.5;
+}
+
+input.twobrain-home-contact-check {
+	margin: 0;
+	flex: 0 0 auto;
 	cursor: pointer;
 }
 
-.twobrain-home-person:hover {
-	text-decoration: none;
-	background-color: var(--zen-line);
+input.twobrain-home-contact-check:disabled {
+	cursor: not-allowed;
+	opacity: 0.4;
 }
 
-.twobrain-home-person.is-owing {
+a.twobrain-home-contact-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-ink);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+a.twobrain-home-contact-name:hover {
+	color: var(--zen-accent);
+	text-decoration: underline;
+}
+
+.twobrain-home-contact.is-logged a.twobrain-home-contact-name {
+	text-decoration: line-through;
+}
+
+/* Right-aligned in a fixed slot so the ages form a readable column even
+ * though the names beside them are all different lengths. */
+.twobrain-home-contact-age {
+	flex: 0 0 auto;
+	min-width: 3.5em;
+	text-align: right;
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+	color: var(--zen-faint);
+	white-space: nowrap;
+}
+
+.twobrain-home-contact.is-overdue .twobrain-home-contact-age {
+	color: var(--zen-warn);
+	font-weight: 600;
+}
+
+/* Promise badges sit between the age and the buttons, and collapse out of the
+ * layout entirely when there are none. */
+.twobrain-home-contact-tag {
+	flex: 0 0 auto;
+	padding: 0 6px;
+	border-radius: 9px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+.twobrain-home-contact-tag.is-owed {
 	color: var(--zen-alert);
 	background-color: color-mix(in srgb, var(--zen-alert) 14%, transparent);
 }
 
-.twobrain-home-person.is-active {
+.twobrain-home-contact-tag.is-waiting {
+	color: var(--zen-soft);
+	background-color: color-mix(in srgb, var(--zen-line) 60%, transparent);
+}
+
+.twobrain-home-contact-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 3px;
+}
+
+/* Faint until the row is touched. These are always-available controls on
+ * every row, and drawn at full strength they out-shout the names — which are
+ * the actual content. Never hidden outright: a control you cannot see on a
+ * touch screen, where there is no hover, is a control that does not exist. */
+button.twobrain-home-contact-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 22px;
+	padding: 0 7px;
+	border: none;
+	border-radius: 4px;
+	box-shadow: none;
+	background-color: transparent;
+	color: var(--zen-faint);
+	font-size: 11px;
+	line-height: 1;
+	white-space: nowrap;
+	cursor: pointer;
+	opacity: 0.55;
+}
+
+.twobrain-home-contact:hover button.twobrain-home-contact-action,
+button.twobrain-home-contact-action:focus-visible {
+	opacity: 1;
+}
+
+button.twobrain-home-contact-action:hover {
+	background-color: var(--zen-line);
+	color: var(--zen-ink);
+}
+
+button.twobrain-home-contact-action.is-active:hover {
 	color: var(--zen-accent);
-	background-color: color-mix(in srgb, var(--zen-accent) 14%, transparent);
 }
 
-.twobrain-home-person.is-quiet {
-	color: var(--zen-warn);
-	background-color: color-mix(in srgb, var(--zen-warn) 14%, transparent);
+button.twobrain-home-contact-action:disabled {
+	cursor: progress;
+	opacity: 0.3;
 }
 
-.twobrain-home-people-more {
+/* ── Folds: more active, inactive, archived ──────────────────────────── */
+
+.twobrain-home-fold {
+	margin-top: 6px;
+}
+
+summary.twobrain-home-fold-summary {
+	padding: 3px 0;
 	font-size: var(--font-ui-smaller);
 	color: var(--zen-faint);
-	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+	list-style: none;
+	user-select: none;
+}
+
+summary.twobrain-home-fold-summary::-webkit-details-marker {
+	display: none;
+}
+
+summary.twobrain-home-fold-summary::before {
+	content: '\25B8';
+	display: inline-block;
+	width: 1em;
+	transition: transform 120ms ease;
+}
+
+.twobrain-home-fold[open] > summary.twobrain-home-fold-summary::before {
+	transform: rotate(90deg);
+}
+
+summary.twobrain-home-fold-summary:hover {
+	color: var(--zen-ink);
+}
+
+.twobrain-home-people-count.is-overdue {
+	color: var(--zen-warn);
 }
 
 .twobrain-home-people-none {
@@ -1379,6 +1513,64 @@ a.twobrain-home-recent-link:hover {
 	.twobrain-home-bignum {
 		font-size: 24px;
 	}
+}
+
+/* Phone: the status buttons and the checkbox become touch targets, and the
+ * promise badges drop out rather than squeezing the name to nothing. There is
+ * no hover on a touch screen, so the buttons are drawn at full strength. */
+@media (max-width: 420px) {
+	.twobrain-home-contact {
+		gap: 6px;
+		padding: 5px 0;
+		min-height: 44px;
+	}
+
+	.twobrain-home-contact-tag {
+		display: none;
+	}
+
+	/* 44px is the touch-target floor. The word labels stay, because the
+	 * tooltip that would have explained an icon never appears on a phone. */
+	button.twobrain-home-contact-action {
+		min-height: 44px;
+		padding: 0 10px;
+		font-size: 12px;
+		opacity: 1;
+		background-color: var(--zen-line);
+	}
+
+	input.twobrain-home-contact-check {
+		width: 26px;
+		height: 26px;
+	}
+
+	summary.twobrain-home-fold-summary {
+		padding: 12px 0;
+		min-height: 44px;
+	}
+}
+
+/* Obsidian mobile, any orientation. Landscape on a phone is wide enough for
+ * the badges but just as short on precision, so the targets stay large. */
+.is-mobile button.twobrain-home-contact-action {
+	min-height: 44px;
+	padding: 0 10px;
+	opacity: 1;
+	background-color: var(--zen-line);
+}
+
+.is-mobile input.twobrain-home-contact-check {
+	width: 26px;
+	height: 26px;
+}
+
+.is-mobile .twobrain-home-contact {
+	padding: 5px 0;
+	min-height: 44px;
+}
+
+.is-mobile summary.twobrain-home-fold-summary {
+	min-height: 44px;
 }
 
 /* ── People dashboard live view (```2ndbrain-people code block) ───────────

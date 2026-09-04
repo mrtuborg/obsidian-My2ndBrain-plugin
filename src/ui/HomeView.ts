@@ -1,4 +1,4 @@
-import { App, TFile } from 'obsidian';
+import { App, Notice, TFile } from 'obsidian';
 import { FileIO, AppLike } from '../utilities/FileIO';
 import { loadActivityRecords } from '../utilities/ActivityIndex';
 import { loadProjectRecords } from '../utilities/ProjectIndex';
@@ -6,6 +6,11 @@ import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import { PeopleDashboard, PersonRow } from '../components/PeopleDashboard';
 import { UNASSIGNED, DIRECTION_LABEL } from '../components/Commitments';
 import { scanCommitments, isPersonPage, CommitmentCache } from '../utilities/CommitmentIndex';
+import {
+	ContactChecklist, Checklist, ChecklistEntry, ContactStatus, CONTACT_STATUS_LABEL,
+	DEFAULT_OVERDUE_DAYS,
+} from '../components/ContactChecklist';
+import { personStatus, setPersonStatus, isArchivedPath } from '../utilities/PersonStatus';
 import {
 	HomeDashboard, HomeSummary, RoleStat, HealthSignal, greeting, longDate,
 } from '../components/HomeDashboard';
@@ -19,24 +24,13 @@ import { ROLES } from '../roles';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Names per line on Home. Enough to recognise the shape of a week, few enough
- * that the strip stays a glance — the People page is where the full list lives.
+ * Active contacts shown before the rest go behind a fold.
+ *
+ * The list is sorted by silence, so these are always the ones with the
+ * strongest claim on you. A checklist you have to scroll is a checklist you
+ * skim, and Home has to survive being read on a phone in landscape.
  */
-const PEOPLE_ON_HOME = 6;
-
-/** Why this name is on Home, for the hover — the strip itself stays wordless. */
-function personHint(row: PersonRow): string {
-	const parts: string[] = [];
-	if (row.owed > 0) parts.push(`${DIRECTION_LABEL.owed}: ${row.owed}`);
-	if (row.waiting > 0) parts.push(`${DIRECTION_LABEL.waiting}: ${row.waiting}`);
-	parts.push(row.daysSinceSeen === null
-		? 'never mentioned in the journal'
-		: row.daysSinceSeen === 0
-			? 'mentioned today'
-			: `last mentioned ${row.daysSinceSeen}d ago`);
-	if (row.days > 0) parts.push(`${row.days} ${row.days === 1 ? 'day' : 'days'} of contact`);
-	return parts.join(' · ');
-}
+const CHECKLIST_ON_HOME = 8;
 
 export interface HomeViewSettings {
 	activitiesFolder: string;
@@ -45,6 +39,8 @@ export interface HomeViewSettings {
 	journalFolder: string;
 	dashboardsFolder: string;
 	peopleFolder: string;
+	/** Days of silence before an active contact is flagged. */
+	contactOverdueDays?: number;
 }
 
 /** How Home reaches the commitment cache the plugin persists — shared with PeopleView. */
@@ -69,6 +65,13 @@ export class HomeView {
 	private dashboard = new HomeDashboard();
 	private projects = new ProjectsDashboard();
 	private people = new PeopleDashboard();
+	private checklist = new ContactChecklist();
+
+	private container: HTMLElement | null = null;
+	/** Folds survive a re-render, so checking someone off doesn't close the list. */
+	private open_ = { more: false, inactive: false, archived: false };
+	/** Status writes the metadata cache has not reflected yet. */
+	private pending = new Map<string, ContactStatus>();
 
 	constructor(
 		private app: App,
@@ -77,6 +80,7 @@ export class HomeView {
 	) {}
 
 	async render(container: HTMLElement): Promise<void> {
+		this.container = container;
 		container.empty();
 		container.addClass('twobrain-home');
 
@@ -118,7 +122,7 @@ export class HomeView {
 		this.renderBanner(container, summary);
 		this.renderRoles(container, summary);
 		this.renderSignals(container, summary);
-		this.renderPeople(container, people.rows);
+		this.renderChecklist(container, people.rows, today, dailyNote);
 		this.renderCharts(container, allFiles, today);
 		this.renderFooter(container, summary);
 	}
@@ -286,73 +290,244 @@ export class HomeView {
 	}
 
 	/**
-	 * Who you're actually in touch with, by name.
+	 * The communication checklist: who to reach out to, and a way to say you did.
 	 *
 	 * The health signals above only fire when something is wrong, so on a good
 	 * week relationships vanished from Home entirely — which is exactly when a
-	 * quiet drift starts. This strip is unconditional: names, not counts,
-	 * because a name is something you can act on and "2 in touch" isn't.
+	 * quiet drift starts. This section is unconditional, and it is names rather
+	 * than counts, because a name is something you can act on and "2 in touch"
+	 * isn't.
 	 *
-	 * It stays a strip and not a third dashboard. Two short lists, capped, each
-	 * name a link. Anything more belongs on the People page.
+	 * It earns its place on a page that refuses to be a third dashboard by
+	 * being the only thing here you can *do* something with. Everything else on
+	 * Home reports; this one closes a loop, in one tap, without leaving the page.
 	 */
-	private renderPeople(container: HTMLElement, rows: PersonRow[]): void {
-		const people = rows.filter(r => r.name !== UNASSIGNED);
-		if (people.length === 0) return;
-
-		const owing = people.filter(r => r.commitments.length > 0);
-		const inTouch = people.filter(r => r.health === 'active');
-		const quiet = people.filter(r => r.health === 'quiet');
-
-		const box = container.createDiv({ cls: 'twobrain-home-people' });
-		const head = box.createDiv({ cls: 'twobrain-home-people-head' });
-		head.createSpan({ cls: 'twobrain-home-people-label', text: 'People' });
-		head.createSpan({
-			cls: 'twobrain-home-people-count',
-			text: `${inTouch.length} in touch · ${quiet.length} drifting`,
+	private renderChecklist(
+		container: HTMLElement, rows: PersonRow[], today: string, dailyNote: TFile | null
+	): void {
+		const list = this.checklist.build({
+			rows,
+			statusOf: path => this.statusOf(path),
+			overdueAfterDays: this.settings.contactOverdueDays ?? DEFAULT_OVERDUE_DAYS,
+			today,
+			exclude: new Set([UNASSIGNED]),
 		});
 
-		this.peopleLine(box, 'Owe', owing, 'is-owing');
-		this.peopleLine(box, 'In touch', inTouch, 'is-active');
-		this.peopleLine(box, 'Drifting', quiet, 'is-quiet');
+		const total = list.active.length + list.inactive.length + list.archived.length;
+		if (total === 0) return;
 
-		// Every list empty means people exist but none are recent, outstanding
-		// or lapsed — say so rather than leaving three blank rows.
-		if (owing.length + inTouch.length + quiet.length === 0) {
+		const box = container.createDiv({ cls: 'twobrain-home-people' });
+		this.renderChecklistHead(box, list, dailyNote);
+
+		const shown = list.active.slice(0, CHECKLIST_ON_HOME);
+		const rest = list.active.slice(CHECKLIST_ON_HOME);
+
+		if (list.active.length === 0) {
 			box.createDiv({
 				cls: 'twobrain-home-people-none',
-				text: 'No one recent, owed or drifting.',
+				text: 'No active contacts. Restore someone below to start a rotation.',
+			});
+		}
+
+		const body = box.createDiv({ cls: 'twobrain-home-checklist' });
+		for (const entry of shown) this.renderChecklistRow(body, entry, dailyNote);
+
+		if (rest.length > 0) {
+			const fold = this.renderFold(box, 'more', `${rest.length} more active`, rest.length);
+			const inner = fold.createDiv({ cls: 'twobrain-home-checklist' });
+			for (const entry of rest) this.renderChecklistRow(inner, entry, dailyNote);
+		}
+
+		this.renderFiled(box, 'inactive', list.inactive, dailyNote);
+		this.renderFiled(box, 'archived', list.archived, dailyNote);
+	}
+
+	private renderChecklistHead(box: HTMLElement, list: Checklist, dailyNote: TFile | null): void {
+		const head = box.createDiv({ cls: 'twobrain-home-people-head' });
+		head.createSpan({ cls: 'twobrain-home-people-label', text: 'People' });
+
+		const parts: string[] = [];
+		if (list.overdue > 0) parts.push(`${list.overdue} to reach out to`);
+		if (list.logged > 0) parts.push(`${list.logged} logged today`);
+		if (parts.length === 0) parts.push('all caught up');
+
+		const count = head.createSpan({
+			cls: 'twobrain-home-people-count',
+			text: parts.join(' · '),
+		});
+		if (list.overdue > 0) count.addClass('is-overdue');
+
+		// Say why the boxes are dead. A `title` tooltip explains it on desktop
+		// and nowhere at all on a phone, which is where a missing daily note
+		// is most likely to be noticed first.
+		if (!dailyNote && list.active.length > 0) {
+			box.createDiv({
+				cls: 'twobrain-home-checklist-note',
+				text: "No note for today yet — open today's daily note to start ticking people off.",
 			});
 		}
 	}
 
-	private peopleLine(
-		box: HTMLElement, label: string, rows: PersonRow[], cls: string
+	/**
+	 * Inactive and archived contacts, folded away.
+	 *
+	 * Folded because the point of filing someone is that you stop seeing them,
+	 * and a section you have to scroll past every morning is not filed. The
+	 * restore button lives on the row rather than the heading so the list
+	 * stays scannable — you unfold, find the name, and put them back.
+	 */
+	private renderFiled(
+		box: HTMLElement, status: 'inactive' | 'archived',
+		entries: ChecklistEntry[], dailyNote: TFile | null
 	): void {
-		if (rows.length === 0) return;
-		const line = box.createDiv({ cls: 'twobrain-home-people-line' });
-		line.createSpan({ cls: 'twobrain-home-people-line-label', text: label });
+		if (entries.length === 0) return;
+		const label = `${CONTACT_STATUS_LABEL[status]} · ${entries.length}`;
+		const fold = this.renderFold(box, status, label, entries.length);
+		const inner = fold.createDiv({ cls: 'twobrain-home-checklist' });
+		for (const entry of entries) this.renderChecklistRow(inner, entry, dailyNote);
+	}
 
-		const names = line.createDiv({ cls: 'twobrain-home-people-names' });
-		for (const row of rows.slice(0, PEOPLE_ON_HOME)) {
-			const chip = names.createEl('a', {
-				cls: 'twobrain-home-person',
-				text: row.name,
-				href: row.path ?? this.targetPath('people'),
-			});
-			chip.addClass(cls);
-			chip.setAttribute('title', personHint(row));
-			chip.addEventListener('click', evt => {
-				evt.preventDefault();
-				this.open(row.path ?? this.targetPath('people'));
-			});
+	/**
+	 * A `<details>` whose open state survives the re-render a button triggers.
+	 *
+	 * Without this, restoring the third name in a folded archive of forty
+	 * slams the fold shut and you have to find your place again — which is
+	 * the whole interaction the user asked for, broken.
+	 */
+	private renderFold(
+		box: HTMLElement, key: keyof typeof this.open_, label: string, count: number
+	): HTMLDetailsElement {
+		const fold = box.createEl('details', { cls: 'twobrain-home-fold' });
+		fold.open = this.open_[key];
+		const summary = fold.createEl('summary', { cls: 'twobrain-home-fold-summary' });
+		summary.setText(label);
+		summary.setAttribute('aria-label', `${label} (${count})`);
+		fold.addEventListener('toggle', () => { this.open_[key] = fold.open; });
+		return fold;
+	}
+
+	private renderChecklistRow(
+		body: HTMLElement, entry: ChecklistEntry, dailyNote: TFile | null
+	): void {
+		const row = body.createDiv({ cls: 'twobrain-home-contact' });
+		if (entry.overdue) row.addClass('is-overdue');
+		if (entry.loggedToday) row.addClass('is-logged');
+
+		this.renderCheck(row, entry, dailyNote);
+
+		const link = row.createEl('a', {
+			cls: 'twobrain-home-contact-name',
+			text: entry.name,
+			href: entry.path,
+		});
+		link.setAttribute('title', this.checklist.hint(entry));
+		link.addEventListener('click', evt => {
+			evt.preventDefault();
+			this.open(entry.path);
+		});
+
+		const age = row.createSpan({
+			cls: 'twobrain-home-contact-age',
+			text: this.checklist.age(entry.daysSinceSeen),
+		});
+		age.setAttribute('title', this.checklist.hint(entry));
+
+		if (entry.owed > 0) {
+			row.createSpan({ cls: 'twobrain-home-contact-tag is-owed', text: `owe ${entry.owed}` })
+				.setAttribute('title', `${DIRECTION_LABEL.owed}: ${entry.owed}`);
 		}
-		if (rows.length > PEOPLE_ON_HOME) {
-			names.createSpan({
-				cls: 'twobrain-home-people-more',
-				text: `+${rows.length - PEOPLE_ON_HOME}`,
-			});
+		if (entry.waiting > 0) {
+			row.createSpan({
+				cls: 'twobrain-home-contact-tag is-waiting',
+				text: `wait ${entry.waiting}`,
+			}).setAttribute('title', `${DIRECTION_LABEL.waiting}: ${entry.waiting}`);
 		}
+
+		this.renderStatusButtons(row, entry);
+	}
+
+	/**
+	 * The check-off itself: one tap says "spoke to them today".
+	 *
+	 * It writes a bullet into today's daily note rather than a date onto the
+	 * person's page, because the journal is the temporal truth (D1) and a
+	 * person's page is a derived view whose `## Journal` section is rewritten
+	 * on every open (D3). The line is a link, so the existing journal scan
+	 * reads it back as contact and the whole vault agrees — no new store, and
+	 * the same number shows up on the People dashboard.
+	 */
+	private renderCheck(
+		row: HTMLElement, entry: ChecklistEntry, dailyNote: TFile | null
+	): void {
+		const box = row.createEl('input', { cls: 'twobrain-home-contact-check' });
+		box.type = 'checkbox';
+		box.checked = entry.loggedToday;
+		box.setAttribute('aria-label', entry.loggedToday
+			? `Undo today's contact with ${entry.name}`
+			: `Log that you spoke to ${entry.name} today`);
+
+		if (!dailyNote) {
+			box.disabled = true;
+			box.setAttribute('title', 'No daily note for today yet — open it first');
+			return;
+		}
+
+		box.setAttribute('title', entry.loggedToday
+			? `Logged in ${dailyNote.basename}. Uncheck to remove the line.`
+			: `Add "Talked to ${entry.name}" to ${dailyNote.basename}`);
+		box.addEventListener('change', () => {
+			box.disabled = true;
+			void this.logContact(entry, dailyNote, box.checked);
+		});
+	}
+
+	/**
+	 * Where a contact sits, changed in one tap.
+	 *
+	 * Buttons rather than a dropdown: a `<select>` on a phone opens a modal
+	 * picker for a three-way choice, and only ever one of the three is a move
+	 * you would make from this row anyway.
+	 */
+	private renderStatusButtons(row: HTMLElement, entry: ChecklistEntry): void {
+		const actions = row.createDiv({ cls: 'twobrain-home-contact-actions' });
+
+		const targets: ContactStatus[] = entry.status === 'active'
+			? ['inactive', 'archived']
+			: entry.status === 'inactive'
+				? ['active', 'archived']
+				: ['active'];
+
+		for (const target of targets) this.statusButton(actions, entry, target);
+	}
+
+	/**
+	 * A filing button, labelled with a word rather than an icon.
+	 *
+	 * An icon-only control explains itself through a hover tooltip, and a
+	 * phone has no hover — so on the device where these are hardest to hit,
+	 * "❙❙" would also have been unreadable. The words are short enough to fit
+	 * beside a truncated name, and on desktop the whole group stays hidden
+	 * until the row is hovered, so nothing is cluttered by the change.
+	 */
+	private statusButton(
+		actions: HTMLElement, entry: ChecklistEntry, target: ContactStatus
+	): void {
+		const label = target === 'active' ? 'Activate'
+			: target === 'inactive' ? 'Pause' : 'Archive';
+
+		const button = actions.createEl('button', { cls: 'twobrain-home-contact-action' });
+		button.addClass(`is-${target}`);
+		button.setText(label);
+		button.setAttribute('aria-label', `${label} ${entry.name}`);
+		button.setAttribute('title', target === 'active'
+			? `Move ${entry.name} back to active contacts`
+			: target === 'inactive'
+				? `Stop chasing ${entry.name} for now`
+				: `File ${entry.name} away`);
+		button.addEventListener('click', () => {
+			button.disabled = true;
+			void this.setStatus(entry, target);
+		});
 	}
 
 	/** Where to go next: today's note, planning, review, and a glance back. */
@@ -426,7 +601,8 @@ export class HomeView {
 				.map(f => ({
 					name: f.basename,
 					path: f.path,
-					archived: /\/Archive\//i.test(f.path),
+					archived: isArchivedPath(f.path),
+					status: this.statusOf(f.path),
 				}));
 
 			const rows = this.people.buildRows({
@@ -473,5 +649,97 @@ export class HomeView {
 	private open(path: string): void {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (file instanceof TFile) void this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	// ── Checklist actions ────────────────────────────────────────────────────
+
+	/**
+	 * Adds or removes the contact line in today's daily note.
+	 *
+	 * Appended at the very end. Today's note is either frozen — the daily
+	 * pipeline returns early once `### Activities:` exists — or still
+	 * generated, in which case that pipeline *prepends* its sections above
+	 * whatever body is there. Either way a trailing line survives, which is
+	 * why this is the one safe place to write from outside the pipeline.
+	 *
+	 * Unchecking only removes a line this checklist wrote. Someone can be
+	 * "logged today" because you wrote about them properly, and silently
+	 * deleting that sentence because a checkbox was clicked would be data loss.
+	 */
+	private async logContact(
+		entry: ChecklistEntry, dailyNote: TFile, checked: boolean
+	): Promise<void> {
+		const line = this.checklist.contactLogLine(entry.name);
+		let refused: string | null = null;
+
+		try {
+			// `vault.process` is an atomic read-modify-write. A plain read then
+			// modify loses one of two contacts checked off in quick succession,
+			// because both callbacks would have read the same note.
+			await this.app.vault.process(dailyNote, content => {
+				if (checked) return this.checklist.appendContactLog(content, line) ?? content;
+
+				const lines = content.split('\n');
+				const index = lines.indexOf(line);
+				if (index === -1) {
+					refused = `${entry.name} is named in today's note by something this checklist did not write — leaving it alone.`;
+					return content;
+				}
+
+				lines.splice(index, 1);
+				const next = lines.join('\n');
+				// Blanking a note is never what a checkbox meant to do, and a
+				// silently dropped write with the tick springing back is the
+				// one outcome that looks like a broken button.
+				if (next.trim() === '') {
+					refused = `Removing that line would leave ${dailyNote.basename} empty. Edit it directly.`;
+					return content;
+				}
+				return next;
+			});
+
+			if (refused !== null) new Notice(`2ndBrain: ${refused as string}`);
+			await this.rerender();
+		} catch (e) {
+			new Notice(`2ndBrain: Could not log contact with ${entry.name} — ${(e as Error).message}`);
+			console.error('[2ndBrain]', e);
+			await this.rerender();
+		}
+	}
+
+	/**
+	 * Files a contact, and shows the move immediately.
+	 *
+	 * `processFrontMatter` writes the file, but the metadata cache the next
+	 * render reads from is refreshed asynchronously — so re-rendering straight
+	 * away can draw the row exactly where it was, and the button looks dead.
+	 * The pending value is held until the cache catches up and agrees.
+	 */
+	private async setStatus(entry: ChecklistEntry, status: ContactStatus): Promise<void> {
+		this.pending.set(entry.path, status);
+		try {
+			await setPersonStatus(this.app, entry.path, status);
+		} catch (e) {
+			this.pending.delete(entry.path);
+			new Notice(`2ndBrain: Could not file ${entry.name} — ${(e as Error).message}`);
+			console.error('[2ndBrain]', e);
+		}
+		await this.rerender();
+	}
+
+	/** The filed status, preferring a write the metadata cache has not caught up with. */
+	private statusOf(path: string): ContactStatus {
+		const actual = personStatus(this.app, path);
+		const pending = this.pending.get(path);
+		if (pending === undefined) return actual;
+		if (pending === actual) {
+			this.pending.delete(path);
+			return actual;
+		}
+		return pending;
+	}
+
+	private async rerender(): Promise<void> {
+		if (this.container) await this.render(this.container);
 	}
 }

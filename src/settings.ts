@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting } from 'obsidian';
 import TwoBrainPlugin from './main';
 import { ROLES, Role } from './roles';
 import { CommitmentCache } from './utilities/CommitmentIndex';
+import { DEFAULT_OVERDUE_DAYS } from './components/ContactChecklist';
 
 export { ROLES };
 export type { Role };
@@ -27,6 +28,8 @@ export interface PluginSettings {
 	openHomeOnStartup: HomeStartupMode;
 	removeScriptsFromDailyNotes: boolean;
 	syncGraceSeconds: number;
+	/** Days of silence before Home flags an active contact as worth reaching out to. */
+	contactOverdueDays: number;
 	// Last role picked from the status bar — used only to preselect the picker.
 	currentRole: Role | null;
 	/**
@@ -50,6 +53,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	openHomeOnStartup: 'off',
 	removeScriptsFromDailyNotes: true,
 	syncGraceSeconds: 5,
+	contactOverdueDays: DEFAULT_OVERDUE_DAYS,
 	currentRole: null,
 };
 
@@ -105,6 +109,19 @@ export class TwoBrainSettingsTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.peopleFolder)
 				.onChange(async (value) => {
 					this.plugin.settings.peopleFolder = value || DEFAULT_SETTINGS.peopleFolder;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Reach out after")
+			.setDesc("Days of silence before an active contact is flagged on the people checklist. Anyone filed as inactive or archived is never flagged.")
+			.addText(text => text
+				.setPlaceholder(String(DEFAULT_OVERDUE_DAYS))
+				.setValue(String(this.plugin.settings.contactOverdueDays))
+				.onChange(async (value) => {
+					const days = Number.parseInt(value, 10);
+					this.plugin.settings.contactOverdueDays =
+						Number.isFinite(days) && days > 0 ? days : DEFAULT_SETTINGS.contactOverdueDays;
 					await this.plugin.saveSettings();
 				}));
 

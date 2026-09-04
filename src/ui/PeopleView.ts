@@ -7,6 +7,8 @@ import {
 } from '../components/PeopleDashboard';
 import { PersonPage } from '../components/PeopleDashboard';
 import { DIRECTION_LABEL, UNASSIGNED, Direction } from '../components/Commitments';
+import { CONTACT_STATUS_LABEL } from '../components/ContactChecklist';
+import { personStatus, isArchivedPath } from '../utilities/PersonStatus';
 import { relativeAge } from './ProjectsView';
 
 export interface PeopleViewSettings {
@@ -140,7 +142,8 @@ export class PeopleView {
 			pages.push({
 				name: file.basename,
 				path: file.path,
-				archived: /\/Archive\//i.test(file.path),
+				archived: isArchivedPath(file.path),
+				status: personStatus(this.app, file.path),
 			});
 		}
 		return pages;
@@ -370,8 +373,11 @@ export class PeopleView {
 			evt.preventDefault();
 			this.open(row.path!);
 		});
-		if (row.archived) {
-			cell.createSpan({ cls: 'twobrain-people-tag', text: 'archived' });
+		if (row.status !== 'active') {
+			cell.createSpan({
+				cls: 'twobrain-people-tag',
+				text: CONTACT_STATUS_LABEL[row.status].toLowerCase(),
+			});
 		}
 	}
 

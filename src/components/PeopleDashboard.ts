@@ -9,6 +9,7 @@
  */
 
 import { Commitment, ContactStat, Direction, UNASSIGNED, daysBetween } from './Commitments';
+import { ContactStatus } from './ContactChecklist';
 
 /**
  * Days an open promise can sit before it counts as aging.
@@ -88,6 +89,11 @@ export interface PersonPage {
 	name: string;
 	path: string;
 	archived: boolean;
+	/**
+	 * How the user filed them, when they have said. Defaults from `archived`
+	 * so callers that predate the checklist keep their existing behaviour.
+	 */
+	status?: ContactStatus;
 }
 
 /** One commitment, with everything the view needs to draw a row. */
@@ -109,6 +115,8 @@ export interface PersonRow {
 	/** Their People page, or null when they are only ever mentioned in the journal. */
 	path: string | null;
 	archived: boolean;
+	/** How the user filed them. 'active' for anyone with no page to file. */
+	status: ContactStatus;
 	/** True when the journal links them but no People page exists. */
 	missingPage: boolean;
 	owed: number;
@@ -151,16 +159,17 @@ function healthOf(
 	oldestOpen: number,
 	daysSinceSeen: number | null,
 	days: number,
-	archived: boolean
+	filed: boolean
 ): PersonHealth {
 	if (oldestOpen >= AGING_DAYS) return 'aging';
 	if (open > 0) return 'open';
 	if (daysSinceSeen === null) return 'dormant';
 	if (daysSinceSeen < QUIET_DAYS) return 'active';
-	// An archived person is not "quiet" — you filed them on purpose, and
-	// nagging about a relationship you deliberately closed is noise. Neither
-	// is someone you barely mentioned: there was no rhythm to break.
-	return !archived && days >= HISTORY_DAYS ? 'quiet' : 'dormant';
+	// Someone you filed as inactive or archived is not "quiet" — you set that
+	// on purpose, and nagging about a relationship you deliberately parked is
+	// noise. Neither is someone you barely mentioned: there was no rhythm to
+	// break.
+	return !filed && days >= HISTORY_DAYS ? 'quiet' : 'dormant';
 }
 
 export class PeopleDashboard {
@@ -226,11 +235,14 @@ export class PeopleDashboard {
 			// Unassigned is a bucket, not a person: it has no page, and calling
 			// it "quiet" or telling you to create a page for it is nonsense.
 			const isBucket = name === UNASSIGNED;
+			const status: ContactStatus =
+				page?.status ?? (page?.archived ? 'archived' : 'active');
 
 			rows.push({
 				name,
 				path: page?.path ?? null,
 				archived: page?.archived ?? false,
+				status,
 				missingPage: !page && !isBucket,
 				owed: open.filter(c => c.direction === 'owed').length,
 				waiting: open.filter(c => c.direction === 'waiting').length,
@@ -245,7 +257,7 @@ export class PeopleDashboard {
 					? (oldestOpen >= AGING_DAYS ? 'aging' : open.length ? 'open' : 'dormant')
 					: healthOf(
 						open.length, oldestOpen, daysSinceSeen,
-						stat?.days ?? 0, page?.archived ?? false
+						stat?.days ?? 0, status !== 'active'
 					),
 				commitments: commitmentRows,
 			});

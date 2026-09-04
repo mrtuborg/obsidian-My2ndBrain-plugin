@@ -205,7 +205,7 @@ page is readable in one glance in landscape on a phone.
 | Banner | Greeting, today's date, and how many activities you have taken to work out of everything open |
 | Role cards | Per role: `taken / open`, a bar for the share you committed to today, and a badge counting that role's projects needing a decision. The name links to today's Context page when it exists |
 | Health signals | Only what is actually wrong — stalled projects, projects with no next action, untriaged activities, activities with no role, promises aging, people gone quiet. Each chip links to the note that resolves it. When nothing fires it says so instead of showing zeroes |
-| People | Who you owe, who you're in touch with, and who's drifting — by name, each linking to their page. Unconditional: the health signals above only fire when something is wrong, and a good week must not make relationships disappear from Home, because that is exactly when a drift starts. Hover a name for what's outstanding and when you last wrote about them |
+| People | The communication checklist — see below. Unconditional: the health signals above only fire when something is wrong, and a good week must not make relationships disappear from Home, because that is exactly when a drift starts |
 | Life balance | A radar with an axis per role, showing how many days each one showed up in your journal over the last 12 months. Normalized against your busiest role, so the shape reads as balance rather than volume — round is even, a spike is a year spent on one thing. A dashed ring marks your own average |
 | Consistency | A year of days, one cell each, shaded by how full the day was relative to your typical day. Current streak, longest streak, and total active days. Click any day to open it |
 | Next steps | Today's note, Plan (matrix), Projects, People, Inbox — plus the last few days for a glance back |
@@ -225,6 +225,45 @@ yesterday's tabs back and then lose focus to them.
 
 Home never creates anything. If today's daily note or a role's Context page doesn't exist yet, it shows a
 plain label rather than a link — creating those stays owned by opening them directly.
+
+### The communication checklist
+
+The one section of Home you can act on. Everything else reports; this closes a loop without leaving the
+page.
+
+Each contact is a row: how long since you last spoke, any promises open in either direction, a checkbox,
+and buttons for where they sit. Rows are ordered by **longest silence first** — someone you have never
+written about ranks above everyone. Past *Settings → 2ndBrain Engine → Reach out after* (30 days by
+default) the age turns amber. Only the eight with the strongest claim on you are shown; the rest fold away.
+
+**Checking someone off** appends `- Talked to [[Name]]` to the end of today's daily note. Nothing is
+stamped on their page: the journal is the temporal truth (D1) and a People page's `## Journal` section is
+regenerated on every open (D3), so a date written there would be erased. Because the line is a link, the
+same journal scan that feeds the People dashboard reads it straight back — one number, one source, no new
+store. Unchecking removes that exact line and nothing else; a sentence you wrote yourself that happens to
+name the same person is left alone. If today's note doesn't exist yet the checkbox is disabled, since Home
+never creates anything.
+
+**Filing someone** moves them between three states:
+
+| State | Means | Effect |
+|---|---|---|
+| Active | In the rotation | On the checklist, chased when they go quiet |
+| Inactive | Not right now | Behind a fold, never flagged as overdue or drifting |
+| Archived | Done | Behind a fold, never flagged |
+
+Inactive and archived are folded away — the point of filing someone is that you stop seeing them. Unfold
+the section and the **Activate** button on their row puts them straight back. The fold remembers whether it was
+open, so restoring the third name out of twelve doesn't slam the list shut.
+
+This is stored as a `contactStatus` field in the person's frontmatter, not by moving the file. Renaming a
+page rewrites every journal link pointing at it — which is the very history the checklist reads. People
+already filed under `People/Archive/` are treated as archived without needing the field, and an explicit
+field outvotes the folder, so they can be brought back like anyone else.
+
+Filing someone is also a statement the rest of the plugin honours: an inactive or archived contact stops
+counting toward the "people gone quiet" health signal and the People dashboard's *Gone quiet* section. You
+said their silence was fine; continuing to raise it would be the plugin arguing with you.
 
 
 ## Theme

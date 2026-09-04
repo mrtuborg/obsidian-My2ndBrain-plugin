@@ -42,9 +42,20 @@ class FakeEl {
 	click(c: string) {
 		for (const cb of this.one(c)?.listeners['click'] ?? []) cb({ preventDefault() {} });
 	}
+	fire(type: string) {
+		for (const cb of this.listeners[type] ?? []) cb({ preventDefault() {} });
+	}
+	/** The checklist row for one person, by the name shown on it. */
+	row(name: string): FakeEl | undefined {
+		return this.withClass('twobrain-home-contact')
+			.find(r => r.all().some(c => c.classes.has('twobrain-home-contact-name') && c.text === name));
+	}
 }
 
 const TODAY = new Date().toISOString().slice(0, 10);
+
+/** Lets the async click handler and the re-render it triggers finish. */
+const flush = () => new Promise(r => setTimeout(r, 0));
 
 function daysAgo(n: number): string {
 	const d = new Date();
@@ -90,12 +101,55 @@ function makeApp(files: Record<string, string>) {
 		// The consistency grid reads size straight off the vault index.
 		stat: { size: (store.get(p) ?? '').length, ctime: 0, mtime: 0 },
 	});
+	// Flat `key: value` frontmatter is all the checklist stores, so the fake
+	// parser only has to handle that much.
+	const frontmatterOf = (p: string): Record<string, unknown> => {
+		const text = store.get(p) ?? '';
+		const m = /^---\n([\s\S]*?)\n---/.exec(text);
+		if (!m) return {};
+		const fm: Record<string, unknown> = {};
+		for (const line of m[1]!.split('\n')) {
+			const kv = /^([A-Za-z0-9_]+):\s*(.*)$/.exec(line);
+			if (kv) fm[kv[1]!] = kv[2]!.trim();
+		}
+		return fm;
+	};
+
+	const writeFrontmatter = (p: string, fm: Record<string, unknown>) => {
+		const text = store.get(p) ?? '';
+		const body = text.replace(/^---\n[\s\S]*?\n---\n?/, '');
+		const keys = Object.keys(fm);
+		store.set(p, keys.length === 0
+			? body
+			: `---\n${keys.map(k => `${k}: ${String(fm[k])}`).join('\n')}\n---\n${body}`);
+	};
+
 	const app = {
 		vault: {
 			getAbstractFileByPath: (p: string) => (store.has(p) ? handle(p) : null),
 			read: async (f: { path: string }) => store.get(f.path) ?? '',
 			modify: async (f: { path: string }, c: string) => { store.set(f.path, c); },
+			// Obsidian's atomic read-modify-write. Modelled here because the
+			// checklist relies on it to not lose one of two contacts ticked
+			// off in quick succession.
+			process: async (f: { path: string }, fn: (data: string) => string) => {
+				const next = fn(store.get(f.path) ?? '');
+				store.set(f.path, next);
+				return next;
+			},
 			getFiles: () => [...store.keys()].map(handle),
+		},
+		metadataCache: {
+			getFileCache: (f: { path: string }) => ({ frontmatter: frontmatterOf(f.path) }),
+		},
+		fileManager: {
+			processFrontMatter: async (
+				f: { path: string }, fn: (fm: Record<string, unknown>) => void
+			) => {
+				const fm = frontmatterOf(f.path);
+				fn(fm);
+				writeFrontmatter(f.path, fm);
+			},
 		},
 		workspace: {
 			getLeaf: () => ({
@@ -103,7 +157,7 @@ function makeApp(files: Record<string, string>) {
 			}),
 		},
 	};
-	return { app, opened };
+	return { app, opened, store };
 }
 
 function makeCacheStore() {
@@ -112,10 +166,10 @@ function makeCacheStore() {
 }
 
 async function renderWith(files: Record<string, string>) {
-	const { app, opened } = makeApp(files);
+	const { app, opened, store } = makeApp(files);
 	const root = new FakeEl('div');
 	await new HomeView(app as any, SETTINGS, makeCacheStore()).render(root as unknown as HTMLElement);
-	return { root, opened };
+	return { root, opened, store, app };
 }
 
 describe('HomeView banner', () => {
@@ -364,50 +418,48 @@ describe('HomeView consistency grid', () => {
 	});
 });
 
-describe('HomeView people strip', () => {
-	it('names who I am in touch with, not just a count', async () => {
+describe('HomeView communication checklist', () => {
+	it('lists each contact with how long since I last spoke to them', async () => {
 		const { root } = await renderWith({
 			[`Journal/${daysAgo(1)}.md`]: 'Synced with [[Ida Haugland]]',
 			'People/Ida Haugland.md': '---\n---\n',
 		});
-		const names = root.withClass('twobrain-home-person').map(e => e.text);
-		expect(names).toContain('Ida Haugland');
-		expect(root.one('twobrain-home-people')).toBeDefined();
+		const row = root.row('Ida Haugland');
+		expect(row).toBeDefined();
+		expect(row!.one('twobrain-home-contact-age')!.text).toBe('yesterday');
 	});
 
-	it('shows the strip even when nothing is wrong', async () => {
-		// The health signals above only fire on a problem. Relationships must
-		// not vanish from Home on a good week — that is when drift starts.
+	it('puts the longest silence first — that is the whole point of the list', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(2)}.md`]: 'Coffee with [[Ida Haugland]]',
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Ida Haugland.md': '---\n---\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		const names = root.withClass('twobrain-home-contact-name').map(e => e.text);
+		expect(names).toEqual(['Frederik Stray', 'Ida Haugland']);
+	});
+
+	it('flags a contact past the reach-out threshold', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		expect(root.row('Frederik Stray')!.classes.has('is-overdue')).toBe(true);
+		expect(root.one('twobrain-home-people-count')!.text).toContain('1 to reach out to');
+	});
+
+	it('sinks someone already logged today to the bottom and strikes them out', async () => {
 		const { root } = await renderWith({
 			[`Journal/${TODAY}.md`]: 'Coffee with [[Ida Haugland]]',
-			'People/Ida Haugland.md': '---\n---\n',
-		});
-		expect(root.withClass('twobrain-home-signal')
-			.some(s => s.text.includes('quiet') || s.text.includes('aging'))).toBe(false);
-		expect(root.one('twobrain-home-people')).toBeDefined();
-		expect(root.one('twobrain-home-people-count')!.text).toBe('1 in touch · 0 drifting');
-	});
-
-	it('separates people I owe from people I am merely in touch with', async () => {
-		const { root } = await renderWith({
-			[`Journal/${daysAgo(1)}.md`]:
-				'- [ ] Send the BOM @owed [[Ida Haugland]]\nCoffee with [[Frederik Stray]]',
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
 			'People/Ida Haugland.md': '---\n---\n',
 			'People/Frederik Stray.md': '---\n---\n',
 		});
-		const labels = root.withClass('twobrain-home-people-line-label').map(e => e.text);
-		expect(labels).toEqual(['Owe', 'In touch']);
-		expect(root.withClass('is-owing').map(e => e.text)).toEqual(['Ida Haugland']);
-		expect(root.withClass('is-active').map(e => e.text)).toEqual(['Frederik Stray']);
-	});
-
-	it('flags a drifting relationship by name', async () => {
-		const { root } = await renderWith({
-			[`Journal/${daysAgo(70)}.md`]: 'Chat with [[Frederik Stray]]',
-			[`Journal/${daysAgo(80)}.md`]: 'Intro to [[Frederik Stray]]',
-			'People/Frederik Stray.md': '---\n---\n',
-		});
-		expect(root.withClass('is-quiet').map(e => e.text)).toEqual(['Frederik Stray']);
+		const names = root.withClass('twobrain-home-contact-name').map(e => e.text);
+		expect(names).toEqual(['Frederik Stray', 'Ida Haugland']);
+		expect(root.row('Ida Haugland')!.classes.has('is-logged')).toBe(true);
+		expect(root.one('twobrain-home-people-count')!.text).toContain('1 logged today');
 	});
 
 	it('links a name straight to their page', async () => {
@@ -415,12 +467,201 @@ describe('HomeView people strip', () => {
 			[`Journal/${daysAgo(1)}.md`]: 'Synced with [[Ida Haugland]]',
 			'People/Ida Haugland.md': '---\n---\n',
 		});
-		root.click('twobrain-home-person');
+		root.click('twobrain-home-contact-name');
 		expect(opened).toContain('People/Ida Haugland.md');
 	});
 
-	it('leaves the strip out entirely when there are no people at all', async () => {
+	it('leaves the section out entirely when there are no people at all', async () => {
 		const { root } = await renderWith({ [`Journal/${TODAY}.md`]: 'Quiet day' });
 		expect(root.one('twobrain-home-people')).toBeUndefined();
+	});
+
+	it('drops people the journal names but the vault has no page for', async () => {
+		// There is nowhere to file a status without a file. The People
+		// dashboard already offers to create the page.
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(1)}.md`]: 'Synced with [[People/Nobody Here]]',
+		});
+		expect(root.one('twobrain-home-people')).toBeUndefined();
+	});
+});
+
+describe('HomeView checklist check-off', () => {
+	const check = (root: FakeEl, name: string, checked: boolean) => {
+		const box = root.row(name)!.one('twobrain-home-contact-check')!;
+		(box as any).checked = checked;
+		box.fire('change');
+	};
+
+	it("writes a linked bullet into today's note", async () => {
+		const { root, store } = await renderWith({
+			[`Journal/${TODAY}.md`]: 'Some work\n',
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		check(root, 'Frederik Stray', true);
+		await flush();
+		expect(store.get(`Journal/${TODAY}.md`)).toContain('- Talked to [[Frederik Stray]]');
+	});
+
+	it('appends rather than replacing what is already in the note', async () => {
+		const { root, store } = await renderWith({
+			[`Journal/${TODAY}.md`]: '## Notes\nSomething I wrote\n',
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		check(root, 'Frederik Stray', true);
+		await flush();
+		const text = store.get(`Journal/${TODAY}.md`)!;
+		expect(text).toContain('Something I wrote');
+		expect(text.trimEnd().endsWith('- Talked to [[Frederik Stray]]')).toBe(true);
+	});
+
+	it('disables the check when there is no note for today to write into', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		const box = root.row('Frederik Stray')!.one('twobrain-home-contact-check')!;
+		expect((box as any).disabled).toBe(true);
+	});
+
+	it('removes only a line the checklist itself wrote', async () => {
+		const { root, store } = await renderWith({
+			[`Journal/${TODAY}.md`]: '## Notes\nReal work\n- Talked to [[Frederik Stray]]\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		check(root, 'Frederik Stray', false);
+		await flush();
+		const text = store.get(`Journal/${TODAY}.md`)!;
+		expect(text).not.toContain('Talked to');
+		expect(text).toContain('Real work');
+	});
+
+	it('refuses to empty the note rather than writing a blank file', async () => {
+		// FileIO guards against blanking a note, so the write would be dropped
+		// on the floor and the checkbox would spring back with no explanation.
+		const { root, store } = await renderWith({
+			[`Journal/${TODAY}.md`]: '- Talked to [[Frederik Stray]]\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		check(root, 'Frederik Stray', false);
+		await flush();
+		expect(store.get(`Journal/${TODAY}.md`)).toContain('- Talked to [[Frederik Stray]]');
+	});
+
+	it('leaves a real journal sentence alone when unchecked', async () => {
+		const { root, store } = await renderWith({
+			[`Journal/${TODAY}.md`]: 'Long call with [[Frederik Stray]] about the BOM\n',
+			'People/Frederik Stray.md': '---\n---\n',
+		});
+		check(root, 'Frederik Stray', false);
+		await flush();
+		expect(store.get(`Journal/${TODAY}.md`)).toContain('Long call with [[Frederik Stray]]');
+	});
+});
+
+describe('HomeView contact status', () => {
+	const press = (root: FakeEl, name: string, label: string) => {
+		const button = root.row(name)!.withClass('twobrain-home-contact-action')
+			.find(b => b.attrs['aria-label'] === `${label} ${name}`);
+		expect(button).toBeDefined();
+		button!.fire('click');
+	};
+
+	const files = {
+		[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+		'People/Frederik Stray.md': '---\nstartDate: 2026-01-01\n---\n',
+	};
+
+	it('files a contact as inactive without moving the file', async () => {
+		const { root, store } = await renderWith(files);
+		press(root, 'Frederik Stray', 'Pause');
+		await flush();
+		expect(store.get('People/Frederik Stray.md')).toContain('contactStatus: inactive');
+		expect(store.has('People/Frederik Stray.md')).toBe(true);
+	});
+
+	it('keeps frontmatter it did not put there', async () => {
+		const { root, store } = await renderWith(files);
+		press(root, 'Frederik Stray', 'Archive');
+		await flush();
+		expect(store.get('People/Frederik Stray.md')).toContain('startDate: 2026-01-01');
+	});
+
+	it('folds archived contacts away with a restore button on each row', async () => {
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\ncontactStatus: archived\n---\n',
+		});
+		const fold = root.one('twobrain-home-fold');
+		expect(fold).toBeDefined();
+		expect(fold!.one('twobrain-home-fold-summary')!.text).toBe('Archived · 1');
+		expect((fold as any).open).toBe(false);
+		expect(root.row('Frederik Stray')!.withClass('twobrain-home-contact-action')
+			.map(b => b.attrs['aria-label'])).toEqual(['Activate Frederik Stray']);
+	});
+
+	it('moves an archived contact back to active', async () => {
+		const { root, store } = await renderWith({
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\ncontactStatus: archived\n---\n',
+		});
+		press(root, 'Frederik Stray', 'Activate');
+		await flush();
+		expect(store.get('People/Frederik Stray.md')).not.toContain('contactStatus');
+	});
+
+	it('shows the move even while the metadata cache is still stale', async () => {
+		// `processFrontMatter` writes the file, but the cache the next render
+		// reads from refreshes asynchronously. Without holding the pending
+		// value the row redraws exactly where it was and the button looks dead.
+		const { root, app } = await renderWith(files);
+		app.metadataCache.getFileCache = () => ({ frontmatter: {} });
+
+		press(root, 'Frederik Stray', 'Pause');
+		await flush();
+
+		const fold = root.withClass('twobrain-home-fold')
+			.find(f => f.one('twobrain-home-fold-summary')!.text.startsWith('Inactive'));
+		expect(fold).toBeDefined();
+		expect(fold!.row('Frederik Stray')).toBeDefined();
+	});
+
+	it('does not let a pending value outlive the write it stood in for', async () => {
+		// The optimistic override self-clears once the cache agrees. If it did
+		// not, the first status a contact was given would be frozen forever.
+		const { root, store } = await renderWith(files);
+		press(root, 'Frederik Stray', 'Pause');
+		await flush();
+		press(root, 'Frederik Stray', 'Activate');
+		await flush();
+
+		expect(store.get('People/Frederik Stray.md')).not.toContain('contactStatus');
+		expect(root.row('Frederik Stray')).toBeDefined();
+		expect(root.withClass('twobrain-home-fold')).toHaveLength(0);
+	});
+
+	it('keeps an explicit status for someone the Archive folder would archive', async () => {
+		// Path and field disagree; the field the user set has to win, or
+		// "move back to active" silently does nothing for archived people.
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(40)}.md`]: 'Chat with [[People/Archive/Frederik Stray]]',
+			'People/Archive/Frederik Stray.md': '---\ncontactStatus: active\n---\n',
+		});
+		expect(root.row('Frederik Stray')).toBeDefined();
+		expect(root.row('Frederik Stray')!.classes.has('is-overdue')).toBe(true);
+	});
+
+	it('stops reporting a paused contact as drifting', async () => {
+		// You said their silence is fine. Continuing to raise it as a health
+		// signal is the plugin arguing with the user.
+		const { root } = await renderWith({
+			[`Journal/${daysAgo(70)}.md`]: 'Chat with [[Frederik Stray]]',
+			[`Journal/${daysAgo(80)}.md`]: 'Intro to [[Frederik Stray]]',
+			'People/Frederik Stray.md': '---\ncontactStatus: inactive\n---\n',
+		});
+		expect(root.withClass('twobrain-home-signal')
+			.some(s => s.text.includes('quiet'))).toBe(false);
 	});
 });
