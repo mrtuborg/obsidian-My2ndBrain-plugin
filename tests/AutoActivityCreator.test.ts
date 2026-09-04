@@ -7,11 +7,15 @@ function makeApp(opts: {
 	otherVaultPaths?: string[]; // files that exist elsewhere in the vault (e.g. Archived/), not at the exact checked path
 	createMock?: jest.Mock;
 	createFolderMock?: jest.Mock;
+	readMock?: jest.Mock;
+	modifyMock?: jest.Mock;
 }) {
 	const existing = new Set(opts.existingPaths ?? []);
 	const allPaths = [...existing, ...(opts.otherVaultPaths ?? [])];
 	const create = opts.createMock ?? jest.fn().mockResolvedValue({});
 	const createFolder = opts.createFolderMock ?? jest.fn().mockResolvedValue(undefined);
+	const read = opts.readMock ?? jest.fn().mockResolvedValue('');
+	const modify = opts.modifyMock ?? jest.fn().mockResolvedValue(undefined);
 
 	return {
 		vault: {
@@ -23,6 +27,8 @@ function makeApp(opts: {
 			}))),
 			create,
 			createFolder,
+			read,
+			modify,
 		},
 	} as any;
 }
@@ -172,6 +178,30 @@ describe('AutoActivityCreator', () => {
 		expect(content).toContain('## Journal');
 	});
 
+	// Role: created from the plain daily note (no role given) → blank role
+	// field, still present and visible so the user can click in and fill it.
+	it('writes a blank role field when no role is given', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ createMock });
+
+		await creator.createMissingFromContent(app, '[[Activities/New.md]]', TODAY, 'inbox');
+
+		const content: string = createMock.mock.calls[0][1];
+		expect(content).toContain('role: \n');
+	});
+
+	// Role: created from a Contexts/YYYY-MM-DD-<Role>.md page → role
+	// pre-filled with that page's role.
+	it('pre-fills the role field when created from a Context page', async () => {
+		const createMock = jest.fn().mockResolvedValue({});
+		const app = makeApp({ createMock });
+
+		await creator.createMissingFromContent(app, '[[Activities/New.md]]', TODAY, 'inbox', 'Engineer');
+
+		const content: string = createMock.mock.calls[0][1];
+		expect(content).toContain('role: Engineer');
+	});
+
 	// AAC-11: parent folder created if missing
 	it('creates parent folder before creating the file', async () => {
 		const createMock = jest.fn().mockResolvedValue({});
@@ -263,5 +293,112 @@ describe('AutoActivityCreator', () => {
 		);
 
 		expect(createMock).not.toHaveBeenCalled();
+	});
+
+	describe('contentLinksTo', () => {
+		it('detects a link to the target path via a full-path wikilink', () => {
+			expect(
+				creator.contentLinksTo('##### [[Activities/My Task.md|My Task]]', 'Activities/My Task.md')
+			).toBe(true);
+		});
+
+		it('detects a link to the target path via a bare-name wikilink', () => {
+			expect(
+				creator.contentLinksTo('[[My Task]]', 'Activities/My Task.md')
+			).toBe(true);
+		});
+
+		it('returns false when no link resolves to the target path', () => {
+			expect(
+				creator.contentLinksTo('[[Some Other Task]]', 'Activities/My Task.md')
+			).toBe(false);
+		});
+
+		it('returns false for empty content', () => {
+			expect(creator.contentLinksTo('', 'Activities/My Task.md')).toBe(false);
+		});
+	});
+
+	describe('initializeIfEmpty', () => {
+		// Blank file (e.g. Obsidian's native "create note from link click")
+		// gets the same default frontmatter as AutoActivityCreator-made stubs.
+		it('populates a blank existing file with default content', async () => {
+			const readMock = jest.fn().mockResolvedValue('');
+			const modifyMock = jest.fn().mockResolvedValue(undefined);
+			const app = makeApp({
+				existingPaths: ['People/Jonas Lien.md'],
+				readMock,
+				modifyMock,
+			});
+
+			const result = await creator.initializeIfEmpty(app, 'People/Jonas Lien.md', TODAY, 'inbox');
+
+			expect(result).toBe(true);
+			expect(modifyMock).toHaveBeenCalledTimes(1);
+			const [, content] = modifyMock.mock.calls[0];
+			expect(content).toContain('startDate:');
+			expect(content).toContain('stage: doing');
+			expect(content).toContain('## Description');
+			expect(content).toContain('## Journal');
+		});
+
+		// Whitespace-only content still counts as empty.
+		it('treats whitespace-only content as empty', async () => {
+			const readMock = jest.fn().mockResolvedValue('   \n\n\t');
+			const modifyMock = jest.fn().mockResolvedValue(undefined);
+			const app = makeApp({
+				existingPaths: ['People/Jonas Lien.md'],
+				readMock,
+				modifyMock,
+			});
+
+			const result = await creator.initializeIfEmpty(app, 'People/Jonas Lien.md', TODAY, 'inbox');
+
+			expect(result).toBe(true);
+			expect(modifyMock).toHaveBeenCalledTimes(1);
+		});
+
+		// Never clobber a note that already has real content.
+		it('does not touch a file that already has content', async () => {
+			const readMock = jest.fn().mockResolvedValue('---\nstartDate: 2026-01-01\n---\nSome notes');
+			const modifyMock = jest.fn().mockResolvedValue(undefined);
+			const app = makeApp({
+				existingPaths: ['People/Jonas Lien.md'],
+				readMock,
+				modifyMock,
+			});
+
+			const result = await creator.initializeIfEmpty(app, 'People/Jonas Lien.md', TODAY, 'inbox');
+
+			expect(result).toBe(false);
+			expect(modifyMock).not.toHaveBeenCalled();
+		});
+
+		// Populating from a Context page link click carries the role through.
+		it('pre-fills role when a role is passed', async () => {
+			const readMock = jest.fn().mockResolvedValue('');
+			const modifyMock = jest.fn().mockResolvedValue(undefined);
+			const app = makeApp({
+				existingPaths: ['Activities/New.md'],
+				readMock,
+				modifyMock,
+			});
+
+			await creator.initializeIfEmpty(app, 'Activities/New.md', TODAY, 'inbox', 'Family');
+
+			const [, content] = modifyMock.mock.calls[0];
+			expect(content).toContain('role: Family');
+		});
+
+		// Missing file entirely → no-op, nothing to initialize.
+		it('returns false when the file does not exist', async () => {
+			const modifyMock = jest.fn().mockResolvedValue(undefined);
+			const app = makeApp({ modifyMock });
+
+			const result = await creator.initializeIfEmpty(app, 'People/Ghost.md', TODAY, 'inbox');
+
+			expect(result).toBe(false);
+			expect(modifyMock).not.toHaveBeenCalled();
+		});
 	});
 });

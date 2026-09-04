@@ -5,8 +5,9 @@ import { AppLike } from '../utilities/FileIO';
 // Re-export for test imports that reference AppLike from NoteBlocksParser
 export type { AppLike };
 
-// Match YYYY-MM-DD exactly.
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Match YYYY-MM-DD, optionally followed by "-<suffix>" (e.g. a Contexts
+// page's "YYYY-MM-DD-<Role>.md" filename) — both are journal-dated content.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}(-.+)?$/;
 
 export class NoteBlocksParser {
 

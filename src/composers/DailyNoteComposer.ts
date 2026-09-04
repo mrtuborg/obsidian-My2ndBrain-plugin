@@ -6,6 +6,12 @@ import { AutoActivityCreator } from '../components/AutoActivityCreator';
 import { ScriptsRemove } from '../utilities/ScriptsRemove';
 import { TodoSyncManager } from '../components/TodoSyncManager';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
+import { buildContextLinksLine, upsertContextLinksLine } from '../utilities/ContextLinks';
+import { contextsFolderForNote, matchContextPagePath, contextPagePath } from '../utilities/ContextPaths';
+import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
+import { parseActivityBlocks, stripActivityBlocks } from '../utilities/DailyNoteSection';
+import { PlanDateActivation } from '../components/PlanDateActivation';
+import { ROLES } from '../roles';
 
 export class DailyNoteComposer {
 	private fileIO = new FileIO();
@@ -16,15 +22,18 @@ export class DailyNoteComposer {
 	private scriptsRemove = new ScriptsRemove();
 	private activityComposer: ActivityComposer;
 	private todoSyncManager: TodoSyncManager;
+	private planDates: PlanDateActivation;
 
 	constructor(private settings: ComposerSettings) {
 		this.activityComposer = new ActivityComposer(settings);
 		this.activitiesIP = new ActivitiesInProgress(settings);
+		this.planDates = new PlanDateActivation(settings);
 		this.todoSyncManager = new TodoSyncManager(
 			(app, file, prebuilt) => this.activityComposer.processActivity(app as AppLike, file, prebuilt),
 			settings
 		);
 	}
+
 
 	async processDailyNote(
 		app: AppLike,
@@ -43,7 +52,7 @@ export class DailyNoteComposer {
 		// If today's note was already fully processed (has Activities section),
 		// treat it as a static frozen record — do not reprocess.
 		// The user can delete the Activities section to force a refresh.
-		if (pageIsToday && existing.includes('### Activities:')) {
+		if (pageIsToday && existing.includes(ACTIVITIES_BUILT_MARKER)) {
 			return;
 		}
 
@@ -79,7 +88,7 @@ export class DailyNoteComposer {
 			const syncedContent = await this.fileIO.loadFile(app, file.path);
 			if (syncedContent === null) return;
 
-			if (syncedContent.includes('### Activities:')) {
+			if (syncedContent.includes(ACTIVITIES_BUILT_MARKER)) {
 				console.log('[2ndBrain] Sync delivered processed daily note, skipping local build.');
 				return;
 			}
@@ -106,12 +115,24 @@ export class DailyNoteComposer {
 		// ── Parse journal + project files ONCE ───────────────────────────────
 		// These BlockCollections are shared across todoSyncManager (per-activity processing)
 		// and the daily note's own mentionsProcessor — eliminating O(n_activities) re-parsing.
-		const journalFilePages = app.vault.getFiles()
-			.filter((f: { path: string }) =>
-				f.path.startsWith(this.settings.journalFolder + '/') &&
-				f.path !== file.path
-			)
-			.map((f: { path: string; name: string }) => ({ file: f }));
+		// Contexts pages are included alongside real journal files (deduped by path)
+		// so a todo typed under an activity heading there syncs into that activity too.
+		// Detected structurally (any ".../Contexts/<Role>/YYYY-MM-DD.md" inside the
+		// journal tree) since each daily note's own Contexts folder can sit at a
+		// different depth (e.g. a new dated month folder).
+		const realJournalFileSet = new Map<string, { path: string; name: string }>();
+		const contextPageFileSet = new Map<string, { path: string; name: string }>();
+		for (const f of app.vault.getFiles()) {
+			const isRealJournalFile = f.path.startsWith(this.settings.journalFolder + '/') && f.path !== file.path;
+			const isContextPage = !!matchContextPagePath(f.path, this.settings.journalFolder, ROLES);
+			if (isContextPage) {
+				contextPageFileSet.set(f.path, f);
+			} else if (isRealJournalFile) {
+				realJournalFileSet.set(f.path, f);
+			}
+		}
+		const journalFilePages = [...realJournalFileSet.values(), ...contextPageFileSet.values()]
+			.map(f => ({ file: f }));
 
 		const projectFilePages = app.vault.getFiles()
 			.filter((f: { path: string }) =>
@@ -127,8 +148,26 @@ export class DailyNoteComposer {
 
 		const prebuilt: PrebuiltBlocks = { journalBlocks, projectBlocks };
 
+		// A separate parse of ONLY real journal files (no Contexts pages), used
+		// below for the "cross-references from other journal entries" step.
+		// Contexts pages are satellites OF this very daily note (their nav
+		// "← Daily Note" backlink literally embeds today's date), so feeding
+		// them into that scan would echo the backlink straight back into the
+		// note it links from — a self-referential duplicate, not a real
+		// external mention. todoSyncManager/activity parsing above still see
+		// them (journalBlocks, unfiltered) so typed todos still sync.
+		const realJournalOnlyPages = [...realJournalFileSet.values()].map(f => ({ file: f }));
+		const journalOnlyBlocksForMentions = await this.parser.run(app, realJournalOnlyPages, 'YYYY-MM-DD');
+
 		// ── Today-only steps ─────────────────────────────────────────────────
 		if (pageIsToday) {
+			// Plan dates that have come due are fired first, so an activity
+			// planned for today is already taken to work by the time the
+			// Activities section below is built.
+			try { await this.planDates.run(app, today); } catch (e) {
+				console.error('[2ndBrain] planDateActivation failed:', e);
+			}
+
 			// B.2.3: auto-create missing Activity files
 			try { await this.runAutoCreator(app, today); } catch (e) {
 				console.error('[2ndBrain] autoActivityCreator failed:', e);
@@ -144,10 +183,29 @@ export class DailyNoteComposer {
 			try {
 				const activities = await this.activitiesIP.run(app as any, pageContent);
 				if (activities && activities.trim().length > 0) {
-					pageContent = activities + '\n' + (pageContent || '');
+					// The fresh section carries over any block the note already
+					// had content in, so the originals must go or they'd appear
+					// twice.
+					const absorbed = parseActivityBlocks(activities).map(b => b.path);
+					pageContent = stripActivityBlocks(pageContent || '', absorbed);
+					pageContent = activities + '\n' + pageContent;
 				}
 			} catch (e) {
 				console.error('[2ndBrain] activitiesInProgress failed:', e);
+			}
+
+			// B.2.5b: link to any context pages that already exist for today —
+			// idempotent, so re-running (or a later manual upsert when a context
+			// page is created after this note was already built) never duplicates.
+			try {
+				const contextsFolder = contextsFolderForNote(file.path);
+				const existingRoles = ROLES.filter(role =>
+					app.vault.getAbstractFileByPath(contextPagePath(contextsFolder, today, role))
+				);
+				const line = buildContextLinksLine(contextsFolder, today, existingRoles);
+				pageContent = upsertContextLinksLine(pageContent, line);
+			} catch (e) {
+				console.error('[2ndBrain] context links failed:', e);
 			}
 		} else if (isFreshPastNote) {
 			// ── Past note recovery ────────────────────────────────────────────
@@ -163,8 +221,9 @@ export class DailyNoteComposer {
 			}
 		}
 
-		// B.2.6: cross-references from other journal entries (reuse pre-built blocks)
-		const mentions = await this.mentionsProc.run(pageContent, journalBlocks, file.basename);
+		// B.2.6: cross-references from other journal entries. Deliberately
+		// excludes Contexts pages (journalOnlyBlocksForMentions) — see above.
+		const mentions = await this.mentionsProc.run(pageContent, journalOnlyBlocksForMentions, file.basename);
 		if (mentions && mentions.trim().length > 0) pageContent = mentions;
 
 		// B.2.7: remove script block (today only — freeze to static)
@@ -180,6 +239,49 @@ export class DailyNoteComposer {
 
 		const combined = parts.join('\n');
 		await this.fileIO.saveFile(app, file.path, combined);
+	}
+
+	/**
+	 * Idempotently adds/updates the "🧭 Contexts:" link line in today's daily
+	 * note for a context page created AFTER the note was already built and
+	 * frozen (see the early-return guard above). Bypasses the freeze
+	 * intentionally — this only ever touches that one line, never the
+	 * Activities section or anything else, so it carries none of the
+	 * data-loss risk a full rebuild would.
+	 */
+	async ensureContextLink(
+		app: AppLike,
+		journalFile: { path: string; basename: string },
+		role: string
+	): Promise<void> {
+		const raw = await this.fileIO.loadFile(app, journalFile.path);
+		if (raw === null) return;
+
+		const header = this.fileIO.generateDailyNoteHeader(journalFile.basename);
+		if (!raw.includes(header)) return; // not yet fully built — next open will pick up the link
+
+		const today = this.fileIO.todayDate();
+		const contextsFolder = contextsFolderForNote(journalFile.path);
+		const rolesPresent = new Set<string>(
+			ROLES.filter(r => !!app.vault.getAbstractFileByPath(contextPagePath(contextsFolder, today, r)))
+		);
+		rolesPresent.add(role);
+
+		const line = buildContextLinksLine(contextsFolder, today, [...rolesPresent]);
+		const body = raw.replace(header, '').trim();
+		const updatedBody = upsertContextLinksLine(body, line);
+		if (updatedBody === body) return;
+
+		await this.fileIO.saveFile(app, journalFile.path, [header, updatedBody].join('\n'));
+	}
+
+	/**
+	 * Which roles have at least one qualifying activity today — used by the
+	 * plugin router to proactively create/refresh only the Contexts pages
+	 * that will have content, right after building the daily note.
+	 */
+	async rolesToPrebuild(app: AppLike): Promise<Set<string>> {
+		return this.activitiesIP.rolesWithActivities(app);
 	}
 
 	// ── Private ──────────────────────────────────────────────────────────────
@@ -215,7 +317,7 @@ export class DailyNoteComposer {
 		);
 
 		// ── Strategy 1: precise — find state-change entries for targetDate ────
-		const preciseBlocks: string[] = ['----', '', '### Activities:', '----'];
+		const preciseBlocks: string[] = ['----', '', ACTIVITIES_BUILT_MARKER, '----'];
 		let preciseFound = false;
 
 		for (const file of activityFiles) {
@@ -244,7 +346,7 @@ export class DailyNoteComposer {
 		// ── Strategy 2: fallback — show activities active as of targetDate ────
 		// Useful when Journal compaction removed carry-forward entries.
 		// Uses startDate ≤ targetDate as the "was active then" criterion.
-		const fallbackBlocks: string[] = ['----', '', '### Activities:', '----'];
+		const fallbackBlocks: string[] = ['----', '', ACTIVITIES_BUILT_MARKER, '----'];
 		let fallbackFound = false;
 
 		for (const file of activityFiles) {

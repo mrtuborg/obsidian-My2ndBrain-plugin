@@ -6,3 +6,2128 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+/* ── Eisenhower Matrix live view (```2ndbrain-matrix code block) ─────────
+ *
+ * Built entirely on Obsidian's own CSS variables so the matrix inherits the
+ * user's theme (light/dark, accent colour, font scale) instead of imposing
+ * its own palette.
+ */
+
+.twobrain-matrix {
+	--tb-quadrant: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* ── Summary bar ──────────────────────────────────────────────────────── */
+
+.twobrain-matrix-summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-3) var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-matrix-summary-main {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+}
+
+.twobrain-matrix-summary-count {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: var(--text-accent);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-summary-label {
+	color: var(--text-muted);
+}
+
+.twobrain-matrix-summary-date {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-progress {
+	flex-basis: 100%;
+	margin-top: var(--size-2-1);
+	height: 3px;
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.twobrain-matrix-progress-fill {
+	height: 100%;
+	border-radius: inherit;
+	background-color: var(--text-accent);
+	transition: width 160ms ease-out;
+}
+
+/* ── Quadrants ────────────────────────────────────────────────────────── */
+
+.twobrain-matrix-quadrant {
+	margin-bottom: var(--size-4-6);
+}
+
+/* Each quadrant gets its own hue so the four sections are distinguishable
+ * at a glance while scrolling, without colouring whole rows. */
+.twobrain-matrix .twobrain-q-urgent-important { --tb-quadrant: var(--color-red); }
+.twobrain-matrix .twobrain-q-not-urgent-important { --tb-quadrant: var(--color-blue); }
+.twobrain-matrix .twobrain-q-urgent-not-important { --tb-quadrant: var(--color-orange); }
+.twobrain-matrix .twobrain-q-not-urgent-not-important { --tb-quadrant: var(--text-faint); }
+
+.twobrain-matrix-quadrant-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	padding-left: var(--size-2-3);
+	margin-bottom: var(--size-2-3);
+	border-left: 3px solid var(--tb-quadrant);
+}
+
+.twobrain-matrix-quadrant-title {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.twobrain-matrix-quadrant-count {
+	padding: 0 var(--size-2-2);
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-empty {
+	margin: 0 0 0 var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+
+.twobrain-matrix-table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.twobrain-matrix-table th,
+.twobrain-matrix-table td {
+	padding: var(--size-2-1) var(--size-2-2);
+	text-align: left;
+	vertical-align: middle;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-matrix-table th {
+	padding-bottom: var(--size-2-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.twobrain-matrix-table tbody tr:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.twobrain-matrix-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* Committed for today: marked with an accent rail rather than a tinted row,
+ * which stays legible against any theme. */
+.twobrain-matrix-inwork td {
+	/* Fallback first for engines without color-mix. */
+	background-color: var(--background-secondary);
+	background-color: color-mix(in srgb, var(--interactive-accent) 7%, transparent);
+}
+
+.twobrain-matrix-table tbody tr.twobrain-matrix-inwork:hover td {
+	background-color: var(--background-modifier-hover);
+	background-color: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
+.twobrain-matrix-inwork td:first-child {
+	box-shadow: inset 2px 0 0 var(--text-accent);
+}
+
+.twobrain-matrix-inwork .twobrain-matrix-name a {
+	font-weight: var(--font-semibold);
+}
+
+.twobrain-matrix-name {
+	overflow: hidden;
+}
+
+.twobrain-matrix-name a {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+	text-decoration: none;
+}
+
+.twobrain-matrix-name a:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────── */
+
+/* Fields read as plain text until the row is hovered — a screen of boxed
+ * inputs buries the activity names that actually matter. */
+.twobrain-matrix-select,
+.twobrain-matrix-date {
+	width: 100%;
+	height: auto;
+	padding: var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	color: var(--text-normal);
+	background-color: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.twobrain-matrix-select {
+	appearance: none;
+	-webkit-appearance: none;
+	padding-right: var(--size-4-3);
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+		linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+	background-position: right 0.75em top 55%, right 0.5em top 55%;
+	background-size: 4px 4px, 4px 4px;
+	background-repeat: no-repeat;
+	text-overflow: ellipsis;
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-select,
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-date {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--background-modifier-border);
+}
+
+.twobrain-matrix-select:focus,
+.twobrain-matrix-date:focus {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+/* An unset field should read as absent, not as a real choice. */
+.twobrain-matrix-select:invalid,
+.twobrain-matrix-select option[value=''] {
+	color: var(--text-faint);
+}
+
+.twobrain-matrix-date {
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-matrix-date-empty::-webkit-datetime-edit {
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-date-empty::-webkit-datetime-edit,
+.twobrain-matrix-date-empty:focus::-webkit-datetime-edit {
+	opacity: 0.55;
+}
+
+.twobrain-matrix-date::-webkit-calendar-picker-indicator {
+	opacity: 0.3;
+	cursor: pointer;
+	transition: opacity 120ms ease;
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-date::-webkit-calendar-picker-indicator {
+	opacity: 0.7;
+}
+
+/* A date that is actually set is content, so it always reads at full strength. */
+.twobrain-matrix-date:not(.twobrain-matrix-date-empty) {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────── */
+
+.twobrain-matrix-actions {
+	white-space: nowrap;
+	text-align: right;
+}
+
+.twobrain-matrix-btn {
+	width: 100%;
+	padding: var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	line-height: 1.4;
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.twobrain-matrix-btn-cta {
+	background-color: transparent;
+	border-color: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.twobrain-matrix-table tbody tr:hover .twobrain-matrix-btn-cta {
+	background-color: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.twobrain-matrix-btn-quiet {
+	background-color: transparent;
+	border-color: var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+.twobrain-matrix-btn-quiet:hover {
+	background-color: var(--background-modifier-error-hover, var(--background-modifier-hover));
+	color: var(--text-error);
+}
+
+/* ── Narrow panes ─────────────────────────────────────────────────────── */
+
+/* Scroll rather than hide: with a fixed colgroup, display:none on cells
+ * leaves their width reserved and the columns stop lining up. */
+.twobrain-matrix-quadrant {
+	overflow-x: auto;
+}
+
+.twobrain-matrix-table {
+	min-width: 640px;
+}
+
+
+/* ── Projects dashboard live view (```2ndbrain-projects code block) ──────
+ *
+ * Same design language as the matrix above — Obsidian's own variables, quiet
+ * chrome, content-first — but the unit is a project rather than an activity,
+ * so the row carries a stacked progress bar and a health pill instead of
+ * per-field editors.
+ */
+
+.twobrain-projects {
+	font-size: var(--font-ui-small);
+}
+
+/* ── Summary bar ──────────────────────────────────────────────────────── */
+
+.twobrain-projects-summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-3) var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-projects-summary-main {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+}
+
+.twobrain-projects-summary-count {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: var(--text-accent);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-summary-label {
+	color: var(--text-muted);
+}
+
+.twobrain-projects-summary-date {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-summary-meta {
+	flex-basis: 100%;
+	display: flex;
+	gap: var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-progress {
+	flex-basis: 100%;
+	margin-top: var(--size-2-1);
+	height: 3px;
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.twobrain-projects-progress-fill {
+	height: 100%;
+	border-radius: inherit;
+	background-color: var(--text-accent);
+	transition: width 160ms ease-out;
+}
+
+/* ── Role sections ────────────────────────────────────────────────────── */
+
+.twobrain-projects-section {
+	margin-bottom: var(--size-4-6);
+	overflow-x: auto;
+}
+
+.twobrain-projects-section-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	padding-left: var(--size-2-3);
+	margin-bottom: var(--size-2-3);
+	border-left: 3px solid var(--text-accent);
+}
+
+.twobrain-projects-section-title {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.twobrain-projects-section-count {
+	padding: 0 var(--size-2-2);
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-projects-empty {
+	margin: 0 0 var(--size-4-4) var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+
+.twobrain-projects-table {
+	width: 100%;
+	min-width: 720px;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.twobrain-projects-table th,
+.twobrain-projects-table td {
+	padding: var(--size-2-1) var(--size-2-2);
+	text-align: left;
+	vertical-align: middle;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-projects-table th {
+	padding-bottom: var(--size-2-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.twobrain-projects-table tbody tr:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.twobrain-projects-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* A rail on the projects that are asking for something, so they're findable
+ * while scrolling without tinting whole rows. */
+.twobrain-projects-table tr.twobrain-health-stalled td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-red);
+}
+
+.twobrain-projects-table tr.twobrain-health-no-next-action td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-orange);
+}
+
+.twobrain-projects-name {
+	overflow: hidden;
+}
+
+.twobrain-projects-name a,
+.twobrain-projects-orphan {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+	text-decoration: none;
+}
+
+.twobrain-projects-name a:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+/* A `project:` value with no matching file: real, but not navigable. */
+.twobrain-projects-orphan {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* ── Progress bar ─────────────────────────────────────────────────────── */
+
+/* Bar and count share a line: stacked, they double every row's height for
+ * a number that's only a reference point. */
+.twobrain-projects-progress-cell {
+	white-space: nowrap;
+}
+
+.twobrain-projects-barwrap {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.twobrain-projects-bar {
+	display: flex;
+	flex: 1;
+	min-width: 40px;
+	height: 6px;
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.twobrain-projects-bar-seg {
+	height: 100%;
+	transition: width 160ms ease-out;
+}
+
+.twobrain-seg-done { background-color: var(--color-green); }
+.twobrain-seg-doing { background-color: var(--text-accent); }
+.twobrain-seg-backlog { background-color: var(--background-modifier-border-hover); }
+
+.twobrain-projects-bar-label {
+	flex: none;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Legend ───────────────────────────────────────────────────────────── */
+
+.twobrain-projects-legend {
+	display: flex;
+	gap: var(--size-2-3);
+	margin-left: auto;
+}
+
+.twobrain-projects-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.twobrain-projects-swatch {
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+}
+
+/* ── Counts ───────────────────────────────────────────────────────────── */
+
+.twobrain-projects-num,
+.twobrain-projects-age {
+	font-variant-numeric: tabular-nums;
+	color: var(--text-muted);
+}
+
+/* Zero is the common case; it should recede rather than read as data. */
+.twobrain-projects-zero {
+	color: var(--text-faint);
+}
+
+/* Planned into today's note — the one number worth an accent. */
+.twobrain-projects-today {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+}
+
+/* ── Health pills ─────────────────────────────────────────────────────── */
+
+.twobrain-projects-pill {
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.twobrain-pill-stalled {
+	color: var(--color-red);
+	border-color: var(--color-red);
+	background-color: transparent;
+	background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+
+.twobrain-pill-no-next-action {
+	color: var(--color-orange);
+	border-color: var(--color-orange);
+	background-color: transparent;
+	background-color: color-mix(in srgb, var(--color-orange) 10%, transparent);
+}
+
+.twobrain-pill-active {
+	color: var(--color-green);
+	border-color: transparent;
+	background-color: transparent;
+	background-color: color-mix(in srgb, var(--color-green) 12%, transparent);
+}
+
+.twobrain-pill-complete,
+.twobrain-pill-empty {
+	color: var(--text-faint);
+	border-color: var(--background-modifier-border);
+}
+
+/* ── Role picker ──────────────────────────────────────────────────────── */
+
+.twobrain-projects-select {
+	width: 100%;
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	color: var(--text-normal);
+	background-color: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+		linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+	background-position: right 0.75em top 55%, right 0.5em top 55%;
+	background-size: 4px 4px, 4px 4px;
+	background-repeat: no-repeat;
+	text-overflow: ellipsis;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.twobrain-projects-table tbody tr:hover .twobrain-projects-select {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--background-modifier-border);
+}
+
+.twobrain-projects-select:focus {
+	background-color: var(--background-modifier-form-field);
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.twobrain-projects-select option[value=''] {
+	color: var(--text-faint);
+}
+
+/* ── Dormant projects ─────────────────────────────────────────────────── */
+
+.twobrain-projects-dormant {
+	margin-top: var(--size-4-4);
+	padding: var(--size-2-3) var(--size-4-3);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-projects-dormant summary {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	list-style-position: outside;
+}
+
+.twobrain-projects-dormant summary:hover {
+	color: var(--text-muted);
+}
+
+.twobrain-projects-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	margin-top: var(--size-2-3);
+}
+
+.twobrain-projects-chip {
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+}
+
+a.twobrain-projects-chip:hover {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}
+
+
+
+/* ── Home landing page (```2ndbrain-home code block) ──────────────────────
+ *
+ * A glance, not a third dashboard. Sized so the whole thing is readable in
+ * one screen in landscape on a phone (~780x360), which is why everything
+ * here is counts and chips and there is not a single table.
+ *
+ * It also runs its own calm palette rather than the sharper accent colours
+ * the matrix and projects views use — this is the page you open first, and
+ * it should read as a quiet room, not a control panel.
+ *
+ * Each colour defers to a `--tb-*` token first. The Zen 2ndBrain theme
+ * defines those vault-wide, so with it installed Home matches every other
+ * note instead of being an island; the literals here are the fallback that
+ * keeps the page looking right under any other theme.
+ */
+
+.twobrain-home {
+	--zen-ink: var(--tb-ink, #33413c);
+	--zen-soft: var(--tb-soft, #6d7f78);
+	--zen-faint: var(--tb-faint, #9aa8a2);
+	--zen-surface: var(--tb-surface, #f4f1ec);
+	--zen-line: var(--tb-line, #e2ded6);
+	--zen-accent: var(--tb-accent, #6f9285);
+	--zen-warn: var(--tb-warn, #c08a52);
+	--zen-alert: var(--tb-alert, #b4705f);
+
+	max-width: 860px;
+	font-size: var(--font-ui-small);
+	color: var(--zen-ink);
+}
+
+.theme-dark .twobrain-home {
+	--zen-ink: var(--tb-ink, #d8e0dc);
+	--zen-soft: var(--tb-soft, #9dada7);
+	--zen-faint: var(--tb-faint, #6f7d78);
+	--zen-surface: var(--tb-surface, #23282a);
+	--zen-line: var(--tb-line, #333a3c);
+	--zen-accent: var(--tb-accent, #85ab9c);
+	--zen-warn: var(--tb-warn, #d3a273);
+	--zen-alert: var(--tb-alert, #cc8878);
+}
+
+/* ── Banner ───────────────────────────────────────────────────────────── */
+
+.twobrain-home-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
+	min-height: 76px;
+	padding: 12px 18px;
+	margin-bottom: 10px;
+	border-radius: 10px;
+	background-size: cover;
+	background-position: center;
+	background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><defs><linearGradient id='s' x1='0' y1='0' x2='0.7' y2='1'><stop offset='0' stop-color='%23dce8e3'/><stop offset='0.5' stop-color='%23ede4d8'/><stop offset='1' stop-color='%23e4dce9'/></linearGradient></defs><rect width='1200' height='160' fill='url(%23s)'/><circle cx='640' cy='52' r='23' fill='%23f2cba6' opacity='0.75'/><g fill='none' stroke='%23a9c1b7' stroke-width='1.8' opacity='0.62'><ellipse cx='640' cy='118' rx='46' ry='6'/><ellipse cx='640' cy='118' rx='88' ry='11'/><ellipse cx='640' cy='118' rx='136' ry='17'/><ellipse cx='640' cy='118' rx='190' ry='24'/><ellipse cx='640' cy='118' rx='250' ry='31'/></g><path d='M0 112 Q 210 86 430 108 T 830 104 Q 1020 84 1200 112 L1200 160 L0 160 Z' fill='%23b4c7bc' opacity='0.5'/><path d='M0 134 Q 280 116 560 132 T 1030 130 Q 1120 124 1200 136 L1200 160 L0 160 Z' fill='%239fb6aa' opacity='0.45'/></svg>");
+}
+
+.theme-dark .twobrain-home-banner {
+	background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><defs><linearGradient id='s' x1='0' y1='0' x2='0.7' y2='1'><stop offset='0' stop-color='%231e2a29'/><stop offset='0.5' stop-color='%232a2b28'/><stop offset='1' stop-color='%23262233'/></linearGradient></defs><rect width='1200' height='160' fill='url(%23s)'/><circle cx='640' cy='52' r='23' fill='%23c99060' opacity='0.4'/><g fill='none' stroke='%235d7d72' stroke-width='1.8' opacity='0.5'><ellipse cx='640' cy='118' rx='46' ry='6'/><ellipse cx='640' cy='118' rx='88' ry='11'/><ellipse cx='640' cy='118' rx='136' ry='17'/><ellipse cx='640' cy='118' rx='190' ry='24'/><ellipse cx='640' cy='118' rx='250' ry='31'/></g><path d='M0 112 Q 210 86 430 108 T 830 104 Q 1020 84 1200 112 L1200 160 L0 160 Z' fill='%233b4f47' opacity='0.55'/><path d='M0 134 Q 280 116 560 132 T 1030 130 Q 1120 124 1200 136 L1200 160 L0 160 Z' fill='%2332453e' opacity='0.5'/></svg>");
+}
+
+.twobrain-home-greeting {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1.15;
+	color: #2f3d38;
+}
+
+.twobrain-home-date {
+	font-size: var(--font-ui-smaller);
+	color: #5f7168;
+}
+
+.theme-dark .twobrain-home-greeting { color: #dfe7e3; }
+.theme-dark .twobrain-home-date { color: #93a49d; }
+
+.twobrain-home-banner-count {
+	text-align: right;
+	flex-shrink: 0;
+}
+
+.twobrain-home-bignum {
+	font-size: 30px;
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: #3c5b4f;
+}
+
+.twobrain-home-bignum-label {
+	font-size: var(--font-ui-smaller);
+	color: #5f7168;
+	white-space: nowrap;
+}
+
+.theme-dark .twobrain-home-bignum { color: #a8ccbc; }
+.theme-dark .twobrain-home-bignum-label { color: #93a49d; }
+
+/* ── Roles ────────────────────────────────────────────────────────────── */
+
+.twobrain-home-roles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.twobrain-home-role {
+	padding: 7px 10px 8px;
+	border-radius: 8px;
+	background-color: var(--zen-surface);
+	border: 1px solid var(--zen-line);
+	border-left: 3px solid var(--zen-accent);
+}
+
+/* Open work, none of it planned for today — the only real neglect signal. */
+.twobrain-home-role.is-untouched {
+	border-left-color: var(--zen-warn);
+}
+
+/* Nothing open at all is finished, not neglected: recede, don't warn. */
+.twobrain-home-role.is-clear {
+	border-left-color: var(--zen-line);
+	opacity: 0.65;
+}
+
+.twobrain-home-role-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px;
+}
+
+.twobrain-home-role-name {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-bold);
+	color: var(--zen-soft);
+	text-decoration: none;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+a.twobrain-home-role-name.is-ready {
+	color: var(--zen-accent);
+}
+
+a.twobrain-home-role-name.is-ready:hover {
+	text-decoration: underline;
+}
+
+.twobrain-home-role-flag {
+	flex-shrink: 0;
+	min-width: 15px;
+	padding: 0 4px;
+	border-radius: 999px;
+	font-size: 10px;
+	line-height: 15px;
+	text-align: center;
+	color: var(--zen-alert);
+	background-color: color-mix(in srgb, var(--zen-alert) 16%, transparent);
+}
+
+.twobrain-home-role-count {
+	margin-top: 1px;
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-bold);
+	color: var(--zen-ink);
+}
+
+.twobrain-home-role.is-clear .twobrain-home-role-count {
+	font-size: var(--font-ui-smaller);
+	font-weight: normal;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-role-track {
+	height: 3px;
+	margin-top: 5px;
+	border-radius: 2px;
+	background-color: var(--zen-line);
+	overflow: hidden;
+}
+
+.twobrain-home-role-fill {
+	height: 100%;
+	border-radius: 2px;
+	background-color: var(--zen-accent);
+}
+
+/* ── Health signals ───────────────────────────────────────────────────── */
+
+.twobrain-home-signals {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+a.twobrain-home-signal {
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	color: var(--zen-soft);
+	border: 1px solid var(--zen-line);
+	background-color: var(--zen-surface);
+}
+
+a.twobrain-home-signal:hover {
+	border-color: var(--zen-accent);
+	color: var(--zen-ink);
+}
+
+a.twobrain-home-signal.is-stalled {
+	color: var(--zen-alert);
+	border-color: color-mix(in srgb, var(--zen-alert) 35%, transparent);
+}
+
+a.twobrain-home-signal.is-no-next-action {
+	color: var(--zen-warn);
+	border-color: color-mix(in srgb, var(--zen-warn) 35%, transparent);
+}
+
+a.twobrain-home-signal.is-aging-promises {
+	color: var(--zen-alert);
+	border-color: color-mix(in srgb, var(--zen-alert) 35%, transparent);
+}
+
+a.twobrain-home-signal.is-quiet-people {
+	color: var(--zen-warn);
+	border-color: color-mix(in srgb, var(--zen-warn) 35%, transparent);
+}
+
+.twobrain-home-allclear {
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	color: var(--zen-faint);
+}
+
+/* ── People: who you're actually in touch with ────────────────────────────
+ * Unconditional, unlike the health signals above — a good week must not make
+ * relationships disappear from Home, since that's when drift starts. */
+
+.twobrain-home-people {
+	margin-bottom: 10px;
+	padding: 10px 12px;
+	background-color: var(--zen-surface);
+	border: 1px solid var(--zen-line);
+	border-radius: 6px;
+}
+
+.twobrain-home-people-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.twobrain-home-people-label {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--zen-soft);
+}
+
+.twobrain-home-people-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-home-checklist {
+	display: flex;
+	flex-direction: column;
+}
+
+/* Explains why the checkboxes are dead, in place of a tooltip nobody on a
+ * phone can trigger. */
+.twobrain-home-checklist-note {
+	margin: 2px 0 6px;
+	color: var(--zen-faint);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+/* A button, not a link, because it acts rather than navigates — but drawn as
+ * a link so it reads as part of the sentence it sits inside. */
+button.twobrain-home-checklist-create {
+	display: inline;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: none;
+	color: var(--zen-accent);
+	font-size: inherit;
+	font-family: inherit;
+	line-height: inherit;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+button.twobrain-home-checklist-create:hover {
+	background: none;
+	color: var(--zen-accent);
+	text-decoration-thickness: 2px;
+}
+
+button.twobrain-home-checklist-create:disabled {
+	color: var(--zen-faint);
+	cursor: progress;
+	text-decoration: none;
+}
+
+/* One contact. Flex rather than grid, because the promise badges are optional
+ * and a fixed column count either strands them on a second line or leaves two
+ * dead columns on every row that has none. The name takes all the slack, so
+ * everything after it is flushed right and lines up down the list anyway. */
+.twobrain-home-contact {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	border-top: 1px solid color-mix(in srgb, var(--zen-line) 45%, transparent);
+}
+
+.twobrain-home-contact:first-child {
+	border-top: none;
+}
+
+/* Done for today: still readable, visibly settled. Not hidden — seeing the
+ * list you have already worked through is half of why you keep working it. */
+.twobrain-home-contact.is-logged {
+	opacity: 0.5;
+}
+
+input.twobrain-home-contact-check {
+	margin: 0;
+	flex: 0 0 auto;
+	cursor: pointer;
+}
+
+input.twobrain-home-contact-check:disabled {
+	cursor: not-allowed;
+	opacity: 0.4;
+}
+
+a.twobrain-home-contact-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-ink);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+a.twobrain-home-contact-name:hover {
+	color: var(--zen-accent);
+	text-decoration: underline;
+}
+
+.twobrain-home-contact.is-logged a.twobrain-home-contact-name {
+	text-decoration: line-through;
+}
+
+/* Right-aligned in a fixed slot so the ages form a readable column even
+ * though the names beside them are all different lengths. */
+.twobrain-home-contact-age {
+	flex: 0 0 auto;
+	min-width: 3.5em;
+	text-align: right;
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+	color: var(--zen-faint);
+	white-space: nowrap;
+}
+
+.twobrain-home-contact.is-overdue .twobrain-home-contact-age {
+	color: var(--zen-warn);
+	font-weight: 600;
+}
+
+/* Promise badges sit between the age and the buttons, and collapse out of the
+ * layout entirely when there are none. */
+.twobrain-home-contact-tag {
+	flex: 0 0 auto;
+	padding: 0 6px;
+	border-radius: 9px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+.twobrain-home-contact-tag.is-owed {
+	color: var(--zen-alert);
+	background-color: color-mix(in srgb, var(--zen-alert) 14%, transparent);
+}
+
+.twobrain-home-contact-tag.is-waiting {
+	color: var(--zen-soft);
+	background-color: color-mix(in srgb, var(--zen-line) 60%, transparent);
+}
+
+.twobrain-home-contact-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 3px;
+}
+
+/* Faint until the row is touched. These are always-available controls on
+ * every row, and drawn at full strength they out-shout the names — which are
+ * the actual content. Never hidden outright: a control you cannot see on a
+ * touch screen, where there is no hover, is a control that does not exist. */
+button.twobrain-home-contact-action {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 22px;
+	padding: 0 7px;
+	border: none;
+	border-radius: 4px;
+	box-shadow: none;
+	background-color: transparent;
+	color: var(--zen-faint);
+	font-size: 11px;
+	line-height: 1;
+	white-space: nowrap;
+	cursor: pointer;
+	opacity: 0.55;
+}
+
+.twobrain-home-contact:hover button.twobrain-home-contact-action,
+button.twobrain-home-contact-action:focus-visible {
+	opacity: 1;
+}
+
+button.twobrain-home-contact-action:hover {
+	background-color: var(--zen-line);
+	color: var(--zen-ink);
+}
+
+button.twobrain-home-contact-action.is-active:hover {
+	color: var(--zen-accent);
+}
+
+button.twobrain-home-contact-action:disabled {
+	cursor: progress;
+	opacity: 0.3;
+}
+
+/* ── Folds: more active, inactive, archived ──────────────────────────── */
+
+.twobrain-home-fold {
+	margin-top: 6px;
+}
+
+summary.twobrain-home-fold-summary {
+	padding: 3px 0;
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+	cursor: pointer;
+	list-style: none;
+	user-select: none;
+}
+
+summary.twobrain-home-fold-summary::-webkit-details-marker {
+	display: none;
+}
+
+summary.twobrain-home-fold-summary::before {
+	content: '\25B8';
+	display: inline-block;
+	width: 1em;
+	transition: transform 120ms ease;
+}
+
+.twobrain-home-fold[open] > summary.twobrain-home-fold-summary::before {
+	transform: rotate(90deg);
+}
+
+summary.twobrain-home-fold-summary:hover {
+	color: var(--zen-ink);
+}
+
+.twobrain-home-people-count.is-overdue {
+	color: var(--zen-warn);
+}
+
+.twobrain-home-people-none {
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	color: var(--zen-faint);
+}
+
+/* ── The long view: balance + consistency ─────────────────────────────── */
+
+/* Equal columns, so the two panels are always the same width — and on a
+ * phone in portrait only one column fits, which stacks them full-width
+ * under the People strip at matching size rather than leaving the radar
+ * pinned to its intrinsic 236px. */
+.twobrain-home-charts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	align-items: stretch;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.twobrain-home-panel {
+	padding: 8px 12px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--zen-line);
+	background-color: var(--zen-surface);
+	/* Both panels hold content wider than a phone; without this the grid
+	   track refuses to shrink and the page scrolls sideways. */
+	min-width: 0;
+}
+
+.twobrain-home-panel.is-radar {
+	/* The chart centres in whatever width the grid gives it. */
+	display: flex;
+	flex-direction: column;
+}
+
+.twobrain-home-panel.is-consistency {
+	min-width: 0;
+}
+
+.twobrain-home-panel-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.twobrain-home-panel-title {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--zen-soft);
+}
+
+.twobrain-home-panel-sub {
+	font-size: 10px;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-panel-empty {
+	max-width: 190px;
+	padding: 12px 0 16px;
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	line-height: 1.4;
+	color: var(--zen-faint);
+}
+
+/* ── Radar ─────────────────────────────────────────────────────────────── */
+
+/* Scales to the panel instead of a fixed 236px, so the radar fills a phone
+ * the same way the consistency grid does. Capped so it doesn't balloon into
+ * a wide desktop column, and centred in whatever space is left over. */
+.twobrain-home-radar {
+	display: block;
+	width: 100%;
+	max-width: 300px;
+	height: auto;
+	margin: 0 auto;
+}
+
+.twobrain-radar-ring {
+	fill: none;
+	stroke: var(--zen-line);
+	stroke-width: 1;
+}
+
+.twobrain-radar-spoke {
+	stroke: var(--zen-line);
+	stroke-width: 1;
+}
+
+/* Your own average, dashed so it reads as a reference rather than data. */
+.twobrain-radar-mean {
+	fill: none;
+	stroke: var(--zen-faint);
+	stroke-width: 1;
+	stroke-dasharray: 2 3;
+	opacity: 0.7;
+}
+
+.twobrain-radar-shape {
+	fill: color-mix(in srgb, var(--zen-accent) 26%, transparent);
+	stroke: var(--zen-accent);
+	stroke-width: 1.6;
+	stroke-linejoin: round;
+}
+
+.twobrain-radar-dot {
+	fill: var(--zen-accent);
+}
+
+/* A role at zero sits on the centre point; hollow so it doesn't read as data. */
+.twobrain-radar-dot.is-empty {
+	fill: var(--zen-surface);
+	stroke: var(--zen-alert);
+	stroke-width: 1.2;
+}
+
+.twobrain-radar-label {
+	font-size: 8.5px;
+	fill: var(--zen-soft);
+}
+
+.twobrain-radar-value {
+	font-size: 8px;
+	font-weight: 600;
+	fill: var(--zen-faint);
+}
+
+/* ── Consistency grid ──────────────────────────────────────────────────── */
+
+.twobrain-home-streak {
+	display: flex;
+	align-items: baseline;
+	gap: 5px;
+	margin-bottom: 6px;
+}
+
+.twobrain-home-streak-num {
+	font-size: 22px;
+	font-weight: 300;
+	line-height: 1;
+	color: var(--zen-accent);
+}
+
+.twobrain-home-streak-label {
+	font-size: 10px;
+	color: var(--zen-faint);
+}
+
+/* A year never fits a phone, so it scrolls sideways like a calendar strip. */
+.twobrain-home-grid-scroll {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-bottom: 2px;
+}
+
+.twobrain-home-grid {
+	display: inline-block;
+}
+
+.twobrain-home-grid-months {
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 9px;
+	height: 11px;
+}
+
+.twobrain-home-grid-month {
+	font-size: 8px;
+	line-height: 1;
+	white-space: nowrap;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-grid-cells {
+	display: flex;
+	gap: 2px;
+}
+
+.twobrain-home-grid-week {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.twobrain-home-grid-cell {
+	width: 7px;
+	height: 7px;
+	border-radius: 1.5px;
+	background-color: var(--zen-line);
+}
+
+.twobrain-home-grid-cell.is-pad {
+	background-color: transparent;
+}
+
+.twobrain-home-grid-cell.is-l1 {
+	background-color: color-mix(in srgb, var(--zen-accent) 25%, var(--zen-line));
+}
+
+.twobrain-home-grid-cell.is-l2 {
+	background-color: color-mix(in srgb, var(--zen-accent) 50%, var(--zen-line));
+}
+
+.twobrain-home-grid-cell.is-l3 {
+	background-color: color-mix(in srgb, var(--zen-accent) 75%, var(--zen-line));
+}
+
+.twobrain-home-grid-cell.is-l4 {
+	background-color: var(--zen-accent);
+}
+
+.twobrain-home-grid-cell.is-open {
+	cursor: pointer;
+}
+
+.twobrain-home-grid-cell.is-open:hover {
+	outline: 1px solid var(--zen-ink);
+	outline-offset: 0;
+}
+
+.twobrain-home-legend {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	margin-top: 6px;
+}
+
+.twobrain-home-legend-label {
+	font-size: 9px;
+	color: var(--zen-faint);
+}
+
+.twobrain-home-legend-label:first-child {
+	margin-right: 2px;
+}
+
+.twobrain-home-legend-label:last-child {
+	margin-left: 2px;
+}
+
+/* ── Next steps ───────────────────────────────────────────────────────── */
+
+.twobrain-home-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 8px;
+}
+
+a.twobrain-home-nav-link {
+	padding: 4px 12px;
+	border-radius: 7px;
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	color: var(--zen-soft);
+	border: 1px solid var(--zen-line);
+	background-color: var(--zen-surface);
+}
+
+a.twobrain-home-nav-link:hover {
+	color: var(--zen-ink);
+	border-color: var(--zen-accent);
+}
+
+a.twobrain-home-nav-link.is-primary {
+	color: #fff;
+	border-color: var(--zen-accent);
+	background-color: var(--zen-accent);
+}
+
+a.twobrain-home-nav-link.is-primary:hover {
+	color: #fff;
+	filter: brightness(1.06);
+}
+
+/* The dark palette's accent is a light mint — white on it is unreadable. */
+.theme-dark a.twobrain-home-nav-link.is-primary,
+.theme-dark a.twobrain-home-nav-link.is-primary:hover {
+	color: #1c2422;
+}
+
+.twobrain-home-nav-missing {
+	padding: 4px 12px;
+	border-radius: 7px;
+	font-size: var(--font-ui-smaller);
+	color: var(--zen-faint);
+	border: 1px dashed var(--zen-line);
+}
+
+.twobrain-home-recent {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-home-recent-label {
+	color: var(--zen-faint);
+}
+
+a.twobrain-home-recent-link {
+	color: var(--zen-soft);
+	text-decoration: none;
+}
+
+a.twobrain-home-recent-link:hover {
+	color: var(--zen-accent);
+	text-decoration: underline;
+}
+
+/* Phone portrait: the banner's two halves stop fitting side by side. */
+@media (max-width: 420px) {
+	.twobrain-home-banner {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.twobrain-home-banner-count {
+		text-align: left;
+	}
+
+	.twobrain-home-bignum {
+		font-size: 24px;
+	}
+}
+
+/* Phone: the status buttons and the checkbox become touch targets, and the
+ * promise badges drop out rather than squeezing the name to nothing. There is
+ * no hover on a touch screen, so the buttons are drawn at full strength. */
+@media (max-width: 420px) {
+	.twobrain-home-contact {
+		gap: 6px;
+		padding: 5px 0;
+		min-height: 44px;
+	}
+
+	.twobrain-home-contact-tag {
+		display: none;
+	}
+
+	/* 44px is the touch-target floor. The word labels stay, because the
+	 * tooltip that would have explained an icon never appears on a phone. */
+	button.twobrain-home-contact-action {
+		min-height: 44px;
+		padding: 0 10px;
+		font-size: 12px;
+		opacity: 1;
+		background-color: var(--zen-line);
+	}
+
+	input.twobrain-home-contact-check {
+		width: 26px;
+		height: 26px;
+	}
+
+	summary.twobrain-home-fold-summary {
+		padding: 12px 0;
+		min-height: 44px;
+	}
+
+	/* The create link is inline text, so it cannot be given a 44px box
+	 * without breaking the sentence. Bigger type and a looser line give it a
+	 * usable target instead. */
+	.twobrain-home-checklist-note {
+		font-size: 13px;
+		line-height: 2;
+	}
+}
+
+/* Obsidian mobile, any orientation. Landscape on a phone is wide enough for
+ * the badges but just as short on precision, so the targets stay large. */
+.is-mobile button.twobrain-home-contact-action {
+	min-height: 44px;
+	padding: 0 10px;
+	opacity: 1;
+	background-color: var(--zen-line);
+}
+
+.is-mobile input.twobrain-home-contact-check {
+	width: 26px;
+	height: 26px;
+}
+
+.is-mobile .twobrain-home-contact {
+	padding: 5px 0;
+	min-height: 44px;
+}
+
+.is-mobile summary.twobrain-home-fold-summary {
+	min-height: 44px;
+}
+
+.is-mobile .twobrain-home-checklist-note {
+	font-size: 13px;
+	line-height: 2;
+}
+
+/* ── People dashboard live view (```2ndbrain-people code block) ───────────
+ *
+ * Same table language as the Projects dashboard, plus an expandable detail
+ * row per person for the individual promises — a plain table cannot show a
+ * variable number of commitments per row without either truncating them or
+ * inflating every row to the tallest person's count.
+ */
+
+.twobrain-people {
+	font-size: var(--font-ui-small);
+}
+
+/* ── Summary bar ──────────────────────────────────────────────────────── */
+
+.twobrain-people-summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-3) var(--size-2-3);
+	margin-bottom: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-people-summary-main {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-2-2);
+}
+
+.twobrain-people-summary-count {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+	line-height: 1;
+	color: var(--color-orange);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-summary-label {
+	color: var(--text-muted);
+}
+
+.twobrain-people-summary-date {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-summary-meta {
+	flex-basis: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-scanned {
+	margin-left: auto;
+	font-style: italic;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+
+/* The convention is new, so the dashboard starts empty by design — this has
+ * to teach the syntax rather than just say "nothing here". */
+.twobrain-people-empty {
+	padding: var(--size-4-3);
+	margin-bottom: var(--size-4-4);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	color: var(--text-muted);
+}
+
+.twobrain-people-examples {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-2);
+	margin: var(--size-2-3) 0;
+}
+
+.twobrain-people-example {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-3);
+	flex-wrap: wrap;
+}
+
+.twobrain-people-example code {
+	padding: 2px var(--size-2-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-example-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+}
+
+.twobrain-people-empty-note {
+	margin-top: var(--size-2-3);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+/* ── Filters ──────────────────────────────────────────────────────────── */
+
+.twobrain-people-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+}
+
+.twobrain-people-filter {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.twobrain-people-filter-label {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-select {
+	padding: var(--size-2-1) var(--size-4-3) var(--size-2-1) var(--size-2-2);
+	font-size: var(--font-ui-smaller);
+	font-family: inherit;
+	color: var(--text-normal);
+	background-color: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.twobrain-people-toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+
+.twobrain-people-table {
+	width: 100%;
+	min-width: 640px;
+	table-layout: fixed;
+	border-collapse: collapse;
+	margin-bottom: var(--size-4-4);
+}
+
+.twobrain-people-table th,
+.twobrain-people-table td {
+	padding: var(--size-2-1) var(--size-2-2);
+	text-align: left;
+	vertical-align: middle;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-people-table th {
+	padding-bottom: var(--size-2-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.twobrain-people-table tbody tr:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+/* A rail on the people asking for something, so they're findable while
+ * scrolling without tinting whole rows. */
+.twobrain-people-table tr.twobrain-person-aging td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-red);
+}
+
+.twobrain-people-table tr.twobrain-person-quiet td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-orange);
+}
+
+.twobrain-people-table tr.twobrain-person-active td:first-child {
+	box-shadow: inset 2px 0 0 var(--color-green);
+}
+
+.twobrain-people-name {
+	overflow: hidden;
+}
+
+.twobrain-people-name a {
+	color: var(--text-normal);
+	text-decoration: none;
+}
+
+.twobrain-people-name a:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.twobrain-people-orphan {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* The catch-all bucket for a promise whose line named nobody — real, but
+ * not a person you can open a page for. */
+.twobrain-people-bucket {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.twobrain-people-tag {
+	margin-left: var(--size-2-2);
+	padding: 0 var(--size-2-1);
+	border-radius: var(--radius-s);
+	background-color: var(--background-modifier-border);
+	color: var(--text-faint);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.twobrain-people-num,
+.twobrain-people-age {
+	font-variant-numeric: tabular-nums;
+	color: var(--text-muted);
+}
+
+/* Zero is the common case; it should recede rather than read as data. */
+.twobrain-people-zero {
+	color: var(--text-faint);
+}
+
+.twobrain-people-owed {
+	color: var(--color-red);
+	font-weight: var(--font-semibold);
+}
+
+.twobrain-people-waiting {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+}
+
+/* ── Status pills ─────────────────────────────────────────────────────── */
+
+.twobrain-people-pill {
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.twobrain-pill-aging {
+	color: var(--color-red);
+	border-color: var(--color-red);
+	background-color: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+
+.twobrain-pill-open {
+	color: var(--text-accent);
+	border-color: transparent;
+	background-color: color-mix(in srgb, var(--text-accent) 10%, transparent);
+}
+
+.twobrain-pill-quiet {
+	color: var(--color-orange);
+	border-color: var(--color-orange);
+	background-color: color-mix(in srgb, var(--color-orange) 10%, transparent);
+}
+
+.twobrain-pill-dormant {
+	color: var(--text-faint);
+	border-color: var(--background-modifier-border);
+}
+
+/* ── Section heads ────────────────────────────────────────────────────────
+ * The table is split by what each group asks of you — outstanding, gone
+ * quiet, in touch — because a single flat list reads as one undifferentiated
+ * pile and the sort order alone doesn't say why someone is near the top. */
+
+.twobrain-people-section-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-4-2);
+	margin: var(--size-4-4) 0 var(--size-2-2);
+	padding-bottom: var(--size-2-1);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-people-section-head:first-child {
+	margin-top: 0;
+}
+
+.twobrain-people-section-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.twobrain-people-section-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-section-hint {
+	margin-left: auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+/* ── Commitment detail rows ───────────────────────────────────────────── */
+
+.twobrain-people-detail-row td {
+	padding-top: 0;
+	padding-bottom: var(--size-2-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.twobrain-people-commitments {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	padding-left: var(--size-4-2);
+}
+
+.twobrain-people-commitment {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	flex-wrap: wrap;
+	padding: var(--size-2-1) 0;
+}
+
+.twobrain-people-commitment.is-aging {
+	color: var(--color-red);
+}
+
+.twobrain-people-commitment.is-done {
+	opacity: 0.55;
+}
+
+.twobrain-people-commitment.is-done .twobrain-people-commitment-text {
+	text-decoration: line-through;
+}
+
+.twobrain-people-check {
+	cursor: pointer;
+}
+
+.twobrain-people-direction {
+	flex-shrink: 0;
+	padding: 0 var(--size-2-1);
+	border-radius: var(--radius-s);
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.twobrain-dir-owed {
+	color: var(--color-red);
+	background-color: color-mix(in srgb, var(--color-red) 12%, transparent);
+}
+
+.twobrain-dir-waiting {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--text-accent) 12%, transparent);
+}
+
+.twobrain-people-commitment-text {
+	flex: 1 1 auto;
+	min-width: 120px;
+	color: var(--text-normal);
+}
+
+.twobrain-people-activity {
+	flex-shrink: 0;
+	padding: 0 var(--size-2-2);
+	border-radius: 999px;
+	background-color: var(--background-modifier-border);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-commitment-age {
+	flex-shrink: 0;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.twobrain-people-jump {
+	flex-shrink: 0;
+	color: var(--text-faint);
+	text-decoration: none;
+}
+
+.twobrain-people-jump:hover {
+	color: var(--text-accent);
+}
+
+/* ── Missing pages ────────────────────────────────────────────────────── */
+
+.twobrain-people-missing {
+	margin-bottom: var(--size-4-4);
+}
+
+.twobrain-people-missing h4 {
+	margin: 0 0 var(--size-2-3);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.twobrain-people-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+}
+
+.twobrain-people-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: 1px var(--size-2-2);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+a.twobrain-people-chip:hover {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}
+
+button.twobrain-people-chip {
+	font-family: inherit;
+}
+
+button.twobrain-people-chip:hover:not(:disabled) {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}
+
+button.twobrain-people-chip:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.twobrain-people-chip-plus {
+	color: var(--text-faint);
+	font-weight: var(--font-bold);
+}
+
+/* ── Resting people ───────────────────────────────────────────────────── */
+
+.twobrain-people-resting {
+	margin-top: var(--size-4-4);
+	padding: var(--size-2-3) var(--size-4-3);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.twobrain-people-resting summary {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	list-style-position: outside;
+}
+
+.twobrain-people-resting summary:hover {
+	color: var(--text-muted);
+}
+
+.twobrain-people-resting .twobrain-people-chips {
+	margin-top: var(--size-2-3);
+}
+
+/* One-line syntax reminder, shown once the table has contact history and the
+ * full teaching box would be in the way. */
+.twobrain-people-syntax-hint {
+	margin-bottom: var(--size-4-3);
+	padding: var(--size-2-2) var(--size-4-2);
+	border-left: 2px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.twobrain-people-syntax-hint code {
+	font-size: var(--font-smaller);
+}

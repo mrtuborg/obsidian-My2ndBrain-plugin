@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 184 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** 602 tests passing. Plugin is deployed and active.
 
 ## Architecture
 
@@ -19,15 +19,176 @@ file-open event
               └── mentionsProcessor           (## Journal, state-transition algorithm)
 ```
 
-Components are in `src/components/`, composers in `src/composers/`, file I/O in `src/utilities/`.
+Components are in `src/components/`, composers in `src/composers/`, file I/O in `src/utilities/`. UI
+(code-block views, modals) lives in `src/ui/`, one-shot migrations in `src/commands/`.
+
+## Planning model: `takeToWork`
+
+Every Activity carries a **mandatory** `takeToWork: true|false` frontmatter field. It is the single gate
+deciding whether the activity is rendered into today's daily note.
+
+| Field | Owner | Effect |
+|---|---|---|
+| `takeToWork` | user, via matrix button | Daily note inclusion. Mandatory on every Activity |
+| `takeToWorkDate` | user, via the matrix's inline date field | A one-shot alarm: on that day the activity is auto-taken to work and the date is cleared |
+| `remind`, `snoozeUntil` | user, hand-written | **Matrix visibility only.** They no longer gate the daily note |
+
+Rules that must not drift:
+
+- Daily note gate (`ActivitiesInProgress`) = `takeToWork` && `stage != done` && valid `startDate <= today`.
+- `TodoSyncManager` is deliberately **not** gated on `takeToWork`. It writes journal todos *into* activity
+  files — that is data integrity, not display. Gating it there silently loses Journal entries.
+- A missing `takeToWork` resolves to `stage === 'doing'` (`resolveTakeToWork` in `src/utilities/TakeToWork.ts`)
+  so a pre-backfill vault still renders something, but the **backfill deliberately does not use that rule**:
+  it stamps `false` everywhere. Migrating "every doing activity" to `true` reproduces exactly the behaviour
+  this field exists to replace, and hands the user a day they never planned.
+- Taking an activity to work also sets `stage: doing`. Setting stage to `done` or `backlog` from the matrix
+  dropdown clears `takeToWork` (both mean "not today"); setting it to `doing` leaves the flag alone, because
+  working on something and planning it for today are separate decisions.
+- Matrix dropdowns (`src/utilities/MatrixOptions.ts`) always include the value currently on disk, labelled
+  `(unknown)` when it is outside the standard vocabulary. A `<select>` that omitted it would rewrite that
+  field the moment the user changed any other column in the row.
+- Activities born from a journal wikilink (`AutoActivityCreator`) start `takeToWork: true`. The Journal is
+  the source of truth, so writing `[[Something]]` in a daily note or Context page *is* the act of taking it
+  to work — and the stub must appear in the very Activities section that created it. Anything else would
+  also contradict the `stage: doing` those stubs are born with.
+- That applies to **creation only**. An existing activity is never re-flagged by being mentioned again,
+  otherwise yesterday's carried-forward journal would silently resurrect everything the user dropped.
+- The matrix is a live view rendered from a ```` ```2ndbrain-matrix ```` code block, not generated markdown —
+  static tables cannot carry buttons. `EisenhowerMatrixComposer.refresh` only installs the block if absent.
+- The Projects dashboard works the same way (```` ```2ndbrain-projects ````, `ProjectsView`). It answers
+  *which projects need a decision*, not *how many activities each one has*: `ProjectsDashboard` computes a
+  `health` per project (`stalled` / `no-next-action` / `active` / `complete` / `empty`) and sorts by it
+  inside each role, most-neglected first. Projects with no activities are folded into one collapsed line —
+  in a real vault they outnumber the rest and a screen of `0/0 (0%)` rows carries no review signal.
+- The per-project bar is a stage **mix** (done/doing/backlog), so it always fills its track. Its column is
+  therefore labelled "Activities", never "Progress" — an untouched project with one `doing` activity would
+  otherwise look finished.
+- `takeToWorkDate` fires through `PlanDateActivation`, run before the Activities section is built and again
+  on every matrix render. It **always clears the date**. A date left in the frontmatter would re-take the
+  activity on every render, making it impossible to drop for as long as the date stayed in the past. A
+  `done` activity has its stale date cleared but is never revived.
+- Home (```` ```2ndbrain-home ````, `HomeView`, `HomeComposer` installing `Home.md`) is **not** a third
+  dashboard and must not grow into one. It renders no tables and repeats no rows from the matrix or the
+  projects view — it reports role balance and system health, then links out. The hard constraint is that
+  the whole page stays readable in one glance in landscape on a phone (~780x360); anything that needs a
+  table belongs in one of the other two views. `tests/HomeView.test.ts` asserts no table is ever emitted.
+- A role card warns only when `open > 0 && taken === 0`. A role with nothing open is *clear*, not
+  neglected — warning on it would train the user to ignore the warning colour.
+- Home never creates a daily note or Context page — it links to one only if it already exists, else renders
+  a plain non-clickable label. Creation stays owned by the daily-note pipeline and the open commands, which
+  know the nested-folder conventions.
+- Home runs its own calm palette (`--zen-*`, scoped to `.twobrain-home`) rather than the sharper accent
+  colours the other views use — it is the page opened first, and it should read as a quiet room. The banner
+  is an inline SVG data-URI, not a binary asset: no file to ship, no licence to track, and it recolours for
+  the dark theme.
+- `loadProjectRecords` (`utilities/ProjectIndex.ts`) is the one place the `Projects/<slug>.md` vs
+  `Projects/<slug>/Project.md` resolution lives; `ProjectsView` and `HomeView` both use it.
+- `theme/` is the Zen 2ndBrain Obsidian theme, shipped alongside the plugin but installed separately (it
+  goes to `.obsidian/themes/`, not `.obsidian/plugins/`). It exists so the plugin's views and the rest of
+  the vault share one palette. The matrix and projects views already use Obsidian's standard variables, so
+  they inherit it for free — **keep it that way**: a hardcoded colour in a view is a colour the theme can
+  no longer unify.
+- Home is the exception, because its calm palette predates the theme. Its `--zen-*` values now read
+  `var(--tb-*, <literal>)`, so the theme drives them when installed and the literals keep Home correct
+  under any other theme. New Home colours must follow the same two-level pattern.
+- The theme is system-font only on purpose. SF Pro/SF Mono are already on the user's Mac and iPhone, need
+  no licence to embed, and `-apple-system` switches optical sizes automatically. Don't add a webfont
+  without a reason that survives the phone.
+- `LifeStats` derives a year of history from vault *metadata only* — filename dates, which Context pages
+  sit beside a daily note, and `TFile.stat.size`. Home re-renders on every open, so reading 365 notes to
+  draw two small charts is not an option; that budget is what the numbers are allowed to mean. Don't add a
+  metric here that needs file contents — put it behind a command instead.
+- The radar normalizes against the user's own busiest role, never an absolute target. The question is "is
+  my life lopsided", and a fixed target would just make a quiet year look like a failure. A role at zero
+  still gets an axis and a hollow dot — that's the most useful thing the chart can say.
+- Consistency levels are quantiles of the user's own days, not byte thresholds. A template that grows would
+  make absolute cutoffs drift into lying.
+- The streak survives today being unwritten. A streak that resets each morning only punishes you for
+  checking Home early.
+- **Nothing written into a daily note or Context page is ever deleted by the plugin** (D1). A rebuild keeps
+  every existing activity block that has content beneath its heading — even for an activity that is now
+  dropped or done — and merges genuinely new todos in rather than replacing the user's lines
+  (`ActivitiesInProgress.mergeWithWritten`). Because the fresh section absorbs those blocks verbatim,
+  `DailyNoteComposer` strips the originals first (`stripActivityBlocks`) or they would appear twice.
+- **Drop** and the `done`/`backlog` stages also prune the activity's block from today's daily note and
+  Context pages — but only when that block is **empty**. A block with content stays, and the user is told so
+  via a `Notice`. Empty/non-empty is the whole rule: see `src/utilities/DailyNoteSection.ts`.
+- Matrix buttons write via `FileIO.updateFrontmatterFields`, which does pure line-level surgery
+  (`upsertFrontmatterField`) rather than a YAML round-trip, so hand-written field order survives.
+- The People dashboard (```` ```2ndbrain-people ````, `PeopleView`, `PeopleDashboardComposer`
+  installing `Dashboards/People.md`) reports on **two** things from one scan of **only**
+  `Journal/**/*.md`: contact history from every `[[Person]]` link, and promises from two inline
+  tags on a todo line — `@owed [[Person]]` (I owe them) and `@waiting [[Person]]` (they owe me).
+  Activities and People pages are never scanned — they mirror journal content, so scanning them too
+  would double-count every commitment (same rule as D1).
+- **Contact history is load-bearing, not a nice-to-have.** The tag convention did not exist in this
+  vault when the feature shipped (0 of 470 journal files used it), so a dashboard built only on
+  `@owed`/`@waiting` rendered as all zeroes and taught the user to stop opening it. Anything added
+  here must produce something useful from links that are *already* in the journal. `days` counts
+  journal *files* mentioning a person, never raw link occurrences — otherwise one note with a long
+  attendee list outranks someone mentioned weekly for a year.
+- **`People/` contains notes that are not people** — iteration notes, overviews, meeting minutes,
+  test pages. `looksLikePerson()` in `Commitments.ts` is the single gate (digits and dots are the
+  strongest discriminators here; no human in this vault has either in their page name), and
+  `isPersonPage()` in `CommitmentIndex.ts` adds the `People/Meetings/` exclusion. Both `personFrom`
+  and every caller that enumerates person pages must go through them, or stale links like
+  `[[People/EELS-W33-iteration]]` come back as rows. Bump `CACHE_VERSION` whenever this filter
+  changes — unchanged files otherwise keep serving results the current parser would never produce.
+- `Commitments.ts` (pure, D7) resolves the person for a tagged line in order: link on the line
+  itself, then a link on the nearest enclosing heading (the existing `### Topic [[Person]]`
+  pattern), then — if neither names anyone — the commitment is kept under an `UNASSIGNED` bucket
+  rather than dropped (D9). It also applies the same born/done state-transition rule as
+  `MentionsProcessor` (D4): first open occurrence sets the "born" date, first `[x]` closes it,
+  carry-forward repeats don't reset the clock. There is deliberately no due-date syntax — a
+  commitment's only time signal is its age, never a deadline the system would have to invent.
+- Person resolution accepts a bare link (`[[Frederik Stray]]`) only when that page already exists
+  (`knownPeople()`), and a folder-qualified link (`[[People/Name]]`, `[[People/Archive/Name]]`)
+  unconditionally. This asymmetry is intentional and is the only way "mentioned but no page"
+  detection can ever fire — don't unify the two paths.
+- `CommitmentIndex` mtime-caches parsed commitments per journal file, persisted on
+  `settings.commitmentCache` (round-trips through the existing `loadData`/`saveData`, no separate
+  storage). `TwoBrainPlugin.commitmentCacheAccess()` is the one shared accessor — both `PeopleView`
+  and `HomeView` must go through it so a warm scan from either view benefits the other.
+- `PeopleDashboard.buildRows()` (pure, D7) computes a `health` per person, in strict precedence:
+  `aging` (oldest open commitment ≥ `AGING_DAYS`) → `open` (open commitments, none aging) → `quiet`
+  (≥ `HISTORY_DAYS` days of contact, silent ≥ `QUIET_DAYS`, not archived) → `active` (seen within
+  `QUIET_DAYS`) → `dormant`. Two rules that look like bugs and are not: archived people can never
+  be `quiet` (filing them was the decision), and `HISTORY_DAYS` gates quiet on having a history to
+  lapse *from* — without it the list fills with names that came up once. `HISTORY_DAYS` is 2 because
+  this journal links people sparingly; raising it silences the very relationships the page exists to
+  catch, so re-probe real data before changing it. The `UNASSIGNED` bucket is data, not a person:
+  `missingPage` is always false for it and it never appears in `summarize().people`/`.active`/
+  `.quiet` or the resting section.
+- `ContactStat` lives in `Commitments.ts`, not `CommitmentIndex.ts`, purely so `PeopleDashboard` can
+  import it without pulling in `AppLike`/`FileIO` and breaking D7. `CommitmentIndex` re-exports it
+  for callers that already depend on the index.
+- The view splits visible rows into **Outstanding / Gone quiet / In touch** plus a folded resting
+  section. The full syntax-teaching empty state renders only when there are *no rows at all*; once
+  contact history fills the table it shrinks to a one-line hint, because at that point promises are
+  a feature the page is missing rather than the reason it exists.
+- `PeopleView.setDone()` only flips `[ ]`→`[x]` on the exact matched line (`lines.indexOf(c.raw)`);
+  if the line has changed since the last scan, the write is abandoned and the note opens instead —
+  never guess which line to edit.
+- Home's people strip (`HomeView.renderPeople`) is **unconditional** — it renders whenever any person
+  exists, unlike the health signals which only fire on a problem. That asymmetry is the point: a good
+  week previously erased relationships from Home entirely, which is precisely when drift begins. It
+  shows *names* (capped at `PEOPLE_ON_HOME`, each linking to the person's page), never counts alone,
+  because a name is actionable and "2 in touch" is not. It must stay a strip — three short lines —
+  or it becomes the third dashboard Home is explicitly not.
+- Home's two relationship signals (`aging-promises`, `quiet-people` in `HomeDashboard.buildSignals`)
+  reuse the same `Commitments`/`PeopleDashboard`/shared-cache path via `HomeView.buildPeopleSignals()`,
+  wrapped in try/catch — a parsing bug there must never break Home's core render, per the same
+  "Home is a glance page, not a third dashboard" rule above. No new chart or radar axis was added
+  for relationships; a list of names is a list problem, not a chart one.
 
 **Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 184 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done. 602 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
-**Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer.
+**Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer, EisenhowerMatrix, ProjectsDashboard, HomeDashboard, LifeStats, Commitments, CommitmentIndex, PeopleDashboard.
 
 ### Install
 

@@ -42,17 +42,70 @@ export class AutoActivityCreator {
 	/**
 	 * Scans `content` for unresolved wikilinks and creates Activity files for each.
 	 * @param projectRef - "inbox" or "Projects/Name.md" — written into the created file's frontmatter
+	 * @param role - pre-fills the created file's `role:` field (e.g. when the
+	 *   scan runs against a Contexts/YYYY-MM-DD-<Role>.md page, so a brand
+	 *   new activity typed there is already tagged with that role). Omit for
+	 *   an empty `role: ` field the user can fill in by hand — e.g. when the
+	 *   scan runs against the plain daily note, where no role is implied.
 	 */
 	async createMissingFromContent(
 		app: AppLike,
 		content: string,
 		today: string,
-		projectRef: string
+		projectRef: string,
+		role: string = ''
 	): Promise<void> {
 		const missing = this.extractMissingPaths(app, content);
 		for (const path of missing) {
-			await this.createActivityFile(app, path, today, projectRef);
+			await this.createActivityFile(app, path, today, projectRef, role);
 		}
+	}
+
+	/**
+	 * Populates a blank note (e.g. one Obsidian just created from clicking an
+	 * unresolved wikilink outside the AutoActivityCreator scan path — a link
+	 * typed directly into an Activity/People note, or clicked before the
+	 * Journal pipeline re-ran) with the same default frontmatter used for
+	 * links discovered via createMissingFromContent. No-ops if the file
+	 * already has any content, so it never clobbers real notes.
+	 */
+	async initializeIfEmpty(
+		app: AppLike,
+		path: string,
+		today: string,
+		projectRef: string,
+		role: string = ''
+	): Promise<boolean> {
+		const file = app.vault.getAbstractFileByPath(path);
+		if (!file) return false;
+
+		const content = await app.vault.read(file);
+		if (content.trim().length > 0) return false;
+
+		await app.vault.modify(file, this.generateDefaultContent(today, projectRef, role));
+		return true;
+	}
+
+	/**
+	 * Checks whether `content` contains a wikilink resolving to `targetPath`
+	 * (e.g. "Activities/Foo.md"). Used to infer which role a brand-new
+	 * activity should get when Obsidian's native "create note from an
+	 * unresolved link click" flow fires — that flow opens the newly-created
+	 * target file directly, so by the time it's routed we've lost track of
+	 * which page (plain daily note vs. a role's Context page) the link was
+	 * actually clicked from. Scanning candidate pages' on-disk content for a
+	 * link to this exact path recovers that context.
+	 */
+	contentLinksTo(content: string, targetPath: string): boolean {
+		const cleanedContent = stripCodeBlocks(content).replace(/!\[\[[^\]]*\]\]/g, '');
+		let m: RegExpExecArray | null;
+		const re = new RegExp(WIKILINK_RE.source, 'g');
+		while ((m = re.exec(cleanedContent)) !== null) {
+			const raw = m[1]!.trim();
+			if (!raw || !isValidWikiTarget(raw)) continue;
+			if (this.resolveActivityPath(raw) === targetPath) return true;
+		}
+		return false;
 	}
 
 	// ── Private ──────────────────────────────────────────────────────────────
@@ -129,7 +182,8 @@ export class AutoActivityCreator {
 		app: AppLike,
 		path: string,
 		today: string,
-		projectRef: string
+		projectRef: string,
+		role: string = ''
 	): Promise<void> {
 		try {
 			const folderPath = path.substring(0, path.lastIndexOf('/'));
@@ -137,7 +191,7 @@ export class AutoActivityCreator {
 				await app.vault.createFolder(folderPath);
 			}
 
-			await app.vault.create(path, this.generateDefaultContent(today, projectRef));
+			await app.vault.create(path, this.generateDefaultContent(today, projectRef, role));
 		} catch (err) {
 			const msg = (err as Error).message ?? '';
 			if (!msg.includes('already exists') && !msg.includes('File already exists')) {
@@ -147,15 +201,31 @@ export class AutoActivityCreator {
 		}
 	}
 
-	private generateDefaultContent(today: string, projectRef: string): string {
+	/**
+	 * `role` is always written — even blank — so the field is visible in
+	 * the frontmatter for the user to click into and fill, rather than
+	 * needing to know to add it themselves. Activities are now the source
+	 * of truth for role (a Project can span many roles across its own
+	 * activities), so this replaces relying solely on the linked Project's
+	 * `role:` field.
+	 */
+	private generateDefaultContent(today: string, projectRef: string, role: string = ''): string {
 		return [
 			'---',
 			`startDate: ${today}`,
 			'stage: doing',
+			// The Journal is the source of truth: writing [[Something]] in a
+			// daily note or Context page IS the act of taking it to work, so
+			// the stub is born planned. That also keeps it consistent with
+			// `stage: doing` above (and with resolveTakeToWork's fallback for
+			// activities predating this field). Use the matrix's "Drop" button
+			// to say "captured, but not today".
+			'takeToWork: true',
 			'responsible: [Me]',
 			'priority: not-urgent-important',
 			'remind: weekdays',
 			`project: ${projectRef}`,
+			`role: ${role}`,
 			'---',
 			'',
 			'## Description',

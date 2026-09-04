@@ -1,0 +1,467 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * Zen 2ndBrain
+ *
+ * One palette for the whole vault, so the daily note, the Eisenhower
+ * matrix, the projects dashboard and the Home page all look like parts of
+ * the same object rather than four tools sharing a window.
+ *
+ * The colours are warm stone and sage: a paper-coloured background instead
+ * of white, ink instead of black, and a desaturated green as the only
+ * accent. Nothing in the palette is fully saturated, because in a system
+ * you look at every day, saturation is a budget — spend it on the two or
+ * three things that genuinely need to interrupt you (overdue, stalled) and
+ * everything else can stay quiet.
+ *
+ * Typography is deliberately system-only: SF Pro and SF Mono are already on
+ * macOS and iOS, they are hinted and optically sized for those exact
+ * screens, and a vault synced to a phone renders identically with nothing
+ * to install. `-apple-system` also switches between SF Pro Text and Display
+ * automatically by size, which no webfont can do.
+ *
+ * Everything is defined through Obsidian's own variables, so third-party
+ * plugins that use them inherit the palette for free — including this
+ * vault's own 2ndBrain Engine views.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+body {
+	/* SF Pro. The stack degrades to the platform UI face everywhere else. */
+	--font-interface-theme:
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-text-theme:
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	/* `ui-monospace` resolves to SF Mono without needing it licensed as a
+	   webfont, which is the only legitimate way to get it in an app. */
+	--font-monospace-theme:
+		ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+		"Liberation Mono", monospace;
+
+	--font-text-size: 16px;
+	--font-ui-smaller: 12px;
+	--font-ui-small: 13px;
+	--font-ui-medium: 15px;
+	--font-ui-large: 20px;
+
+	/* Looser than Obsidian's default. Body text at 16px wants ~1.6 to stop
+	   lines visually merging, and this vault's notes are long. */
+	--line-height-normal: 1.62;
+	--line-height-tight: 1.3;
+
+	/* ~68 characters — the span the eye can track without losing its place. */
+	--file-line-width: 40rem;
+
+	--radius-s: 5px;
+	--radius-m: 8px;
+	--radius-l: 12px;
+
+	--border-width: 1px;
+}
+
+/* ── Light: warm paper ────────────────────────────────────────────────── */
+
+.theme-light {
+	--color-base-00: #faf8f4;
+	--color-base-05: #f6f3ed;
+	--color-base-10: #f2eee7;
+	--color-base-20: #ece7de;
+	--color-base-25: #e6e0d6;
+	--color-base-30: #e0dad0;
+	--color-base-35: #d4cec3;
+	--color-base-40: #beb9ad;
+	--color-base-50: #9aa8a2;
+	--color-base-60: #83918b;
+	--color-base-70: #6d7f78;
+	--color-base-100: #33413c;
+
+	--accent-h: 157;
+	--accent-s: 21%;
+	--accent-l: 42%;
+
+	--color-red: #b4705f;
+	--color-orange: #c08a52;
+	--color-yellow: #ab9247;
+	--color-green: #6f9285;
+	--color-cyan: #5f9298;
+	--color-blue: #6b87a8;
+	--color-purple: #8b7fa3;
+	--color-pink: #b0798e;
+
+	--color-red-rgb: 180, 112, 95;
+	--color-orange-rgb: 192, 138, 82;
+	--color-yellow-rgb: 171, 146, 71;
+	--color-green-rgb: 111, 146, 133;
+	--color-cyan-rgb: 95, 146, 152;
+	--color-blue-rgb: 107, 135, 168;
+	--color-purple-rgb: 139, 127, 163;
+	--color-pink-rgb: 176, 121, 142;
+
+	/* The tokens the 2ndBrain Engine's Home page reads, so it stops being an
+	   island with its own private palette. */
+	--tb-ink: #33413c;
+	--tb-soft: #6d7f78;
+	--tb-faint: #9aa8a2;
+	--tb-surface: #f2eee7;
+	--tb-line: #e0dad0;
+	--tb-accent: #6f9285;
+	--tb-warn: #c08a52;
+	--tb-alert: #b4705f;
+
+	--tb-shadow: rgba(51, 65, 60, 0.07);
+}
+
+/* ── Dark: ink, not black ─────────────────────────────────────────────── */
+
+.theme-dark {
+	--color-base-00: #1b1f21;
+	--color-base-05: #1f2426;
+	--color-base-10: #23282a;
+	--color-base-20: #282e30;
+	--color-base-25: #2d3436;
+	--color-base-30: #333a3c;
+	--color-base-35: #3c4447;
+	--color-base-40: #4a5457;
+	--color-base-50: #6f7d78;
+	--color-base-60: #869490;
+	--color-base-70: #9dada7;
+	--color-base-100: #d8e0dc;
+
+	--accent-h: 157;
+	--accent-s: 22%;
+	--accent-l: 60%;
+
+	--color-red: #cc8878;
+	--color-orange: #d3a273;
+	--color-yellow: #c6ac68;
+	--color-green: #85ab9c;
+	--color-cyan: #7bacb2;
+	--color-blue: #8aa3c2;
+	--color-purple: #a598bd;
+	--color-pink: #c894a6;
+
+	--color-red-rgb: 204, 136, 120;
+	--color-orange-rgb: 211, 162, 115;
+	--color-yellow-rgb: 198, 172, 104;
+	--color-green-rgb: 133, 171, 156;
+	--color-cyan-rgb: 123, 172, 178;
+	--color-blue-rgb: 138, 163, 194;
+	--color-purple-rgb: 165, 152, 189;
+	--color-pink-rgb: 200, 148, 166;
+
+	--tb-ink: #d8e0dc;
+	--tb-soft: #9dada7;
+	--tb-faint: #6f7d78;
+	--tb-surface: #23282a;
+	--tb-line: #333a3c;
+	--tb-accent: #85ab9c;
+	--tb-warn: #d3a273;
+	--tb-alert: #cc8878;
+
+	--tb-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* ── Shared derivations ───────────────────────────────────────────────── */
+
+body {
+	--background-secondary-alt: var(--color-base-05);
+	--divider-color: var(--color-base-25);
+
+	--text-selection: hsla(var(--accent-h), var(--accent-s), 60%, 0.22);
+	--text-highlight-bg: hsla(45, 60%, 60%, 0.32);
+
+	--link-decoration: none;
+	--link-decoration-hover: underline;
+	--link-external-decoration: none;
+
+	--h1-weight: 600;
+	--h2-weight: 600;
+	--h3-weight: 600;
+	--h4-weight: 600;
+	--h5-weight: 600;
+	--h6-weight: 600;
+
+	--h1-size: 1.72em;
+	--h2-size: 1.4em;
+	--h3-size: 1.18em;
+	--h4-size: 1.04em;
+	--h5-size: 0.94em;
+	--h6-size: 0.88em;
+
+	--h1-color: var(--text-normal);
+	--h2-color: var(--text-normal);
+	--h3-color: var(--text-normal);
+	--h4-color: var(--text-muted);
+	--h5-color: var(--text-muted);
+	--h6-color: var(--text-faint);
+
+	--bold-color: var(--text-normal);
+	--italic-color: var(--text-normal);
+
+	--blockquote-border-color: var(--color-green);
+	--blockquote-color: var(--text-muted);
+
+	--hr-color: var(--color-base-25);
+	--hr-thickness: 1px;
+
+	--code-background: var(--color-base-10);
+	--code-normal: var(--color-base-70);
+	--code-size: 0.9em;
+
+	--tag-background: rgba(var(--color-green-rgb), 0.13);
+	--tag-color: var(--color-green);
+	--tag-border-width: 0;
+	--tag-radius: 4px;
+
+	--checkbox-color: var(--color-green);
+	--checkbox-color-hover: var(--color-green);
+	--checkbox-border-color: var(--color-base-40);
+	--checkbox-marker-color: var(--color-base-00);
+	--checkbox-radius: 4px;
+
+	--table-header-background: var(--color-base-10);
+	--table-header-color: var(--text-muted);
+	--table-row-alt-background: var(--color-base-05);
+	--table-border-color: var(--color-base-25);
+
+	--input-radius: var(--radius-s);
+	--modal-radius: var(--radius-l);
+
+	--scrollbar-thumb-bg: var(--color-base-30);
+	--scrollbar-active-thumb-bg: var(--color-base-40);
+	--scrollbar-bg: transparent;
+
+	--titlebar-background: var(--color-base-05);
+	--titlebar-background-focused: var(--color-base-05);
+
+	--tab-outline-color: var(--color-base-25);
+	--tab-text-color-focused-active: var(--text-normal);
+
+	--nav-item-color: var(--text-muted);
+	--nav-item-color-hover: var(--text-normal);
+	--nav-item-color-active: var(--text-normal);
+	--nav-item-background-active: rgba(var(--color-green-rgb), 0.13);
+	--nav-item-weight-active: 600;
+
+	--indentation-guide-color: var(--color-base-30);
+	--collapse-icon-color: var(--color-base-40);
+}
+
+/* ── Reading comfort ──────────────────────────────────────────────────── */
+
+/* Digits the same width everywhere, so counts in a column line up and a
+   number changing doesn't shuffle the layout beside it. This matters more
+   in this vault than in most: nearly every custom view is a table of counts. */
+body,
+.markdown-preview-view table,
+.markdown-source-view table,
+.twobrain-matrix,
+.twobrain-projects,
+.twobrain-people,
+.twobrain-home {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Headings sit closer to the text they own than to the text above them —
+   proximity is what makes a document scannable without any rules or boxes. */
+.markdown-preview-view h1,
+.markdown-preview-view h2,
+.markdown-preview-view h3,
+.markdown-rendered h1,
+.markdown-rendered h2,
+.markdown-rendered h3 {
+	letter-spacing: -0.011em;
+	margin-top: 1.7em;
+	margin-bottom: 0.45em;
+}
+
+/* A hairline under H2 gives long daily notes a visible spine when you
+   scroll fast, without the weight of a full rule. */
+.markdown-preview-view h2,
+.markdown-rendered h2 {
+	padding-bottom: 0.22em;
+	border-bottom: 1px solid var(--color-base-25);
+}
+
+.markdown-preview-view h1,
+.markdown-rendered h1 {
+	letter-spacing: -0.018em;
+}
+
+/* Inline code shouldn't shout — it's a word in a sentence, not a block. */
+.markdown-rendered code {
+	padding: 0.1em 0.32em;
+	border-radius: 4px;
+	background-color: var(--code-background);
+	color: var(--color-base-70);
+}
+
+/* Inside a block, code *is* the content, so it gets full contrast and drops
+   the inline chrome it would otherwise inherit. */
+.markdown-rendered pre code {
+	padding: 0;
+	background-color: transparent;
+	color: var(--text-normal);
+}
+
+.markdown-rendered pre {
+	border: 1px solid var(--color-base-25);
+	border-radius: var(--radius-m);
+}
+
+.markdown-rendered blockquote {
+	padding-left: 1em;
+	border-left-width: 3px;
+	font-style: normal;
+}
+
+.markdown-rendered hr {
+	margin: 2.2em 0;
+}
+
+/* Lists are most of this vault. Tightening them fits more of a day on
+   screen while keeping the lines distinguishable. */
+.markdown-rendered ul,
+.markdown-rendered ol {
+	padding-inline-start: 1.5em;
+}
+
+.markdown-rendered li {
+	margin-bottom: 0.16em;
+}
+
+/* A finished task should recede, not vanish — you still need to read it. */
+.markdown-rendered li.task-list-item[data-task="x"],
+.markdown-rendered li.task-list-item[data-task="X"] {
+	color: var(--text-faint);
+	text-decoration: line-through;
+	text-decoration-color: var(--color-base-35);
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────── */
+
+.markdown-rendered table {
+	border-collapse: separate;
+	border-spacing: 0;
+	border: 1px solid var(--table-border-color);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+	font-size: 0.94em;
+}
+
+.markdown-rendered th {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--table-header-color);
+}
+
+.markdown-rendered th,
+.markdown-rendered td {
+	border: none;
+	border-bottom: 1px solid var(--table-border-color);
+	padding: 6px 10px;
+}
+
+.markdown-rendered tr:last-child td {
+	border-bottom: none;
+}
+
+/* ── Chrome ───────────────────────────────────────────────────────────── */
+
+/* The sidebars sit half a step back from the note so the eye knows which
+   surface is the work and which is the furniture. */
+.workspace-split.mod-left-split,
+.workspace-split.mod-right-split {
+	background-color: var(--color-base-05);
+}
+
+.workspace-tab-header.is-active {
+	border-radius: var(--radius-s) var(--radius-s) 0 0;
+}
+
+.workspace-leaf-content[data-type="markdown"] .view-content {
+	background-color: var(--background-primary);
+}
+
+.nav-file-title,
+.nav-folder-title {
+	border-radius: var(--radius-s);
+}
+
+.nav-folder-title {
+	font-weight: 600;
+	color: var(--text-muted);
+}
+
+/* Sentence-case, quiet headers in the side panels. */
+.nav-header,
+.side-dock-ribbon,
+.workspace-tab-header-container {
+	background-color: transparent;
+}
+
+.suggestion-item.is-selected {
+	background-color: rgba(var(--color-green-rgb), 0.16);
+}
+
+.prompt,
+.modal {
+	border: 1px solid var(--color-base-25);
+	box-shadow: 0 12px 36px var(--tb-shadow);
+}
+
+/* ── Callouts ─────────────────────────────────────────────────────────── */
+
+.callout {
+	border-radius: var(--radius-m);
+	border: 1px solid rgba(var(--callout-color), 0.28);
+	background-color: rgba(var(--callout-color), 0.07);
+	mix-blend-mode: normal;
+}
+
+.callout-title {
+	font-weight: 600;
+	padding: 8px 12px;
+}
+
+.callout-content {
+	padding: 0 12px 8px;
+}
+
+/* ── 2ndBrain Engine views ────────────────────────────────────────────── */
+
+/* The plugin's views already read Obsidian's own variables, so they pick
+   the palette up on their own. These are the few places worth nudging so
+   they sit at the same visual weight as the rest of the vault. */
+
+.twobrain-matrix-quadrant,
+.twobrain-projects-section {
+	border-radius: var(--radius-m);
+}
+
+.twobrain-matrix-table,
+.twobrain-projects-table,
+.twobrain-people-table {
+	font-size: var(--font-ui-small);
+}
+
+.twobrain-matrix-quadrant-title,
+.twobrain-projects-section-title {
+	letter-spacing: 0.03em;
+}
+
+/* Home already has the softest surface in the vault; matching its radius
+   to the theme's keeps the corners consistent across every panel. */
+.twobrain-home-panel,
+.twobrain-home-banner {
+	border-radius: var(--radius-l);
+}
+
+/* ── Print ────────────────────────────────────────────────────────────── */
+
+@media print {
+	body {
+		--file-line-width: 100%;
+	}
+}

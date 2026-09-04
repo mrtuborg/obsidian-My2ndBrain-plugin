@@ -13,3 +13,19 @@ export class Setting {
   addToggle(cb: any) { return this; }
 }
 export class App {}
+
+// Obsidian re-exports moment and ships normalizePath; both are used when
+// working out where today's daily note belongs.
+export { default as moment } from 'moment';
+
+export function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+export class Modal {
+  app: any;
+  contentEl: any = {};
+  constructor(app: any) { this.app = app; }
+  open() {}
+  close() {}
+}

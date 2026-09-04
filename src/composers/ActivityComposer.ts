@@ -4,6 +4,12 @@ import { AttributesProcessor } from '../components/AttributesProcessor';
 import { ProjectDescriptionInjector } from '../components/ProjectDescriptionInjector';
 import { MentionsProcessor } from '../components/MentionsProcessor';
 import { BlockCollection } from '../components/BlockCollection';
+import {
+	TAKE_TO_WORK_FIELD,
+	TAKE_TO_WORK_DATE_FIELD,
+	resolveTakeToWork,
+	normalizeTakeToWorkDate,
+} from '../utilities/TakeToWork';
 
 export interface ComposerSettings {
 	journalFolder: string;
@@ -13,7 +19,10 @@ export interface ComposerSettings {
 	syncGraceSeconds?: number;
 }
 
-const STANDARD_FIELDS = new Set(['startDate', 'stage', 'responsible', 'type', 'project']);
+const STANDARD_FIELDS = new Set([
+	'startDate', 'stage', 'responsible', 'type', 'project', 'role',
+	TAKE_TO_WORK_FIELD, TAKE_TO_WORK_DATE_FIELD,
+]);
 
 export interface PrebuiltBlocks {
 	journalBlocks: BlockCollection;
@@ -68,12 +77,32 @@ export class ActivityComposer {
 			? respRaw.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean)
 			: [respRaw];
 		const type      = this.fileIO.parseFrontmatterField(rawContent, 'type') ?? null;
+		// project/role are preserved as-is (falling back to blank rather than
+		// null) so they always round-trip through generateActivityHeader,
+		// even when unset — see its own comment for why that matters.
+		const project   = this.fileIO.parseFrontmatterField(rawContent, 'project') ?? '';
+		const role      = this.fileIO.parseFrontmatterField(rawContent, 'role') ?? '';
+
+		// takeToWork is mandatory: activities written before this field existed
+		// get it stamped here, derived from their stage, so simply opening an
+		// activity normalises it (the one-shot backfill command does the rest).
+		const takeToWork = resolveTakeToWork(
+			this.fileIO.parseFrontmatterBool(rawContent, TAKE_TO_WORK_FIELD),
+			stage
+		);
+		const takeToWorkDate = normalizeTakeToWorkDate(
+			this.fileIO.parseFrontmatterField(rawContent, TAKE_TO_WORK_DATE_FIELD)
+		);
 
 		// Extra fields must be preserved unchanged (invariant A.1.6)
 		const extraFields = this.fileIO.parseExtraFrontmatterFields(rawContent, STANDARD_FIELDS);
 
 		// 3. Build frontmatter object for directive mutations
-		const frontmatterObj: Record<string, unknown> = { startDate, stage, responsible, type };
+		const frontmatterObj: Record<string, unknown> = {
+			startDate, stage, responsible, type, project, role,
+			[TAKE_TO_WORK_FIELD]: takeToWork,
+			[TAKE_TO_WORK_DATE_FIELD]: takeToWorkDate,
+		};
 
 		// 4. Extract content sections
 		const { dataviewJsBlock, pageContent } = this.fileIO.extractFrontmatterAndDataviewJs(rawContent);
@@ -116,8 +145,22 @@ export class ActivityComposer {
 		// 10. Rebuild frontmatter (with mutated Standard fields + preserved Extra fields)
 		const updatedStage     = (frontmatterObj['stage'] as string) ?? stage;
 		const updatedStartDate = (frontmatterObj['startDate'] as string) ?? startDate;
+		const updatedProject   = (frontmatterObj['project'] as string) ?? project;
+		const updatedRole      = (frontmatterObj['role'] as string) ?? role;
+		// Finishing an activity retires it from planning: it leaves both the
+		// daily note and the Eisenhower Matrix without needing a second click.
+		const rawUpdatedTakeToWork = frontmatterObj[TAKE_TO_WORK_FIELD];
+		const updatedTakeToWork = updatedStage === 'done'
+			? false
+			: typeof rawUpdatedTakeToWork === 'string'
+				? rawUpdatedTakeToWork.trim().toLowerCase() === 'true'
+				: Boolean(rawUpdatedTakeToWork);
+		const updatedTakeToWorkDate = normalizeTakeToWorkDate(
+			frontmatterObj[TAKE_TO_WORK_DATE_FIELD] as string
+		);
 		const newFrontmatter = this.fileIO.generateActivityHeader(
-			updatedStartDate, updatedStage, responsible, type, extraFields
+			updatedStartDate, updatedStage, responsible, type, extraFields, updatedProject, updatedRole,
+			updatedTakeToWork, updatedTakeToWorkDate
 		);
 
 		// 11. Compose and save

@@ -189,6 +189,48 @@ describe('ActivityComposer.processActivity', () => {
 		expect(saved).toContain('wiki: ""');
 	});
 
+	// Regression: project was declared a "standard" field but never actually
+	// threaded through to the rewritten frontmatter, so it silently vanished
+	// from every activity on every save.
+	it('preserves the project field across processing', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({}), // fixture includes "project: inbox"
+		});
+
+		await composer.processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = (app.vault as MockVault).saves.get(ACTIVITY_PATH)!;
+		expect(saved).toContain('project: inbox');
+	});
+
+	// Regression: role must survive processing too, and stay visible even
+	// when blank, so a newly-created activity's empty role: field isn't
+	// stripped the moment it's first opened/processed.
+	it('preserves a set role field across processing', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({ extraFields: 'role: Engineer' }),
+		});
+
+		await composer.processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = (app.vault as MockVault).saves.get(ACTIVITY_PATH)!;
+		expect(saved).toContain('role: Engineer');
+	});
+
+	it('keeps a blank role field visible (not stripped) across processing', async () => {
+		const composer = new ActivityComposer(SETTINGS);
+		const app = makeApp({
+			[ACTIVITY_PATH]: activityContent({ extraFields: 'role: ' }),
+		});
+
+		await composer.processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = (app.vault as MockVault).saves.get(ACTIVITY_PATH)!;
+		expect(saved).toContain('role: ');
+	});
+
 	// AC-06: ## Description populated from Projects/
 	it('populates ## Description from project file', async () => {
 		const composer = new ActivityComposer(SETTINGS);
@@ -307,5 +349,64 @@ describe('ActivityComposer.processActivity — size guard', () => {
 		});
 
 		await expect(composer.processActivity(app, { path: ACTIVITY_PATH })).resolves.not.toThrow();
+	});
+});
+
+// ── takeToWork normalisation ─────────────────────────────────────────
+
+describe('ActivityComposer takeToWork handling', () => {
+	const SETTINGS = {
+		journalFolder: 'Journal',
+		projectsFolder: 'Projects',
+		activitiesFolder: 'Activities',
+		archiveFolder: 'Activities/Archive',
+	};
+
+	function bareActivity(lines: string[]): string {
+		return ['---', 'startDate: 2026-01-01', ...lines, 'responsible: [Me]', '---', '', '## Description', '', '----', '', '## Journal', '', '----'].join('\n');
+	}
+
+	it('stamps the mandatory field on an activity that predates it, derived from stage', async () => {
+		const app = makeApp({ [ACTIVITY_PATH]: bareActivity(['stage: doing']) });
+		await new ActivityComposer(SETTINGS).processActivity(app, { path: ACTIVITY_PATH });
+
+		expect(app.vault.saves.get(ACTIVITY_PATH)).toContain('takeToWork: true');
+	});
+
+	it('derives false for a backlog activity that predates the field', async () => {
+		const app = makeApp({ [ACTIVITY_PATH]: bareActivity(['stage: backlog']) });
+		await new ActivityComposer(SETTINGS).processActivity(app, { path: ACTIVITY_PATH });
+
+		expect(app.vault.saves.get(ACTIVITY_PATH)).toContain('takeToWork: false');
+	});
+
+	it('round-trips an explicit value and its plan date without duplicating them', async () => {
+		const app = makeApp({
+			[ACTIVITY_PATH]: bareActivity(['stage: backlog', 'takeToWork: true', 'takeToWorkDate: 2026-09-05']),
+		});
+		await new ActivityComposer(SETTINGS).processActivity(app, { path: ACTIVITY_PATH });
+
+		const saved = app.vault.saves.get(ACTIVITY_PATH)!;
+		expect(saved.match(/takeToWork:/g)).toHaveLength(1);
+		expect(saved).toContain('takeToWork: true');
+		expect(saved).toContain('takeToWorkDate: 2026-09-05');
+	});
+
+	it('drops an invalid plan date rather than writing it back', async () => {
+		const app = makeApp({
+			[ACTIVITY_PATH]: bareActivity(['stage: doing', 'takeToWork: true', 'takeToWorkDate: soon']),
+		});
+		await new ActivityComposer(SETTINGS).processActivity(app, { path: ACTIVITY_PATH });
+
+		expect(app.vault.saves.get(ACTIVITY_PATH)).not.toContain('takeToWorkDate');
+	});
+
+	it('retires a finished activity from planning', async () => {
+		const app = makeApp({
+			[ACTIVITY_PATH]: bareActivity(['stage: done', 'takeToWork: true']),
+		});
+		await new ActivityComposer(SETTINGS).processActivity(app, { path: ACTIVITY_PATH });
+
+		expect(app.vault.saves.get(ACTIVITY_PATH)).toContain('takeToWork: false');
 	});
 });

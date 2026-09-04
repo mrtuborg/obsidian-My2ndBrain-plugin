@@ -1,17 +1,199 @@
-import { Plugin, TFile, Notice } from 'obsidian';
-import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab } from './settings';
+import { Plugin, TFile, Notice, FuzzySuggestModal, WorkspaceLeaf } from 'obsidian';
+import { PluginSettings, DEFAULT_SETTINGS, TwoBrainSettingsTab, ROLES, Role } from './settings';
 import { ActivityComposer } from './composers/ActivityComposer';
 import { DailyNoteComposer } from './composers/DailyNoteComposer';
+import { ContextPageComposer } from './composers/ContextPageComposer';
+import { ProjectsDashboardComposer, PROJECTS_CODE_BLOCK_LANG } from './composers/ProjectsDashboardComposer';
+import { PeopleDashboardComposer, PEOPLE_CODE_BLOCK_LANG } from './composers/PeopleDashboardComposer';
+import { HomeComposer, HOME_CODE_BLOCK_LANG } from './composers/HomeComposer';
+import { EisenhowerMatrixComposer, MATRIX_CODE_BLOCK_LANG } from './composers/EisenhowerMatrixComposer';
+import { MatrixView } from './ui/MatrixView';
+import { ProjectsView } from './ui/ProjectsView';
+import { PeopleView } from './ui/PeopleView';
+import { HomeView } from './ui/HomeView';
+import { backfillTakeToWork } from './commands/BackfillTakeToWork';
+import { AppLike } from './utilities/FileIO';
+import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
+import { AutoActivityCreator } from './components/AutoActivityCreator';
+import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
+
+const DAILY_NOTE_ITEM = '📓 Daily Note' as const;
+type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
+
+const PROJECTS_DASHBOARD_FILENAME = 'Projects.md';
+const PEOPLE_DASHBOARD_FILENAME = 'People.md';
+const EISENHOWER_MATRIX_FILENAME = 'Eisenhower Matrix.md';
+// At the vault root, not under Dashboards/ — a landing page is where you
+// land, not one more thing to navigate to.
+const HOME_FILENAME = 'Home.md';
+// Where Projects.md itself lived before dashboards got their own folder —
+// migrated in place (preserving links) the first time a dashboard is opened.
+const LEGACY_PROJECTS_DASHBOARD_PATH = 'Projects/Dashboard.md';
+
+class ContextRoleSuggestModal extends FuzzySuggestModal<SwitcherItem> {
+	constructor(private plugin: TwoBrainPlugin) {
+		super(plugin.app);
+		this.setPlaceholder("Open today's daily note or a context page…");
+	}
+
+	getItems(): SwitcherItem[] {
+		return [DAILY_NOTE_ITEM, ...ROLES];
+	}
+
+	getItemText(item: SwitcherItem): string {
+		return item;
+	}
+
+	onChooseItem(item: SwitcherItem): void {
+		if (item === DAILY_NOTE_ITEM) {
+			void this.plugin.openTodaysDailyNote();
+		} else {
+			void this.plugin.openTodaysContextPage(item);
+		}
+	}
+}
+
+/** Gaps between startup re-open attempts, in ms. Short enough that a human
+ *  who has deliberately navigated away won't be interrupted. */
+const STARTUP_REASSERT_MS = [150, 500, 1200];
 
 export default class TwoBrainPlugin extends Plugin {
+	private startupTimers: number[] = [];
+
 	settings: PluginSettings;
 	private activityComposer!: ActivityComposer;
 	private dailyNoteComposer!: DailyNoteComposer;
+	private contextPageComposer!: ContextPageComposer;
+	private projectsDashboardComposer!: ProjectsDashboardComposer;
+	private peopleDashboardComposer = new PeopleDashboardComposer();
+	private eisenhowerMatrixComposer!: EisenhowerMatrixComposer;
+	private homeComposer = new HomeComposer();
+	private inboxActivitiesComposer!: InboxActivitiesComposer;
+	private autoCreator = new AutoActivityCreator();
+	private contextStatusBarItem!: HTMLElement;
 
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new TwoBrainSettingsTab(this.app, this));
 		this.rebuildComposers();
+
+		this.contextStatusBarItem = this.addStatusBarItem();
+		this.contextStatusBarItem.addClass('mod-clickable');
+		this.contextStatusBarItem.setText('🧭 Context');
+		this.registerDomEvent(this.contextStatusBarItem, 'click', () => {
+			new ContextRoleSuggestModal(this).open();
+		});
+
+		this.addCommand({
+			id: 'open-context-page',
+			name: "Open today's context page…",
+			callback: () => new ContextRoleSuggestModal(this).open(),
+		});
+
+		this.addCommand({
+			id: 'open-projects-dashboard',
+			name: 'Open projects dashboard',
+			callback: () => void this.openProjectsDashboard(),
+		});
+
+		this.addCommand({
+			id: 'open-people-dashboard',
+			name: 'Open people dashboard',
+			callback: () => void this.openPeopleDashboard(),
+		});
+
+		this.addCommand({
+			id: 'open-eisenhower-matrix',
+			name: 'Open Eisenhower matrix',
+			callback: () => void this.openEisenhowerMatrix(),
+		});
+
+		this.addCommand({
+			id: 'open-home',
+			name: 'Open home',
+			callback: () => void this.openHome(),
+		});
+
+		// After the workspace has finished restoring, so opening Home doesn't
+		// race Obsidian putting yesterday's tabs back and then lose focus.
+		this.app.workspace.onLayoutReady(() => void this.openHomeOnStartup());
+
+		this.addCommand({
+			id: 'backfill-take-to-work',
+			name: 'Backfill takeToWork on all activities',
+			callback: () => void this.backfillTakeToWork(),
+		});
+
+		// The matrix is a live view, not generated markdown — only a rendered
+		// code block can carry the take-to-work / plan / done buttons.
+		this.registerMarkdownCodeBlockProcessor(MATRIX_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new MatrixView(this.app, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+				projectsFolder: this.settings.projectsFolder,
+				journalFolder: this.settings.journalFolder,
+			});
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render matrix — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
+
+		// Same reasoning as the matrix: the projects dashboard carries
+		// progress bars, health pills and an inline role picker, none of
+		// which survive as generated markdown.
+		this.registerMarkdownCodeBlockProcessor(PROJECTS_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new ProjectsView(this.app, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+				projectsFolder: this.settings.projectsFolder,
+			});
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render projects dashboard — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
+
+		// Live for a third reason beyond the other two: this view writes back
+		// to journal lines and creates People pages, so it has to be
+		// interactive by nature.
+		this.registerMarkdownCodeBlockProcessor(PEOPLE_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new PeopleView(this.app, {
+				journalFolder: this.settings.journalFolder,
+				peopleFolder: this.settings.peopleFolder,
+				archiveFolder: this.settings.archiveFolder,
+			}, this.commitmentCacheAccess());
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render people dashboard — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
+
+		// The home page is a glance, not a third dashboard — it links to the
+		// matrix and projects views rather than repeating their rows.
+		this.registerMarkdownCodeBlockProcessor(HOME_CODE_BLOCK_LANG, async (_src, el) => {
+			const view = new HomeView(this.app, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+				projectsFolder: this.settings.projectsFolder,
+				journalFolder: this.settings.journalFolder,
+				dashboardsFolder: this.settings.dashboardsFolder,
+				peopleFolder: this.settings.peopleFolder,
+				contactOverdueDays: this.settings.contactOverdueDays,
+			}, this.commitmentCacheAccess());
+			try {
+				await view.render(el);
+			} catch (e) {
+				el.setText(`2ndBrain: could not render home — ${(e as Error).message}`);
+				console.error('[2ndBrain]', e);
+			}
+		});
 
 		this.registerEvent(
 			this.app.workspace.on('file-open', async (file) => {
@@ -19,6 +201,139 @@ export default class TwoBrainPlugin extends Plugin {
 				await this.routeFile(file);
 			})
 		);
+	}
+
+	/**
+	 * Ensures Contexts/<role>/<today>.md exists (creating folders/file as
+	 * needed) and opens it. The file-open handler then runs
+	 * ContextPageComposer to regenerate its Activities section.
+	 */
+	async openTodaysContextPage(role: Role): Promise<void> {
+		const dailyNote = this.findTodaysDailyNoteFile();
+		if (!dailyNote) {
+			new Notice("2ndBrain: Open today's daily note first — context pages live right next to it.");
+			return;
+		}
+
+		this.settings.currentRole = role;
+		void this.saveSettings();
+
+		const file = await this.ensureContextPageFile(role, dailyNote);
+		if (!file) return;
+
+		await this.app.workspace.getLeaf(false).openFile(file);
+
+		// Also link this context page from today's daily note, in case that
+		// note was already built earlier today (frozen) before this page existed.
+		try {
+			await this.dailyNoteComposer.ensureContextLink(
+				this.app as any, { path: dailyNote.path, basename: dailyNote.basename }, role
+			);
+		} catch (e) {
+			console.error('[2ndBrain]', e);
+		}
+	}
+
+	/**
+	 * Finds today's real daily note file, wherever it actually lives under
+	 * the journal folder (flat, or nested via a dated Daily Notes folder
+	 * format like "Journal/2026/08.August/2026-08-12.md") — never a context
+	 * page, even though those share the same YYYY-MM-DD basename.
+	 */
+	private findTodaysDailyNoteFile(): TFile | null {
+		const today = new Date().toISOString().slice(0, 10);
+		const journalFolder = this.settings.journalFolder;
+		const match = this.app.vault.getFiles().find(f =>
+			f.path.startsWith(journalFolder + '/') &&
+			f.basename === today &&
+			!matchContextPagePath(f.path, journalFolder, ROLES as readonly string[])
+		);
+		return (match as TFile) ?? null;
+	}
+
+	/**
+	 * Creates <today's-daily-note-dir>/Contexts/<today>-<role>.md (and its
+	 * Contexts folder) if it doesn't exist yet, and returns the file handle.
+	 * Shared by openTodaysContextPage() (interactive) and the automatic
+	 * post-daily-note prebuild step. `dailyNote` anchors where the sibling
+	 * Contexts folder is created — always right next to that specific note.
+	 */
+	private async ensureContextPageFile(role: Role, dailyNote: TFile): Promise<TFile | null> {
+		const today = new Date().toISOString().slice(0, 10);
+		const folderPath = contextsFolderForNote(dailyNote.path);
+		const path = contextPagePath(folderPath, today, role);
+
+		try {
+			if (!this.app.vault.getAbstractFileByPath(folderPath)) {
+				await this.app.vault.createFolder(folderPath);
+			}
+		} catch (e) {
+			const msg = (e as Error).message ?? '';
+			if (!msg.includes('already exists')) console.error('[2ndBrain]', e);
+		}
+
+		let file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+		if (!file) {
+			try {
+				file = await this.app.vault.create(path, '') as TFile;
+			} catch (e) {
+				const msg = (e as Error).message ?? '';
+				if (!msg.includes('already exists')) {
+					new Notice(`2ndBrain: Could not create ${path} — ${msg}`);
+					console.error('[2ndBrain]', e);
+					return null;
+				}
+				file = this.app.vault.getAbstractFileByPath(path) as TFile;
+			}
+		}
+		return file;
+	}
+
+	/**
+	 * Proactively creates/refreshes today's Contexts pages for every role
+	 * that has at least one qualifying activity, right after the daily note
+	 * itself is built — so context pages are ready before the user ever
+	 * switches to them, instead of being lazily built on first visit.
+	 * `dailyNote` is the note that was just opened/processed — its own
+	 * directory anchors where the sibling Contexts folder is created.
+	 */
+	private async prebuildContextPages(dailyNote: TFile): Promise<void> {
+		let roles: Set<string>;
+		try {
+			roles = await this.dailyNoteComposer.rolesToPrebuild(this.app as any);
+		} catch (e) {
+			console.error('[2ndBrain] rolesToPrebuild failed:', e);
+			return;
+		}
+
+		for (const role of roles) {
+			if (!(ROLES as readonly string[]).includes(role)) continue;
+			try {
+				const file = await this.ensureContextPageFile(role as Role, dailyNote);
+				if (!file) continue;
+				await this.contextPageComposer.processContextPage(
+					this.app as any, { path: file.path }, role
+				);
+			} catch (e) {
+				console.error(`[2ndBrain] prebuild context page failed for ${role}:`, e);
+			}
+		}
+	}
+
+	/**
+	 * Opens today's daily note if it already exists (searched at any nesting
+	 * depth under the journal folder — e.g. a dated Daily Notes folder
+	 * format). Doesn't create one: this plugin doesn't know your Daily Notes
+	 * folder-format template, so guessing a path risks creating a stray
+	 * duplicate instead of the note your Daily Notes setup would use.
+	 */
+	async openTodaysDailyNote(): Promise<void> {
+		const file = this.findTodaysDailyNoteFile();
+		if (!file) {
+			new Notice("2ndBrain: Today's daily note doesn't exist yet — create it via Obsidian's Daily notes command first.");
+			return;
+		}
+		await this.app.workspace.getLeaf(false).openFile(file);
 	}
 
 	private rebuildComposers() {
@@ -32,6 +347,251 @@ export default class TwoBrainPlugin extends Plugin {
 		};
 		this.activityComposer = new ActivityComposer(composerSettings);
 		this.dailyNoteComposer = new DailyNoteComposer(composerSettings);
+		this.contextPageComposer = new ContextPageComposer(composerSettings);
+		this.projectsDashboardComposer = new ProjectsDashboardComposer({
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
+			projectsFolder: settings.projectsFolder,
+		});
+		this.eisenhowerMatrixComposer = new EisenhowerMatrixComposer({
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
+		});
+		this.inboxActivitiesComposer = new InboxActivitiesComposer({
+			activitiesFolder: settings.activitiesFolder,
+			archiveFolder: settings.archiveFolder,
+			projectsFolder: settings.projectsFolder,
+		});
+	}
+
+	/**
+	 * Shared load/save closures for the journal commitment cache, used by
+	 * both the People dashboard and Home so a warm scan in one benefits
+	 * the other instead of each keeping its own copy.
+	 */
+	private commitmentCacheAccess() {
+		return {
+			load: () => this.settings.commitmentCache ?? null,
+			save: (cache: PluginSettings['commitmentCache']) => {
+				this.settings.commitmentCache = cache;
+				void this.saveSettings();
+			},
+		};
+	}
+
+	private projectsDashboardPath(): string {
+		return `${this.settings.dashboardsFolder}/${PROJECTS_DASHBOARD_FILENAME}`;
+	}
+
+	private peopleDashboardPath(): string {
+		return `${this.settings.dashboardsFolder}/${PEOPLE_DASHBOARD_FILENAME}`;
+	}
+
+	private eisenhowerMatrixPath(): string {
+		return `${this.settings.dashboardsFolder}/${EISENHOWER_MATRIX_FILENAME}`;
+	}
+
+	private homePath(): string {
+		return HOME_FILENAME;
+	}
+
+	/**
+	 * Ensures a dashboard note exists at `path` — creating parent folders
+	 * as needed — then opens it. If `legacyPath` is given and still exists
+	 * (pre-Dashboards-folder layout) it's moved into place instead of
+	 * creating a blank file, preserving any existing links to it. The
+	 * file-open handler then regenerates its content, same pattern as
+	 * Context pages, so it's never stale and never hand-edited.
+	 */
+	private async openDashboard(path: string, legacyPath?: string): Promise<void> {
+		let file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+		if (!file) {
+			const folder = path.slice(0, path.lastIndexOf('/'));
+			if (folder && !this.app.vault.getAbstractFileByPath(folder)) {
+				try {
+					await this.app.vault.createFolder(folder);
+				} catch (e) {
+					const msg = (e as Error).message ?? '';
+					if (!msg.includes('already exists')) console.error('[2ndBrain]', e);
+				}
+			}
+
+			const legacyFile = legacyPath
+				? (this.app.vault.getAbstractFileByPath(legacyPath) as TFile | null)
+				: null;
+			if (legacyFile) {
+				try {
+					await this.app.fileManager.renameFile(legacyFile, path);
+					file = this.app.vault.getAbstractFileByPath(path) as TFile;
+				} catch (e) {
+					console.error('[2ndBrain] Failed to migrate legacy dashboard:', e);
+				}
+			}
+
+			if (!file) {
+				try {
+					file = await this.app.vault.create(path, '') as TFile;
+				} catch (e) {
+					const msg = (e as Error).message ?? '';
+					if (!msg.includes('already exists')) {
+						new Notice(`2ndBrain: Could not create ${path} — ${msg}`);
+						console.error('[2ndBrain]', e);
+						return;
+					}
+					file = this.app.vault.getAbstractFileByPath(path) as TFile;
+				}
+			}
+		}
+		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+
+	/**
+	 * Ensures the projects dashboard note exists (creating it, or migrating
+	 * the pre-Dashboards-folder Projects/Dashboard.md into place, if
+	 * needed) and opens it.
+	 */
+	async openProjectsDashboard(): Promise<void> {
+		await this.openDashboard(this.projectsDashboardPath(), LEGACY_PROJECTS_DASHBOARD_PATH);
+	}
+
+	/** Ensures the Eisenhower Matrix dashboard note exists and opens it. */
+	async openEisenhowerMatrix(): Promise<void> {
+		await this.openDashboard(this.eisenhowerMatrixPath());
+	}
+
+	/** Ensures the People dashboard note exists and opens it. */
+	async openPeopleDashboard(): Promise<void> {
+		await this.openDashboard(this.peopleDashboardPath());
+	}
+
+	/** Ensures the Home landing page exists and opens it. */
+	async openHome(): Promise<void> {
+		await this.openDashboard(this.homePath());
+	}
+
+	/**
+	 * Opens Home when Obsidian starts, if the user asked for it. Runs on
+	 * every device the vault syncs to, phone included, because it is a plugin
+	 * setting rather than a per-machine workspace layout.
+	 *
+	 * Failures here are logged, never surfaced: something going wrong on
+	 * startup should not greet you with an error dialog before you have even
+	 * read anything.
+	 */
+	private async openHomeOnStartup(): Promise<void> {
+		const mode = this.settings.openHomeOnStartup;
+		if (mode === 'off') return;
+
+		const home = this.homePath();
+		try {
+			if (mode === 'only') {
+				// Only the main area — a markdown note pinned in a sidebar is
+				// furniture the user arranged, not a leftover tab.
+				const leaves: WorkspaceLeaf[] = [];
+				this.app.workspace.iterateRootLeaves(leaf => leaves.push(leaf));
+				for (const leaf of leaves) leaf.detach();
+			}
+			await this.openHome();
+			console.info('[2ndBrain] Startup: opened home in mode', mode);
+		} catch (e) {
+			console.error('[2ndBrain] Could not open home on startup:', e);
+			return;
+		}
+
+		// Obsidian restores tabs lazily and activates the previously focused
+		// one after layout-ready, so a single open can be silently undone a
+		// few frames later. Re-assert briefly, and stop the moment Home is
+		// showing so we never fight a user who has already clicked away.
+		for (const delay of STARTUP_REASSERT_MS) {
+			await this.sleep(delay);
+			if (this.app.workspace.getActiveFile()?.path === home) {
+				this.persistHomeAsStartupLayout();
+				return;
+			}
+			try {
+				await this.openHome();
+				console.info('[2ndBrain] Startup: re-opened home after', delay, 'ms');
+			} catch (e) {
+				console.error('[2ndBrain] Could not re-open home on startup:', e);
+				return;
+			}
+		}
+		this.persistHomeAsStartupLayout();
+	}
+
+	/**
+	 * Saves the current (now Home-first) layout to workspace.json.
+	 *
+	 * The daily-note flash some users see on launch — especially on mobile —
+	 * isn't this plugin's doing: Obsidian paints the previously saved layout
+	 * natively before any plugin code runs, and no hook fires early enough to
+	 * beat that first frame. What we *can* do is make sure the layout we save
+	 * after fixing things up is the one that gets painted next time, so the
+	 * flash only returns on a launch after a session that ended somewhere
+	 * other than Home.
+	 */
+	private persistHomeAsStartupLayout(): void {
+		this.app.workspace.requestSaveLayout();
+	}
+
+	onunload(): void {
+		for (const id of this.startupTimers) window.clearTimeout(id);
+		this.startupTimers = [];
+	}
+
+	/** Cancellable on unload, so a reload mid-startup doesn't leave timers behind. */
+	private sleep(ms: number): Promise<void> {
+		return new Promise(resolve => {
+			const id = window.setTimeout(resolve, ms);
+			this.startupTimers.push(id);
+		});
+	}
+
+	/** One-shot migration: stamp the mandatory takeToWork field everywhere. */
+	async backfillTakeToWork(): Promise<void> {
+		try {
+			const result = await backfillTakeToWork(this.app as unknown as AppLike, {
+				activitiesFolder: this.settings.activitiesFolder,
+				archiveFolder: this.settings.archiveFolder,
+			});
+			new Notice(
+				`2ndBrain: takeToWork stamped on ${result.stamped} of ${result.scanned} activities` +
+				(result.skipped > 0 ? ` (${result.skipped} skipped).` : '.')
+			);
+		} catch (e) {
+			new Notice(`2ndBrain: Backfill failed — ${(e as Error).message}`);
+			console.error('[2ndBrain]', e);
+		}
+	}
+
+	/**
+	 * Infers which role (if any) a brand-new Activity/People file should be
+	 * tagged with, by checking whether today's plain daily note or any of
+	 * today's Contexts/YYYY-MM-DD-<Role>.md pages currently link to it.
+	 * Needed because Obsidian's native "create note from an unresolved link
+	 * click" flow opens the newly-created target file directly — routeFile
+	 * has no other way to know which page the link was actually clicked
+	 * from. Returns '' (blank, for manual fill-in) when the link was typed
+	 * in the plain daily note, or no matching page is found.
+	 */
+	private async findLinkingRole(targetPath: string): Promise<string> {
+		const dailyNote = this.findTodaysDailyNoteFile();
+		if (!dailyNote) return '';
+
+		try {
+			const folderPath = contextsFolderForNote(dailyNote.path);
+			const today = new Date().toISOString().slice(0, 10);
+			for (const role of ROLES) {
+				const path = contextPagePath(folderPath, today, role);
+				const file = this.app.vault.getAbstractFileByPath(path) as TFile | null;
+				if (!file) continue;
+				const content = await this.app.vault.read(file);
+				if (this.autoCreator.contentLinksTo(content, targetPath)) return role;
+			}
+		} catch (e) {
+			console.error('[2ndBrain] findLinkingRole failed:', e);
+		}
+		return '';
 	}
 
 	private async routeFile(file: TFile) {
@@ -39,28 +599,125 @@ export default class TwoBrainPlugin extends Plugin {
 
 		const { settings } = this;
 		const today = new Date().toISOString().slice(0, 10);
-		const isJournal = file.path.startsWith(settings.journalFolder + '/') &&
+		const contextRole = this.matchContextPage(file);
+		const isJournal = !contextRole &&
+			file.path.startsWith(settings.journalFolder + '/') &&
 			/^\d{4}-\d{2}-\d{2}$/.test(file.basename);
-		const isToday = isJournal && file.basename === today;
 		const isActivity = file.path.startsWith(settings.activitiesFolder + '/') &&
 			!file.path.startsWith(settings.archiveFolder + '/');
 		const isPeople = file.path.startsWith(settings.peopleFolder + '/');
+		const isProject = file.path.startsWith(settings.projectsFolder + '/');
+		const isProjectsDashboard = file.path === this.projectsDashboardPath();
+		const isPeopleDashboard = file.path === this.peopleDashboardPath();
+		const isEisenhowerMatrix = file.path === this.eisenhowerMatrixPath();
+		const isHome = file.path === this.homePath();
 
 		try {
-			if (isJournal) {
+			if (isProjectsDashboard) {
+				await this.projectsDashboardComposer.refresh(this.app as any, file.path);
+			} else if (isPeopleDashboard) {
+				await this.peopleDashboardComposer.refresh(this.app as any, file.path);
+			} else if (isEisenhowerMatrix) {
+				await this.eisenhowerMatrixComposer.refresh(this.app as any, file.path);
+			} else if (isHome) {
+				await this.homeComposer.refresh(this.app as any, file.path);
+			} else if (contextRole) {
+				await this.contextPageComposer.processContextPage(
+					this.app as any, { path: file.path }, contextRole
+				);
+			} else if (isJournal) {
+				// Prebuild context pages first so the daily note's link-line
+				// picks up all of today's roles in the same pass, instead of
+				// needing a second open to catch up.
+				if (file.basename === today) {
+					await this.prebuildContextPages(file);
+				}
 				// Handles both today (full pipeline) and past dates (recovery/cross-refs)
 				await this.dailyNoteComposer.processDailyNote(
 					this.app as any, { path: file.path, basename: file.basename }
 				);
 			} else if (isActivity || isPeople) {
-				await this.activityComposer.processActivity(
-					this.app as any, { path: file.path }
-				);
+				await this.initializeAndProcessActivity(file.path);
+			} else if (isProject) {
+				// No-ops for every Project file except the vault's canonical
+				// "Inbox" one — see InboxActivitiesComposer for why only
+				// Inbox needs an auto-generated activity list.
+				await this.inboxActivitiesComposer.processProjectFile(this.app as any, file.path);
+			} else if (file.extension === 'md' && !isProject) {
+				// Not a daily note, Context page, Activity, People, or Project
+				// note. Most likely a blank stub Obsidian just created from a
+				// bare (un-prefixed) wikilink click, dropped wherever the
+				// vault's "Default location for new notes" setting points
+				// (often the same folder as the note it was clicked from) —
+				// Obsidian decides that placement before this plugin ever
+				// sees the file, so it can land outside Activities/ entirely.
+				// Rescue it: relocate into Activities/ and initialize it like
+				// any other freshly-created activity. Only acts on genuinely
+				// blank notes — a real, populated note living elsewhere is
+				// never touched.
+				await this.rescueStrayNote(file);
 			}
 		} catch (e) {
 			new Notice(`2ndBrain: Error processing ${file.name} — ${(e as Error).message}`);
 			console.error('[2ndBrain]', e);
 		}
+	}
+
+	/**
+	 * Initializes a blank Activity/People file with default frontmatter (if
+	 * it's still empty) — inferring its role from whichever page currently
+	 * links to it, so it doesn't need a manual role: fill-in when linked
+	 * from a Context page — then runs it through the normal composer.
+	 */
+	private async initializeAndProcessActivity(path: string): Promise<void> {
+		const today = new Date().toISOString().slice(0, 10);
+		const linkingRole = await this.findLinkingRole(path);
+		await this.autoCreator.initializeIfEmpty(
+			this.app as any, path, today, 'inbox', linkingRole
+		);
+		await this.activityComposer.processActivity(
+			this.app as any, { path }
+		);
+	}
+
+	/**
+	 * Relocates a blank note that landed outside Activities/People/Journal/
+	 * Contexts/Projects into Activities/, then initializes and processes it
+	 * exactly like a native Activity. No-ops (and never touches the file) if
+	 * it already has real content, or if something already occupies the
+	 * target path — always favors leaving a real note alone over guessing.
+	 */
+	private async rescueStrayNote(file: TFile): Promise<void> {
+		const content = await this.app.vault.read(file);
+		if (content.trim().length > 0) return;
+
+		const targetPath = `${this.settings.activitiesFolder}/${file.basename}.md`;
+		if (targetPath === file.path) return;
+		if (this.app.vault.getAbstractFileByPath(targetPath)) {
+			new Notice(`2ndBrain: Can't rescue "${file.path}" — Activities/${file.basename}.md already exists.`);
+			return;
+		}
+
+		if (!this.app.vault.getAbstractFileByPath(this.settings.activitiesFolder)) {
+			try {
+				await this.app.vault.createFolder(this.settings.activitiesFolder);
+			} catch (e) {
+				const msg = (e as Error).message ?? '';
+				if (!msg.includes('already exists')) throw e;
+			}
+		}
+
+		// renameFile (not vault.rename) updates every other note's links to
+		// this file's old path throughout the vault.
+		await this.app.fileManager.renameFile(file, targetPath);
+		new Notice(`2ndBrain: Moved "${file.path}" → ${targetPath}`);
+
+		await this.initializeAndProcessActivity(targetPath);
+	}
+
+	/** Matches .../Contexts/<Role>/YYYY-MM-DD.md (at any nesting depth) and returns the role, or null. */
+	private matchContextPage(file: TFile): Role | null {
+		return matchContextPagePath(file.path, this.settings.journalFolder, ROLES as readonly string[]) as Role | null;
 	}
 
 	async loadSettings() {
@@ -71,3 +728,4 @@ export default class TwoBrainPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 }
+

@@ -73,6 +73,28 @@ describe('FileIO.generateActivityHeader', () => {
 		// Empty string extra fields should be skipped
 		expect(result).not.toContain('wiki:');
 	});
+
+	// Regression: project used to be declared "standard" but never actually
+	// threaded through here, so it was silently dropped from every activity
+	// on every save.
+	it('always writes the project field, even blank', () => {
+		const withProject = io.generateActivityHeader('2026-04-04', 'doing', ['Me'], null, {}, 'Projects/Widget.md');
+		expect(withProject).toContain('project: Projects/Widget.md');
+
+		const withoutProject = io.generateActivityHeader('2026-04-04', 'doing', ['Me']);
+		expect(withoutProject).toContain('project: ');
+	});
+
+	// role is always visible — even blank — so the user can click into it
+	// and assign a value, unlike arbitrary extra fields which are dropped
+	// when empty.
+	it('always writes the role field, even blank', () => {
+		const withRole = io.generateActivityHeader('2026-04-04', 'doing', ['Me'], null, {}, '', 'Engineer');
+		expect(withRole).toContain('role: Engineer');
+
+		const withoutRole = io.generateActivityHeader('2026-04-04', 'doing', ['Me']);
+		expect(withoutRole).toContain('role: ');
+	});
 });
 
 // ── FIO-07 / FIO-08 ──────────────────────────────────────────────────
