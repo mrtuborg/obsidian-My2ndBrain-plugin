@@ -419,6 +419,25 @@ describe('HomeView consistency grid', () => {
 });
 
 describe('HomeView communication checklist', () => {
+	it('never folds an active contact away, however many there are', async () => {
+		// The list is sorted by silence, so a cap hides exactly the people you
+		// have neglected longest — and a checklist you must unfold to finish
+		// is one you stop finishing. Length is managed by filing, not hiding.
+		const letters = 'ABCDEFGHIJKLMNOPQRSTUVWX';
+		const names = [...letters].map(c => `Person ${c}${c.toLowerCase()}`);
+		const files: Record<string, string> = {};
+		names.forEach((name, i) => {
+			files[`Journal/${daysAgo(i + 2)}.md`] = `Spoke to [[${name}]]`;
+			files[`People/${name}.md`] = '---\n---\n';
+		});
+
+		const { root } = await renderWith(files);
+
+		expect(root.withClass('twobrain-home-contact-name')).toHaveLength(24);
+		for (const name of names) expect(root.row(name)).toBeDefined();
+		expect(root.withClass('twobrain-home-fold')).toHaveLength(0);
+	});
+
 	it('lists each contact with how long since I last spoke to them', async () => {
 		const { root } = await renderWith({
 			[`Journal/${daysAgo(1)}.md`]: 'Synced with [[Ida Haugland]]',

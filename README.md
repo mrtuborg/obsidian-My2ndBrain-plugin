@@ -234,7 +234,9 @@ page.
 Each contact is a row: how long since you last spoke, any promises open in either direction, a checkbox,
 and buttons for where they sit. Rows are ordered by **longest silence first** — someone you have never
 written about ranks above everyone. Past *Settings → 2ndBrain Engine → Reach out after* (30 days by
-default) the age turns amber. Only the eight with the strongest claim on you are shown; the rest fold away.
+default) the age turns amber. **Every active contact is shown** — the list is sorted by silence, so a cap
+would hide precisely the people you have neglected longest. You shorten it by filing people, not by
+folding them.
 
 **Checking someone off** appends `- Talked to [[Name]]` to the end of today's daily note. Nothing is
 stamped on their page: the journal is the temporal truth (D1) and a People page's `## Journal` section is

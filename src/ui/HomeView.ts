@@ -24,15 +24,6 @@ import { ROLES } from '../roles';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * Active contacts shown before the rest go behind a fold.
- *
- * The list is sorted by silence, so these are always the ones with the
- * strongest claim on you. A checklist you have to scroll is a checklist you
- * skim, and Home has to survive being read on a phone in landscape.
- */
-const CHECKLIST_ON_HOME = 8;
-
 export interface HomeViewSettings {
 	activitiesFolder: string;
 	archiveFolder: string;
@@ -70,7 +61,7 @@ export class HomeView {
 
 	private container: HTMLElement | null = null;
 	/** Folds survive a re-render, so checking someone off doesn't close the list. */
-	private open_ = { more: false, inactive: false, archived: false };
+	private open_ = { inactive: false, archived: false };
 	/** Status writes the metadata cache has not reflected yet. */
 	private pending = new Map<string, ContactStatus>();
 
@@ -320,9 +311,6 @@ export class HomeView {
 		const box = container.createDiv({ cls: 'twobrain-home-people' });
 		this.renderChecklistHead(box, list, dailyNote);
 
-		const shown = list.active.slice(0, CHECKLIST_ON_HOME);
-		const rest = list.active.slice(CHECKLIST_ON_HOME);
-
 		if (list.active.length === 0) {
 			box.createDiv({
 				cls: 'twobrain-home-people-none',
@@ -330,14 +318,12 @@ export class HomeView {
 			});
 		}
 
+		// Every active contact, always. A checklist you have to unfold to
+		// finish is a checklist you stop finishing, and the people who get
+		// truncated are by definition the ones you have neglected longest.
+		// Length is controlled by filing people, not by hiding them.
 		const body = box.createDiv({ cls: 'twobrain-home-checklist' });
-		for (const entry of shown) this.renderChecklistRow(body, entry, dailyNote);
-
-		if (rest.length > 0) {
-			const fold = this.renderFold(box, 'more', `${rest.length} more active`, rest.length);
-			const inner = fold.createDiv({ cls: 'twobrain-home-checklist' });
-			for (const entry of rest) this.renderChecklistRow(inner, entry, dailyNote);
-		}
+		for (const entry of list.active) this.renderChecklistRow(body, entry, dailyNote);
 
 		this.renderFiled(box, 'inactive', list.inactive, dailyNote);
 		this.renderFiled(box, 'archived', list.archived, dailyNote);
