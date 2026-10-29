@@ -1,4 +1,4 @@
-import { canonicalizeSourceUrl } from '../utilities/SourceUrl';
+import { canonicalizeSourceUrl, titleContainsSourceNumber } from '../utilities/SourceUrl';
 import {
 	ActivityIndexEntry,
 	ROLE_FOR_KIND,
@@ -54,10 +54,25 @@ export interface PlanItemInput {
 	sentence: string;
 }
 
+/** Evening-only: work done that no Activity owns. Rendered, never turned into an Activity. */
+export interface UnlinkedItemInput {
+	/** Canonical http(s) source URL; becomes the link target. */
+	url: string;
+	/** Descriptive title, not a number ("PR 12", "#12" are rejected). */
+	title: string;
+	/** One concise human sentence. */
+	sentence: string;
+}
+
+export const UNLINKED_TITLE = 'Work without an Activity';
+const TITLE_LIMIT = 120;
+
 export interface WorkdayPlanRequest {
 	date: string;
 	kind: ManagedKind;
 	role?: string;
+	/** Evening only. Counted against `maxItems` after the Activity-backed items. */
+	unlinked?: UnlinkedItemInput[];
 	/** Already ordered by the caller within a section; sections are ordered here. */
 	items: PlanItemInput[];
 	/** Items the caller left out before sending (cap, noise); shown as a count. */
@@ -74,7 +89,10 @@ export interface WorkdayPlanResult {
 	code?: string;
 	message?: string;
 	contextPath?: string;
+	/** Activity-backed plus unlinked items actually rendered. */
 	placed: number;
+	/** Of `placed`, how many were unlinked (Work without an Activity). */
+	unlinkedPlaced?: number;
 	omitted: number;
 	/** Items skipped without a link: no Activity, archived, done, duplicate. */
 	unresolved: PlanIssue[];
@@ -84,11 +102,14 @@ export interface WorkdayPlanResult {
 
 export interface PlanLine { section: PlanSection; path: string; name: string; sentence: string }
 
+export interface UnlinkedLine { url: string; title: string; sentence: string }
+
 export type ValidatedPlan =
 	| {
 		ok: true;
 		role: string;
 		items: Array<PlanItemInput & { url: string }>;
+		unlinked: UnlinkedLine[];
 		omitted: number;
 		failures: string[];
 		maxItems: number;
@@ -128,11 +149,47 @@ export function validatePlanRequest(req: WorkdayPlanRequest, knownRoles: readonl
 		items.push({ section: it.section, url: canon.url, sentence });
 	}
 
+	const unlinked: UnlinkedLine[] = [];
+	if (req.unlinked !== undefined) {
+		if (req.kind !== 'evening') return fail('unlinked-not-allowed', `unlinked work is only supported for evening plans, not ${req.kind}.`);
+		if (!Array.isArray(req.unlinked)) return fail('bad-unlinked', 'unlinked must be an array.');
+		const seen = new Set<string>();
+		for (const u of req.unlinked) {
+			if (!u || typeof u !== 'object') return fail('bad-unlinked', 'Each unlinked entry must be an object.');
+			const canon = canonicalizeSourceUrl(u.url);
+			if (!canon) return fail('bad-source-url', `Not an http(s) URL: ${String(u.url)}`);
+			const title = cleanTitle(u.title);
+			if (!isSemanticTitle(title, canon.number)) {
+				return fail('unlinked-title', `Unlinked item ${canon.url} needs a descriptive title, not a number or empty text.`);
+			}
+			const sentence = cleanSentence(u.sentence);
+			if (!sentence) return fail('sentence-empty', `Item ${canon.url} needs a sentence.`);
+			if (seen.has(canon.url)) continue;
+			seen.add(canon.url);
+			unlinked.push({ url: canon.url, title, sentence });
+		}
+	}
+
 	const omitted = req.omitted ?? 0;
 	if (!Number.isInteger(omitted) || omitted < 0) return fail('bad-omitted', 'omitted must be a non-negative integer.');
 	const failures = (req.sourceFailures ?? []).map(cleanSentence).filter(Boolean).slice(0, FAILURE_LIMIT);
 	const maxItems = Math.min(HARD_MAX_ITEMS, Math.max(1, Math.floor(req.maxItems ?? DEFAULT_MAX_ITEMS)));
-	return { ok: true, role, items, omitted, failures, maxItems };
+	return { ok: true, role, items, unlinked, omitted, failures, maxItems };
+}
+
+function cleanTitle(text: unknown): string {
+	const raw = typeof text === 'string' ? text : '';
+	const line = sanitizeSummaryLine(raw)
+		.replace(/[[\]|<>`]/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+	return line.length > TITLE_LIMIT ? `${line.slice(0, TITLE_LIMIT - 1).trimEnd()}…` : line;
+}
+
+function isSemanticTitle(title: string, sourceNumber: string): boolean {
+	if ((title.match(/\p{L}/gu) ?? []).length < 3) return false;
+	if (/^https?:\/\//i.test(title)) return false;
+	return !titleContainsSourceNumber(title, [sourceNumber]);
 }
 
 function cleanSentence(text: unknown): string {
@@ -145,8 +202,9 @@ export interface ResolvedPlan {
 	lines: PlanLine[];
 	unresolved: PlanIssue[];
 	conflicts: SourceConflict[];
-	/** Items beyond `maxItems`, in priority order. */
+	/** Items beyond `maxItems`, in priority order (Activity-backed first, then unlinked). */
 	truncated: number;
+	unlinkedLines: UnlinkedLine[];
 }
 
 /**
@@ -158,7 +216,8 @@ export interface ResolvedPlan {
 export function resolvePlan(
 	items: Array<PlanItemInput & { url: string }>,
 	index: ActivityIndexEntry[],
-	maxItems: number
+	maxItems: number,
+	unlinked: UnlinkedLine[] = []
 ): ResolvedPlan {
 	const ordered = PLAN_SECTIONS.flatMap(s => items.filter(i => i.section === s));
 	const unresolved: PlanIssue[] = [];
@@ -193,8 +252,23 @@ export function resolvePlan(
 		lines.push({ section: it.section, path: owner.path, name: owner.basename, sentence: it.sentence });
 	}
 
-	const truncated = Math.max(0, lines.length - maxItems);
-	return { lines: lines.slice(0, maxItems), unresolved, conflicts, truncated };
+	// "Without an Activity" is only true when no Activity owns the URL; otherwise it belongs in the sections above.
+	const free: UnlinkedLine[] = [];
+	for (const u of unlinked) {
+		const owners = index.filter(a => a.sourceUrls.includes(u.url));
+		if (owners.length === 0) {
+			free.push(u);
+		} else if (owners.length > 1) {
+			if (!conflicts.some(c => c.url === u.url)) conflicts.push({ url: u.url, owners: owners.map(o => o.path).sort() });
+		} else {
+			unresolved.push({ url: u.url, code: 'activity-exists', message: `${owners[0]!.path} already owns this URL; send it as an Activity-backed item.` });
+		}
+	}
+
+	const keptLines = lines.slice(0, maxItems);
+	const keptUnlinked = free.slice(0, Math.max(0, maxItems - keptLines.length));
+	const truncated = lines.length - keptLines.length + free.length - keptUnlinked.length;
+	return { lines: keptLines, unresolved, conflicts, truncated, unlinkedLines: keptUnlinked };
 }
 
 // ── Region ───────────────────────────────────────────────────────────────
@@ -211,21 +285,31 @@ function linkName(name: string): string {
 	return name.replace(/[\]|[]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function markdownUrl(url: string): string {
+	return url.replace(/[()\s<>]/g, c => encodeURIComponent(c).replace(/\(/g, '%28').replace(/\)/g, '%29'));
+}
+
 export function renderPlanRegion(
 	kind: ManagedKind,
 	date: string,
 	role: string,
 	lines: PlanLine[],
 	omitted: number,
-	failures: string[]
+	failures: string[],
+	unlinked: UnlinkedLine[] = []
 ): string[] {
 	const out = [planStart(kind, date, role), `## ${KIND_TITLES[kind]}`, ''];
-	if (lines.length === 0) out.push('Nothing actionable was placed in this plan.', '');
+	if (lines.length === 0 && unlinked.length === 0) out.push('Nothing actionable was placed in this plan.', '');
 	for (const section of PLAN_SECTIONS) {
 		const mine = lines.filter(l => l.section === section);
 		if (mine.length === 0) continue;
 		out.push(`### ${SECTION_TITLES[section]}`, '');
 		for (const l of mine) out.push(`- [[${l.path}|${linkName(l.name)}]] — ${l.sentence}`);
+		out.push('');
+	}
+	if (unlinked.length > 0) {
+		out.push(`### ${UNLINKED_TITLE}`, '');
+		for (const u of unlinked) out.push(`- [${u.title}](${markdownUrl(u.url)}) — ${u.sentence}`);
 		out.push('');
 	}
 	if (omitted > 0) out.push(`_${omitted} more ${omitted === 1 ? 'item was' : 'items were'} left out of this overview._`, '');

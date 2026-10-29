@@ -197,6 +197,15 @@ prompt; the composer accepts the chosen title.
   resolve to Activities by canonical source URL (renames stay authoritative; duplicate ownership is reported,
   never guessed). Sections: Reviews waiting, Finish, Continue, Pull next, Actionable blockers. Damaged markers
   → `plan-region-damaged`, nothing written.
+- **Unlinked work** (`unlinked: [{url, title, sentence}]`, **evening only**; any other kind →
+  `unlinked-not-allowed`): work with no Activity, rendered as clickable Markdown links under
+  `### Work without an Activity`, after the Activity-backed sections inside the same evening plan region.
+  Never creates/renames Activities or touches Notes. URL is canonicalized (`bad-source-url`); title must be
+  descriptive — empty, <3 letters, a URL or containing a PR/issue/work-item number is `unlinked-title`; empty
+  sentence → `sentence-empty`; text is sanitized and link-breaking characters stripped. Duplicate URLs keep the
+  first. A URL an Activity already owns is not listed (`activity-exists` in `unresolved`); a URL owned by
+  several Activities stays a `conflict`. Items share `maxItems` with Activity-backed ones (Activity items
+  win); the overflow is added to `omitted`. `placed` includes them; `unlinkedPlaced` reports the subset.
 - Generated todos are deduped by marker id across the whole Activity block (`dedupeGeneratedTodos`); checked
   state wins, unmarked lines are never touched. `resolve-conflicts` precedes `merge`; `todoText` never
   double-prefixes a verb-led Activity name.

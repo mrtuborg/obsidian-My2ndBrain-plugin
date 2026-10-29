@@ -134,7 +134,7 @@ export class ExternalWorkComposer {
 		if (!v.ok) return planError(v.code, v.message);
 
 		const index = await this.loadIndex(app);
-		const resolved = resolvePlan(v.items, index, v.maxItems);
+		const resolved = resolvePlan(v.items, index, v.maxItems, v.unlinked);
 
 		const ctx = await this.ensureContextNow(app, req.date, v.role);
 		if (ctx.status === 'error' || !ctx.path) {
@@ -144,7 +144,7 @@ export class ExternalWorkComposer {
 		if (page === null) return planError('context-unreadable', `${ctx.path} could not be read.`, ctx.path);
 
 		const omitted = v.omitted + resolved.truncated;
-		const region = renderPlanRegion(req.kind, req.date, v.role, resolved.lines, omitted, v.failures);
+		const region = renderPlanRegion(req.kind, req.date, v.role, resolved.lines, omitted, v.failures, resolved.unlinkedLines);
 		const updated = upsertPlanRegion(page, req.kind, req.date, v.role, region);
 		if (updated === null) {
 			return planError('plan-region-damaged', `The ${req.kind} plan markers in ${ctx.path} are damaged; nothing was changed.`, ctx.path);
@@ -158,7 +158,8 @@ export class ExternalWorkComposer {
 		return {
 			status: changed ? 'updated' : 'unchanged',
 			contextPath: ctx.path,
-			placed: resolved.lines.length,
+			placed: resolved.lines.length + resolved.unlinkedLines.length,
+			unlinkedPlaced: resolved.unlinkedLines.length,
 			omitted,
 			unresolved: resolved.unresolved,
 			conflicts: resolved.conflicts,
