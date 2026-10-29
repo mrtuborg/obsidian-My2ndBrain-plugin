@@ -16,9 +16,18 @@ import { AppLike } from './utilities/FileIO';
 import { InboxActivitiesComposer } from './composers/InboxActivitiesComposer';
 import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
+import { ExternalWorkComposer, EnsureContextResult } from './composers/ExternalWorkComposer';
+import { ExternalWorkRequest, ExternalWorkResult, SourceConflict } from './components/ExternalWork';
+import { coreOptions, dailyNotePathForDate } from './utilities/DailyNoteCreate';
 
 const DAILY_NOTE_ITEM = '📓 Daily Note' as const;
 type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
+
+function localDateString(): string {
+	const d = new Date();
+	const p = (n: number) => String(n).padStart(2, '0');
+	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 const PROJECTS_DASHBOARD_FILENAME = 'Projects.md';
 const PEOPLE_DASHBOARD_FILENAME = 'People.md';
@@ -70,6 +79,7 @@ export default class TwoBrainPlugin extends Plugin {
 	private homeComposer = new HomeComposer();
 	private inboxActivitiesComposer!: InboxActivitiesComposer;
 	private autoCreator = new AutoActivityCreator();
+	private externalWorkComposer!: ExternalWorkComposer;
 	private contextStatusBarItem!: HTMLElement;
 
 	async onload() {
@@ -117,6 +127,27 @@ export default class TwoBrainPlugin extends Plugin {
 		// After the workspace has finished restoring, so opening Home doesn't
 		// race Obsidian putting yesterday's tabs back and then lose focus.
 		this.app.workspace.onLayoutReady(() => void this.openHomeOnStartup());
+
+		for (const role of ['Engineer', 'TechLead'] as const) {
+			this.addCommand({
+				id: `ensure-${role.toLowerCase()}-context-today`,
+				name: `Ensure today's ${role} context page`,
+				callback: () => void this.ensureContext(localDateString(), role).then(r => {
+					if (r.status === 'error') new Notice(`2ndBrain: ${r.message}`);
+				}),
+			});
+		}
+
+		this.addCommand({
+			id: 'report-source-conflicts',
+			name: 'Report activities sharing a source URL',
+			callback: () => void this.reportSourceConflicts().then(c => {
+				new Notice(c.length === 0
+					? '2ndBrain: no source URL is owned by two activities.'
+					: `2ndBrain: ${c.length} source URL(s) owned by several activities — see the console.`);
+				if (c.length > 0) console.warn('[2ndBrain] source conflicts:', c);
+			}),
+		});
 
 		this.addCommand({
 			id: 'backfill-take-to-work',
@@ -336,6 +367,22 @@ export default class TwoBrainPlugin extends Plugin {
 		await this.app.workspace.getLeaf(false).openFile(file);
 	}
 
+	/**
+	 * Automation API (offline, deterministic). Reached by skills through
+	 * `obsidian eval` on this plugin instance; none of it touches the network.
+	 */
+	ensureContext(date: string, role: string): Promise<EnsureContextResult> {
+		return this.externalWorkComposer.ensureContext(this.app as any, date, role);
+	}
+
+	upsertExternalWork(payload: ExternalWorkRequest | ExternalWorkRequest[]): Promise<ExternalWorkResult[]> {
+		return this.externalWorkComposer.upsertExternalWork(this.app as any, payload);
+	}
+
+	reportSourceConflicts(): Promise<SourceConflict[]> {
+		return this.externalWorkComposer.reportSourceConflicts(this.app as any);
+	}
+
 	private rebuildComposers() {
 		const { settings } = this;
 		const composerSettings = {
@@ -348,6 +395,19 @@ export default class TwoBrainPlugin extends Plugin {
 		this.activityComposer = new ActivityComposer(composerSettings);
 		this.dailyNoteComposer = new DailyNoteComposer(composerSettings);
 		this.contextPageComposer = new ContextPageComposer(composerSettings);
+		this.externalWorkComposer = new ExternalWorkComposer(
+			{
+				journalFolder: settings.journalFolder,
+				activitiesFolder: settings.activitiesFolder,
+				archiveFolder: settings.archiveFolder,
+			},
+			{
+				dailyNotePathForDate: date =>
+					dailyNotePathForDate(coreOptions(this.app), settings.journalFolder, date),
+				linkContext: (app, note, role, date) =>
+					this.dailyNoteComposer.ensureContextLink(app, note, role, date),
+			}
+		);
 		this.projectsDashboardComposer = new ProjectsDashboardComposer({
 			activitiesFolder: settings.activitiesFolder,
 			archiveFolder: settings.archiveFolder,

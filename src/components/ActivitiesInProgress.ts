@@ -4,6 +4,7 @@ import { TAKE_TO_WORK_FIELD, resolveTakeToWork } from '../utilities/TakeToWork';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
 import { ROLES } from '../roles';
 import { parseActivityBlocks, blockHasContent } from '../utilities/DailyNoteSection';
+import { parseTodoId } from './ManagedRegions';
 
 /** One activity as it will be written into the note. */
 interface RenderedActivity {
@@ -384,7 +385,17 @@ export class ActivitiesInProgress {
 			}
 
 			const seen = new Set(existing.body.map(l => l.trim()));
-			const additions = openTodos.filter(todo => !seen.has(todo.trim()));
+			// A generated todo is identified by its marker, not its wording: after
+			// an Activity rename the Journal still holds the old-wording line, and
+			// re-adding it would duplicate a todo the block already carries.
+			const seenIds = new Set(
+				existing.body.map(l => parseTodoId(l)).filter((id): id is string => id !== null)
+			);
+			const additions = openTodos.filter(todo => {
+				if (seen.has(todo.trim())) return false;
+				const id = parseTodoId(todo);
+				return id === null || !seenIds.has(id);
+			});
 			rendered.push({
 				path: file.path,
 				displayName: file.basename,

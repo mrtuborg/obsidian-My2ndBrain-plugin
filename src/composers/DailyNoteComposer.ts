@@ -258,7 +258,8 @@ export class DailyNoteComposer {
 	async ensureContextLink(
 		app: AppLike,
 		journalFile: { path: string; basename: string },
-		role: string
+		role: string,
+		date: string = this.fileIO.todayDate()
 	): Promise<void> {
 		const raw = await this.fileIO.loadFile(app, journalFile.path);
 		if (raw === null) return;
@@ -266,7 +267,7 @@ export class DailyNoteComposer {
 		const header = this.fileIO.generateDailyNoteHeader(journalFile.basename);
 		if (!raw.includes(header)) return; // not yet fully built — next open will pick up the link
 
-		const today = this.fileIO.todayDate();
+		const today = date;
 		const contextsFolder = contextsFolderForNote(journalFile.path);
 		const rolesPresent = new Set<string>(
 			ROLES.filter(r => !!app.vault.getAbstractFileByPath(contextPagePath(contextsFolder, today, r)))

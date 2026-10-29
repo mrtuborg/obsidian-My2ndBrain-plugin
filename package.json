@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-2ndbrain-plugin",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Automates Daily Notes, Activities, and People views in a structured Obsidian vault.",
 	"main": "main.js",
 	"type": "module",

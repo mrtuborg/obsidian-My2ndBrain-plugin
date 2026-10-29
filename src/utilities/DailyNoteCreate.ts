@@ -72,7 +72,7 @@ function runCoreCommand(app: App): boolean {
 }
 
 /** The core Daily notes settings, when that plugin is on. */
-function coreOptions(app: App): DailyNotesOptions | null {
+export function coreOptions(app: App): DailyNotesOptions | null {
 	try {
 		const plugin = (app as unknown as InternalApp).internalPlugins
 			?.getPluginById?.(CORE_COMMAND);
@@ -93,9 +93,16 @@ function coreOptions(app: App): DailyNotesOptions | null {
 export function todaysDailyNotePath(
 	options: DailyNotesOptions | null, journalFolder: string
 ): string {
+	return dailyNotePathForDate(options, journalFolder, moment().format('YYYY-MM-DD'));
+}
+
+/** Where the daily note for an explicit `YYYY-MM-DD` date belongs. */
+export function dailyNotePathForDate(
+	options: DailyNotesOptions | null, journalFolder: string, date: string
+): string {
 	const folder = (options?.folder ?? journalFolder).replace(/\/+$/, '');
 	const format = options?.format?.trim() || DEFAULT_FORMAT;
-	const name = moment().format(format);
+	const name = moment(date, 'YYYY-MM-DD').format(format);
 	return normalizePath(folder === '' ? `${name}.md` : `${folder}/${name}.md`);
 }
 

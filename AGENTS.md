@@ -4,7 +4,7 @@
 
 A TypeScript Obsidian plugin that replaces a CustomJS + DataviewJS automation system. It reacts to `file-open` events and runs processing pipelines for Daily Notes, Activities, and People files in a structured personal knowledge vault.
 
-**All 7 implementation phases are complete.** 602 tests passing. Plugin is deployed and active.
+**All 7 implementation phases are complete.** Run `npm test` for the current test count. Plugin is deployed and active.
 
 ## Architecture
 
@@ -182,11 +182,42 @@ Rules that must not drift:
   "Home is a glance page, not a third dashboard" rule above. No new chart or radar axis was added
   for relationships; a list of names is a list problem, not a chart one.
 
+### External work (GitHub / Azure DevOps automation)
+
+The plugin is the **sole owner** of Context creation and of structural Activity-block merging for
+externally sourced work. Skills pass facts through `ExternalWorkComposer` (plugin methods
+`ensureContext`, `upsertExternalWork`, `reportSourceConflicts`, reached via `obsidian eval`; commands
+`ensure-engineer-context-today`, `ensure-techlead-context-today`, `report-source-conflicts`). It is local
+and offline: **no network and no LLM in the plugin.** Short-title generation belongs in the skill/agent
+prompt; the composer accepts the chosen title.
+
+- **Identity is the canonical URL** (`utilities/SourceUrl.ts`; frontmatter `sourceUrls:` block list). Names
+  are user-owned and never contain PR/issue/work-item numbers (`titleContainsSourceNumber`). A rename is
+  final: every later run finds the Activity by URL and never renames it back; an upstream title change
+  updates only the managed `<!-- 2ndbrain:sources:start/end -->` area (placed before `## Description`, so
+  `ActivityComposer` keeps it). Collisions get a semantic qualifier, never a number; otherwise
+  `name-collision`.
+- One Activity may own several URLs. A URL owned by two Activities is reported as a `conflict` with **no
+  writes** — never merged. Archived owners are skipped; done owners are skipped except for evening.
+- **Managed regions** (`components/ManagedRegions.ts`): `<!-- 2ndbrain:managed:<morning|evening|board>:start/end -->`
+  inside an Activity block, replaced independently; user lines are untouched. `NoteBlocksParser` ignores
+  region prose (so it never pollutes the Activity Journal) but todos still sync.
+- **Generated todos** carry `<!-- 2ndbrain:todo:<action>@<url> -->`; wording follows the current Activity name,
+  checkbox state is kept by id, `ActivitiesInProgress.mergeWithWritten` dedupes by id after a rename. Ticked
+  orphans are kept, unticked orphans dropped.
+- **Routing:** morning→Engineer, board→TechLead, evening→Engineer or TechLead; a mismatch is
+  `role-kind-mismatch`. Past dates are supported (`ensureContext` anchors the Contexts folder from the daily
+  note path and links the daily note only if it exists); future dates are refused. Evening requests do not
+  create Activities unless `createIfMissing: true`; `takeToWork` of an existing Activity is never touched.
+- Calls are serialised (promise chain) so overlapping automation never interleaves read-modify-write cycles.
+- Block matching is by activity path; with link auto-update off after a rename, an orphaned block is adopted
+  only when its managed todo ids name the same source URL.
+
 **Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
 
 ## Current status (all phases complete)
 
-All 7 implementation phases done. 602 tests passing. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
+All 7 implementation phases done; the external-work API (SourceUrl, ManagedRegions, ExternalWork, ExternalWorkComposer) is added on top. Plugin deployed to `.obsidian/plugins/2ndbrain-engine/`.
 
 **Components** — all in `src/`: Block, BlockCollection, NoteBlocksParser, FileIO, ScriptsRemove, AttributesProcessor, ProjectDescriptionInjector, MentionsProcessor, ActivitiesInProgress, TodoSyncManager, AutoActivityCreator, ActivityComposer, DailyNoteComposer, EisenhowerMatrix, ProjectsDashboard, HomeDashboard, LifeStats, Commitments, CommitmentIndex, PeopleDashboard.
 

@@ -308,11 +308,22 @@ Two things to check after switching:
 
 ## Plugin development
 
+### Automation API
+
+Skills (Workday Plan, Workday Review, Leadership Board Health) publish GitHub/Azure work through the
+plugin rather than writing notes: `ensureContext(date, role)`, `upsertExternalWork(request | request[])` and
+`reportSourceConflicts()` on the plugin instance (via `obsidian vault=… eval`), plus the commands
+**Ensure today's Engineer context page**, **Ensure today's TechLead context page** and **Report activities
+sharing a source URL**. Activities are matched by canonical source URL (`sourceUrls` frontmatter), so renaming
+one is safe; automation output lives in independently replaceable managed regions inside the Activity block
+on the Engineer/TechLead Context page, and your own notes and todos in that block are never overwritten.
+Nothing here uses the network or an LLM.
+
 ### Commands
 
 ```bash
 npm run build   # TypeScript check + esbuild bundle
-npm test        # Jest unit tests (629 tests)
+npm test        # Jest unit tests
 npm run dev     # Watch mode for development
 npm run lint    # ESLint
 ```

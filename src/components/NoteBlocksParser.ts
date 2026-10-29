@@ -1,6 +1,7 @@
 import { Block } from './Block';
 import { BlockCollection } from './BlockCollection';
 import { AppLike } from '../utilities/FileIO';
+import { isRegionMarker } from './ManagedRegions';
 
 // Re-export for test imports that reference AppLike from NoteBlocksParser
 export type { AppLike };
@@ -26,6 +27,10 @@ export class NoteBlocksParser {
 		let currentBlock: Block | null = null;
 		let emptyLineCount = 0;
 		let inCodeBlock = false;
+		// Inside an automation-managed region only todos are journal-worthy;
+		// the snapshot prose and marker lines are regenerated every run and
+		// would otherwise pile up in the Activity's Journal.
+		let inManagedRegion = false;
 		let headerStack: Block[] = [];
 		let indentationStack: Array<{ block: Block; level: number }> = [];
 
@@ -36,6 +41,12 @@ export class NoteBlocksParser {
 		for (const line of lines) {
 			const trimmed = line.trim();
 			const indentLevel = this.getIndentationLevel(line);
+
+			if (!inCodeBlock && isRegionMarker(trimmed)) {
+				inManagedRegion = /:start -->$/.test(trimmed);
+				continue;
+			}
+			if (inManagedRegion && !this.isTodoLine(line) && !this.isDoneLine(line)) continue;
 
 			// ── Code block toggle ─────────────────────────────────────────
 			if (this.isCodeBlock(trimmed)) {
