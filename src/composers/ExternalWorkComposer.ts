@@ -32,6 +32,12 @@ export interface ExternalWorkSettings {
 export interface ExternalWorkDeps {
 	/** Where the daily note for `date` belongs, for anchoring a Contexts folder when it does not exist. */
 	dailyNotePathForDate(date: string): string;
+	/**
+	 * Creates and fully builds today's daily note through the canonical pipeline
+	 * (never a hand-made file). Called only for today's date, only when the note
+	 * is missing. Resolves with the built note; rejects when it cannot be provisioned.
+	 */
+	provisionDailyNote?(app: AppLike, date: string): Promise<{ path: string; basename: string }>;
 	/** Adds the "🧭 Contexts:" link to an existing, fully built daily note. */
 	linkContext?(app: AppLike, dailyNote: { path: string; basename: string }, role: string, date: string): Promise<void>;
 }
@@ -110,11 +116,25 @@ export class ExternalWorkComposer {
 			return { status: 'error', code: 'future-date', message: `${date} is in the future.` };
 		}
 
-		const dailyNote = app.vault.getFiles().find(f =>
+		const findNote = () => app.vault.getFiles().find(f =>
 			f.path.startsWith(this.settings.journalFolder + '/') &&
 			f.basename === date &&
 			!matchContextPagePath(f.path, this.settings.journalFolder, ROLES as readonly string[])
 		);
+		let dailyNote: { path: string; basename: string } | undefined = findNote();
+		const isToday = date === this.fileIO.todayDate() || date === localDate();
+		// Only today's note is ever provisioned; a missing historical note is history, not a gap to fill.
+		if (!dailyNote && isToday && this.deps.provisionDailyNote) {
+			try {
+				dailyNote = await this.deps.provisionDailyNote(app, date);
+			} catch (e) {
+				return {
+					status: 'error',
+					code: 'daily-note-unavailable',
+					message: `Could not provision today's daily note: ${(e as Error).message}`,
+				};
+			}
+		}
 		const anchor = dailyNote?.path ?? this.deps.dailyNotePathForDate(date);
 		const folder = contextsFolderForNote(anchor);
 		const path = contextPagePath(folder, date, role);

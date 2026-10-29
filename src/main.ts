@@ -18,7 +18,8 @@ import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
 import { ExternalWorkComposer, EnsureContextResult } from './composers/ExternalWorkComposer';
 import { ExternalWorkRequest, ExternalWorkResult, SourceConflict } from './components/ExternalWork';
-import { coreOptions, dailyNotePathForDate } from './utilities/DailyNoteCreate';
+import { isActivitiesBuilt } from './utilities/ActivitiesMarker';
+import { coreOptions, dailyNotePathForDate, createTodaysDailyNote } from './utilities/DailyNoteCreate';
 
 const DAILY_NOTE_ITEM = '📓 Daily Note' as const;
 type SwitcherItem = Role | typeof DAILY_NOTE_ITEM;
@@ -375,6 +376,39 @@ export default class TwoBrainPlugin extends Plugin {
 		return this.externalWorkComposer.ensureContext(this.app as any, date, role);
 	}
 
+	/**
+	 * Creates today's daily note via the core Daily notes path (which opens it,
+	 * so the file-open router builds it) and waits until the Activities section
+	 * is built. If auto-processing is off, runs the same composer directly.
+	 */
+	private async provisionTodaysDailyNote(): Promise<{ path: string; basename: string }> {
+		const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+		let file = this.findTodaysDailyNoteFile();
+		if (!file) {
+			const ok = await createTodaysDailyNote(this.app, this.settings.journalFolder);
+			if (!ok) throw new Error('daily note creation failed');
+			for (let i = 0; i < 50 && !file; i++) {
+				await sleep(200);
+				file = this.findTodaysDailyNoteFile();
+			}
+			if (!file) throw new Error('daily note did not appear');
+		}
+		const built = async () => isActivitiesBuilt(await this.app.vault.read(file!));
+		const deadline = Date.now() + 20000 + this.settings.syncGraceSeconds * 1000;
+		while (!(await built()) && Date.now() < deadline) {
+			await sleep(300);
+			// Auto-processing is off: nothing else will build it.
+			if (!this.settings.autoProcessOnOpen) {
+				await this.dailyNoteComposer.processDailyNote(
+					this.app as any, { path: file.path, basename: file.basename }
+				);
+				break;
+			}
+		}
+		if (!(await built())) throw new Error('daily note was not built in time');
+		return { path: file.path, basename: file.basename };
+	}
+
 	upsertExternalWork(payload: ExternalWorkRequest | ExternalWorkRequest[]): Promise<ExternalWorkResult[]> {
 		return this.externalWorkComposer.upsertExternalWork(this.app as any, payload);
 	}
@@ -404,6 +438,7 @@ export default class TwoBrainPlugin extends Plugin {
 			{
 				dailyNotePathForDate: date =>
 					dailyNotePathForDate(coreOptions(this.app), settings.journalFolder, date),
+				provisionDailyNote: () => this.provisionTodaysDailyNote(),
 				linkContext: (app, note, role, date) =>
 					this.dailyNoteComposer.ensureContextLink(app, note, role, date),
 			}

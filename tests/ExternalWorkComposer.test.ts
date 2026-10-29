@@ -80,6 +80,89 @@ describe('ensureContext', () => {
 	});
 });
 
+describe('ensureContext provisions today\'s daily note', () => {
+	const TODAY = new Date().toISOString().slice(0, 10);
+	const todayNote = `Journal/${TODAY}.md`;
+
+	function setupToday(files: Record<string, string> = {}, fail = false) {
+		const vault = new MockVault(files);
+		const links = new Map<string, Set<string>>();
+		const link = jest.fn(async (_a: any, note: { path: string }, role: string) => {
+			if (!links.has(note.path)) links.set(note.path, new Set());
+			links.get(note.path)!.add(role);
+		});
+		const provision = jest.fn(async () => {
+			if (fail) throw new Error('boom');
+			await vault.create(todayNote, '# built');
+			return { path: todayNote, basename: TODAY };
+		});
+		const composer = new ExternalWorkComposer(SETTINGS, {
+			dailyNotePathForDate: d => `Journal/${d}.md`,
+			linkContext: link,
+			provisionDailyNote: provision,
+		});
+		return { vault, app: { vault } as any, composer, link, links, provision };
+	}
+
+	it.each(['Engineer', 'TechLead'])('provisions a missing today note, then links the %s context once', async role => {
+		const { app, composer, links, provision, vault } = setupToday();
+		const r = await composer.ensureContext(app, TODAY, role);
+		expect(r.status).toBe('created');
+		expect(r.dailyNotePath).toBe(todayNote);
+		expect(provision).toHaveBeenCalledTimes(1);
+		expect(vault.files.get(`Journal/Contexts/${TODAY}-${role}.md`)).toContain(`[[Journal/${TODAY}`);
+		expect(links.get(todayNote)!.has(role)).toBe(true);
+
+		const again = await composer.ensureContext(app, TODAY, role);
+		expect(again.status).toBe('exists');
+		expect(again.dailyNotePath).toBe(todayNote);
+		expect(provision).toHaveBeenCalledTimes(1);
+		expect([...vault.files.keys()].filter(p => p.includes('Contexts/'))).toHaveLength(1);
+		expect(vault.files.get(todayNote)).toBe('# built');
+	});
+
+	it('reuses an existing today note without provisioning', async () => {
+		const { app, composer, provision, link } = setupToday({ [todayNote]: '# existing' });
+		const r = await composer.ensureContext(app, TODAY, 'Engineer');
+		expect(r.dailyNotePath).toBe(todayNote);
+		expect(provision).not.toHaveBeenCalled();
+		expect(link).toHaveBeenCalledTimes(1);
+	});
+
+	it('serialises overlapping calls so the note is provisioned once', async () => {
+		const { app, composer, provision } = setupToday();
+		const rs = await Promise.all([
+			composer.ensureContext(app, TODAY, 'Engineer'),
+			composer.ensureContext(app, TODAY, 'TechLead'),
+		]);
+		expect(rs.every(r => r.dailyNotePath === todayNote)).toBe(true);
+		expect(provision).toHaveBeenCalledTimes(1);
+	});
+
+	it('never provisions a missing past note but still creates the dated context', async () => {
+		const { app, composer, provision, vault } = setupToday();
+		const r = await composer.ensureContext(app, DAY, 'TechLead');
+		expect(r.status).toBe('created');
+		expect(r.dailyNotePath).toBeNull();
+		expect(provision).not.toHaveBeenCalled();
+		expect(vault.files.has(`Journal/${DAY}.md`)).toBe(false);
+	});
+
+	it('refuses the future without provisioning', async () => {
+		const { app, composer, provision } = setupToday();
+		expect((await composer.ensureContext(app, '2999-01-01', 'Engineer')).code).toBe('future-date');
+		expect(provision).not.toHaveBeenCalled();
+	});
+
+	it('reports a clear error and writes nothing when provisioning fails', async () => {
+		const { app, composer, vault } = setupToday({}, true);
+		const r = await composer.ensureContext(app, TODAY, 'Engineer');
+		expect(r.status).toBe('error');
+		expect(r.code).toBe('daily-note-unavailable');
+		expect(vault.files.size).toBe(0);
+	});
+});
+
 describe('upsertExternalWork', () => {
 	it('creates an Activity with a numberless name, source area, and routes Engineer work to the Engineer Context', async () => {
 		const { app, composer, vault } = setup();
