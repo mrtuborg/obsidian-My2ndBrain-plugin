@@ -124,6 +124,14 @@ function buttonsFor(root: FakeEl, displayName: string): FakeEl[] {
 }
 
 describe('MatrixView', () => {
+	// The plan-date tests use 2026-09-10, which must stay in the future, so they
+	// freeze only Date to when they were written (real timers keep working).
+	const freezeClock = () => jest.useFakeTimers({
+		now: new Date('2026-09-04T12:00:00Z'),
+		doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'performance', 'hrtime', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback'],
+	});
+	afterEach(() => jest.useRealTimers());
+
 	it('renders a row per open activity, with a summary of what is taken to work', async () => {
 		const { app } = makeApp({
 			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
@@ -319,6 +327,7 @@ describe('MatrixView', () => {
 	// ── Planned date ─────────────────────────────────────────────────────
 
 	it('edits the plan date inline rather than behind a modal', async () => {
+		freezeClock();
 		const { app, store } = makeApp({
 			'Activities/planned.md': activityFile('p', ['stage: doing', 'takeToWork: true', 'priority: urgent-important']),
 		});
@@ -337,6 +346,7 @@ describe('MatrixView', () => {
 	});
 
 	it('clearing the plan date removes the field entirely', async () => {
+		freezeClock();
 		const { app, store } = makeApp({
 			'Activities/planned.md': activityFile('p', [
 				'stage: doing', 'takeToWork: true', 'priority: urgent-important',
@@ -355,6 +365,7 @@ describe('MatrixView', () => {
 	});
 
 	it('a plan date never pulls an activity into the daily note by itself', async () => {
+		freezeClock();
 		// The date is sort/display metadata only — takeToWork stays the gate.
 		const { app, store } = makeApp({
 			'Activities/idle.md': activityFile('i', ['stage: backlog', 'takeToWork: false', 'priority: urgent-important']),

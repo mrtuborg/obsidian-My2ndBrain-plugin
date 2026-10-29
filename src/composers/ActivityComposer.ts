@@ -124,12 +124,14 @@ export class ActivityComposer {
 		);
 
 		// 7. Use pre-built project blocks if provided.
+		const pFolder = this.settings.projectsFolder;
 		const projectBlocks = prebuilt?.projectBlocks ?? await this.parser.run(
 			app,
 			app.vault.getFiles()
 				.filter((f: { path: string }) =>
-					f.path.startsWith(this.settings.projectsFolder + '/') &&
-					f.path.endsWith('.md')
+					f.path.startsWith(pFolder + '/') &&
+					f.path.endsWith('.md') &&
+					f.path.slice(pFolder.length + 1).split('/').length <= 2
 				)
 				.map((f: { path: string; name: string }) => ({ file: f })),
 			null

@@ -9,3 +9,8 @@
  * redundant section label.
  */
 export const ACTIVITIES_BUILT_MARKER = '<!-- 2ndbrain:activities-built -->';
+
+/** True for notes carrying the hidden marker or the legacy visible heading. */
+export function isActivitiesBuilt(content: string): boolean {
+	return content.includes(ACTIVITIES_BUILT_MARKER) || content.includes('### Activities:');
+}

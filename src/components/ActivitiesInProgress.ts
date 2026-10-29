@@ -2,6 +2,7 @@ import { FileIO, AppLike, VaultFile } from '../utilities/FileIO';
 import { NoteBlocksParser } from './NoteBlocksParser';
 import { TAKE_TO_WORK_FIELD, resolveTakeToWork } from '../utilities/TakeToWork';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
+import { ROLES } from '../roles';
 import { parseActivityBlocks, blockHasContent } from '../utilities/DailyNoteSection';
 
 /** One activity as it will be written into the note. */
@@ -177,7 +178,7 @@ export class ActivitiesInProgress {
 			if (!handle) continue;
 			const content = await app.vault.read(handle);
 			const role = this.fileIO.parseFrontmatterField(content, 'role');
-			if (role) roleByProject.set(f.path, role);
+			if (role && (ROLES as readonly string[]).includes(role)) roleByProject.set(f.path, role);
 		}
 
 		const result = new Map<string, string[]>();
@@ -191,7 +192,8 @@ export class ActivitiesInProgress {
 			// 1. The activity's own role, if set — the primary source now.
 			const ownRole = this.fileIO.parseFrontmatterField(content, 'role');
 			if (ownRole) {
-				result.set(file.path, [ownRole]);
+				// Only known roles are rollable; an unknown value stays in the daily note.
+				result.set(file.path, (ROLES as readonly string[]).includes(ownRole) ? [ownRole] : []);
 				continue;
 			}
 

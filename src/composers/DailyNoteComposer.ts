@@ -8,7 +8,7 @@ import { TodoSyncManager } from '../components/TodoSyncManager';
 import { ActivityComposer, ComposerSettings, PrebuiltBlocks } from './ActivityComposer';
 import { buildContextLinksLine, upsertContextLinksLine } from '../utilities/ContextLinks';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from '../utilities/ContextPaths';
-import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
+import { ACTIVITIES_BUILT_MARKER, isActivitiesBuilt } from '../utilities/ActivitiesMarker';
 import { parseActivityBlocks, stripActivityBlocks } from '../utilities/DailyNoteSection';
 import { PlanDateActivation } from '../components/PlanDateActivation';
 import { ROLES } from '../roles';
@@ -52,7 +52,7 @@ export class DailyNoteComposer {
 		// If today's note was already fully processed (has Activities section),
 		// treat it as a static frozen record — do not reprocess.
 		// The user can delete the Activities section to force a refresh.
-		if (pageIsToday && existing.includes(ACTIVITIES_BUILT_MARKER)) {
+		if (pageIsToday && isActivitiesBuilt(existing)) {
 			return;
 		}
 
@@ -88,7 +88,7 @@ export class DailyNoteComposer {
 			const syncedContent = await this.fileIO.loadFile(app, file.path);
 			if (syncedContent === null) return;
 
-			if (syncedContent.includes(ACTIVITIES_BUILT_MARKER)) {
+			if (isActivitiesBuilt(syncedContent)) {
 				console.log('[2ndBrain] Sync delivered processed daily note, skipping local build.');
 				return;
 			}
@@ -192,6 +192,12 @@ export class DailyNoteComposer {
 				}
 			} catch (e) {
 				console.error('[2ndBrain] activitiesInProgress failed:', e);
+			}
+
+			// Always stamp the hidden sentinel, even when every eligible activity
+			// was rolled into a Contexts page or none was eligible.
+			if (!(pageContent || '').includes(ACTIVITIES_BUILT_MARKER)) {
+				pageContent = ['----', '', ACTIVITIES_BUILT_MARKER, '----'].join('\n') + '\n' + (pageContent || '');
 			}
 
 			// B.2.5b: link to any context pages that already exist for today —
