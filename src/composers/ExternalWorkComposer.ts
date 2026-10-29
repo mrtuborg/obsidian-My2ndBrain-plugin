@@ -22,6 +22,18 @@ import {
 	upsertActivityBlock,
 	validateRequest,
 } from '../components/ExternalWork';
+import {
+	WorkdayPlanRequest,
+	WorkdayPlanResult,
+	renderPlanRegion,
+	resolvePlan,
+	upsertPlanRegion,
+	validatePlanRequest,
+} from '../components/WorkdayPlan';
+
+function planError(code: string, message: string, contextPath?: string): WorkdayPlanResult {
+	return { status: 'error', code, message, contextPath, placed: 0, omitted: 0, unresolved: [], conflicts: [], warnings: [] };
+}
 
 export interface ExternalWorkSettings {
 	journalFolder: string;
@@ -100,6 +112,58 @@ export class ExternalWorkComposer {
 	/** Every source URL owned by more than one Activity, vault-wide. */
 	async reportSourceConflicts(app: AppLike): Promise<SourceConflict[]> {
 		return this.serial(async () => findSourceConflicts(await this.loadIndex(app)));
+	}
+
+	/**
+	 * Publishes the plan overview (the reading surface) into the Context page,
+	 * above `## Activities`. Items are resolved to the user-owned Activities by
+	 * canonical URL; only this kind/date/role's plan region is replaced.
+	 */
+	upsertWorkdayPlan(app: AppLike, req: WorkdayPlanRequest): Promise<WorkdayPlanResult> {
+		return this.serial(async () => {
+			try {
+				return await this.upsertPlanNow(app, req);
+			} catch (e) {
+				return planError('exception', (e as Error).message);
+			}
+		});
+	}
+
+	private async upsertPlanNow(app: AppLike, req: WorkdayPlanRequest): Promise<WorkdayPlanResult> {
+		const v = validatePlanRequest(req, ROLES as readonly string[]);
+		if (!v.ok) return planError(v.code, v.message);
+
+		const index = await this.loadIndex(app);
+		const resolved = resolvePlan(v.items, index, v.maxItems);
+
+		const ctx = await this.ensureContextNow(app, req.date, v.role);
+		if (ctx.status === 'error' || !ctx.path) {
+			return planError(ctx.code ?? 'context-unavailable', ctx.message ?? 'Context page unavailable.');
+		}
+		const page = await this.fileIO.loadFile(app, ctx.path);
+		if (page === null) return planError('context-unreadable', `${ctx.path} could not be read.`, ctx.path);
+
+		const omitted = v.omitted + resolved.truncated;
+		const region = renderPlanRegion(req.kind, req.date, v.role, resolved.lines, omitted, v.failures);
+		const updated = upsertPlanRegion(page, req.kind, req.date, v.role, region);
+		if (updated === null) {
+			return planError('plan-region-damaged', `The ${req.kind} plan markers in ${ctx.path} are damaged; nothing was changed.`, ctx.path);
+		}
+		const changed = updated !== page;
+		if (changed) await this.fileIO.saveFile(app, ctx.path, updated);
+
+		const warnings: string[] = [];
+		if (resolved.unresolved.length > 0) warnings.push(`${resolved.unresolved.length} item(s) were not linked.`);
+		if (resolved.conflicts.length > 0) warnings.push(`${resolved.conflicts.length} URL(s) are owned by several Activities and were skipped.`);
+		return {
+			status: changed ? 'updated' : 'unchanged',
+			contextPath: ctx.path,
+			placed: resolved.lines.length,
+			omitted,
+			unresolved: resolved.unresolved,
+			conflicts: resolved.conflicts,
+			warnings,
+		};
 	}
 
 	// ── Context ──────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { TAKE_TO_WORK_FIELD, resolveTakeToWork } from '../utilities/TakeToWork';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
 import { ROLES } from '../roles';
 import { parseActivityBlocks, blockHasContent } from '../utilities/DailyNoteSection';
-import { parseTodoId } from './ManagedRegions';
+import { dedupeGeneratedTodos, parseTodoId } from './ManagedRegions';
 
 /** One activity as it will be written into the note. */
 interface RenderedActivity {
@@ -380,7 +380,7 @@ export class ActivitiesInProgress {
 			used.add(key);
 
 			if (!existing) {
-				rendered.push({ path: file.path, displayName: file.basename, body: openTodos });
+				rendered.push({ path: file.path, displayName: file.basename, body: dedupeGeneratedTodos(openTodos) });
 				continue;
 			}
 
@@ -394,12 +394,16 @@ export class ActivitiesInProgress {
 			const additions = openTodos.filter(todo => {
 				if (seen.has(todo.trim())) return false;
 				const id = parseTodoId(todo);
-				return id === null || !seenIds.has(id);
+				if (id === null) return true;
+				if (seenIds.has(id)) return false;
+				// Journal history can hold one id several times under old wordings.
+				seenIds.add(id);
+				return true;
 			});
 			rendered.push({
 				path: file.path,
 				displayName: file.basename,
-				body: [...existing.body, ...additions],
+				body: dedupeGeneratedTodos([...existing.body, ...additions]),
 			});
 		}
 

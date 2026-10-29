@@ -24,6 +24,8 @@ export type ManagedKind = typeof MANAGED_KINDS[number];
 const START_RE = /^<!-- 2ndbrain:managed:([a-z]+):start -->\s*$/;
 const END_RE = /^<!-- 2ndbrain:managed:([a-z]+):end -->\s*$/;
 const TODO_ID_RE = /<!-- 2ndbrain:todo:(.*?) -->\s*$/;
+// The plan overview sits on the Context page itself, outside any Activity block.
+const PLAN_MARKER_RE = /^<!-- 2ndbrain:plan:[a-z]+:\d{4}-\d{2}-\d{2}:[A-Za-z]+:(start|end) -->\s*$/;
 
 export function regionStart(kind: ManagedKind): string {
 	return `<!-- 2ndbrain:managed:${kind}:start -->`;
@@ -35,7 +37,7 @@ export function regionEnd(kind: ManagedKind): string {
 
 /** Marker line of any kind — used by the parser to keep regions out of the Journal. */
 export function isRegionMarker(line: string): boolean {
-	return START_RE.test(line) || END_RE.test(line);
+	return START_RE.test(line) || END_RE.test(line) || PLAN_MARKER_RE.test(line);
 }
 
 /**
@@ -145,7 +147,9 @@ export function mergeManagedTodos(existing: string[], fresh: ManagedTodo[]): str
 		const id = parseTodoId(line);
 		if (id === null) continue;
 		state.set(id, isChecked(line));
-		if (isChecked(line) && !freshIds.has(id)) orphanDone.push(line);
+		if (isChecked(line) && !freshIds.has(id) && !orphanDone.some(l => parseTodoId(l) === id)) {
+			orphanDone.push(line);
+		}
 	}
 
 	const seen = new Set<string>();
@@ -157,6 +161,56 @@ export function mergeManagedTodos(existing: string[], fresh: ManagedTodo[]): str
 		out.push(renderManagedTodo(todo, state.get(key) ?? false));
 	}
 	return [...out, ...orphanDone];
+}
+
+/**
+ * Collapses duplicate generated todos across a whole Activity block. The
+ * marker is the identity, so a second line with the same id is never a second
+ * task — wherever it sits.
+ *
+ *  - per region kind the first copy of an id is kept;
+ *  - a copy outside every region (legacy placement) folds into the first
+ *    region copy when one exists, else the first outside copy is kept;
+ *  - a survivor is ticked if any copy it absorbed was ticked, so state is
+ *    never lost.
+ *
+ * Lines without a marker — the user's own — are never touched.
+ */
+export function dedupeGeneratedTodos(lines: string[]): string[] {
+	interface Copy { idx: number; scope: string | null; checked: boolean }
+	const byId = new Map<string, Copy[]>();
+	let scope: string | null = null;
+	lines.forEach((line, idx) => {
+		const s = START_RE.exec(line);
+		if (s) { scope = s[1]!; return; }
+		if (END_RE.test(line)) { scope = null; return; }
+		const id = parseTodoId(line);
+		if (id === null) return;
+		if (!byId.has(id)) byId.set(id, []);
+		byId.get(id)!.push({ idx, scope, checked: isChecked(line) });
+	});
+
+	const drop = new Set<number>();
+	const tick = new Set<number>();
+	for (const copies of byId.values()) {
+		if (copies.length < 2) continue;
+		const survivors = new Map<string | null, Copy>();
+		for (const c of copies) {
+			if (c.scope !== null && !survivors.has(c.scope)) survivors.set(c.scope, c);
+		}
+		const outside = copies.filter(c => c.scope === null);
+		if (survivors.size === 0 && outside.length > 0) survivors.set(null, outside[0]!);
+		const kept = [...survivors.values()].sort((a, b) => a.idx - b.idx);
+		for (const c of copies) if (!kept.includes(c)) drop.add(c.idx);
+		kept.forEach((sv, n) => {
+			const absorbed = copies.some(c => c.checked && (c.scope === sv.scope || (n === 0 && c.scope === null)));
+			if (absorbed && !sv.checked) tick.add(sv.idx);
+		});
+	}
+	if (drop.size === 0 && tick.size === 0) return lines;
+	return lines
+		.map((l, i) => (tick.has(i) ? l.replace(/^(\s*- )\[ \]/, '$1[x]') : l))
+		.filter((_, i) => !drop.has(i));
 }
 
 /** Lines of a region that are not generated todos (the summary prose). */

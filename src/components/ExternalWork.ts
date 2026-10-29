@@ -3,6 +3,7 @@ import {
 	ManagedKind,
 	ManagedTodo,
 	MANAGED_KINDS,
+	dedupeGeneratedTodos,
 	extractRegion,
 	mergeManagedTodos,
 	parseTodoId,
@@ -25,10 +26,36 @@ export const TODO_ACTIONS = {
 	'fix-ci': (t: string) => `Fix CI in «${t}»`,
 	'address-feedback': (t: string) => `Address feedback in «${t}»`,
 	continue: (t: string) => `Continue «${t}»`,
+	'resolve-conflicts': (t: string) => `Resolve conflicts in «${t}»`,
 	merge: (t: string) => `Merge «${t}»`,
 	unblock: (t: string) => `Unblock «${t}»`,
 	'follow-up': (t: string) => `Follow up on «${t}»`,
 } as const;
+
+/** Leading verb each action already starts a title with, so it is not said twice. */
+const ACTION_VERB: Record<keyof typeof TODO_ACTIONS, RegExp> = {
+	review: /^review\b/i,
+	'fix-ci': /^fix\s+(?:the\s+)?(?:ci|checks?|build)\b/i,
+	'address-feedback': /^address\b/i,
+	continue: /^continue\b/i,
+	'resolve-conflicts': /^(?:resolve|fix)\s+(?:merge\s+)?conflicts?\b/i,
+	merge: /^merge\b/i,
+	unblock: /^unblock\b/i,
+	'follow-up': /^follow\s+up\b/i,
+};
+/** Any imperative lead-in; a title starting with one already reads as a todo. */
+const ANY_VERB = /^(?:review|continue|merge|unblock|fix|resolve|address|follow\s+up|finish|update|implement|investigate)\b/i;
+
+/**
+ * Human wording of a generated todo. The Activity name is user-owned and may
+ * already begin with the action ("Review parser", "Fix conflicts in X"); in that
+ * case the name alone is the todo — never `Continue «Continue …»`.
+ */
+export function todoText(action: keyof typeof TODO_ACTIONS, title: string): string {
+	if (ACTION_VERB[action].test(title)) return title;
+	if (action === 'continue' && ANY_VERB.test(title)) return title;
+	return TODO_ACTIONS[action](title);
+}
 export type TodoAction = keyof typeof TODO_ACTIONS | 'custom';
 
 export interface SourceInput { url: string; title?: string }
@@ -93,7 +120,7 @@ export type Validated =
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-const ROLE_FOR_KIND: Record<ManagedKind, readonly string[]> = {
+export const ROLE_FOR_KIND: Record<ManagedKind, readonly string[]> = {
 	morning: ['Engineer'],
 	evening: ['Engineer', 'TechLead'],
 	board: ['TechLead'],
@@ -193,7 +220,7 @@ export function finishTodos(todos: ManagedTodo[], title: string): ManagedTodo[] 
 	return todos.map(t => {
 		if (t.text) return t;
 		const action = t.id.slice(0, t.id.indexOf('@')) as keyof typeof TODO_ACTIONS;
-		return { id: t.id, text: TODO_ACTIONS[action](title) };
+		return { id: t.id, text: todoText(action, title) };
 	});
 }
 
@@ -526,7 +553,11 @@ export function upsertActivityBlock(content: string, update: BlockUpdate): strin
 	let bodyEnd = headIdx + 1;
 	while (bodyEnd < sectionEnd && lines[bodyEnd]!.trim() !== '----') bodyEnd++;
 	const body = lines.slice(headIdx + 1, bodyEnd);
-	const newBody = replaceRegion(body, update.kind, regionBody(extractRegion(body, update.kind) ?? []));
+	// Generated todos are plugin-owned: the marker is identity, so legacy copies
+	// outside the region fold into it instead of duplicating.
+	const newBody = dedupeGeneratedTodos(
+		replaceRegion(body, update.kind, regionBody(extractRegion(body, update.kind) ?? []))
+	);
 	const closing = bodyEnd < sectionEnd ? [] : ['----'];
 	lines.splice(headIdx, bodyEnd - headIdx, heading, ...newBody, ...closing);
 	return lines.join('\n');

@@ -18,6 +18,7 @@ import { AutoActivityCreator } from './components/AutoActivityCreator';
 import { contextsFolderForNote, matchContextPagePath, contextPagePath } from './utilities/ContextPaths';
 import { ExternalWorkComposer, EnsureContextResult } from './composers/ExternalWorkComposer';
 import { ExternalWorkRequest, ExternalWorkResult, SourceConflict } from './components/ExternalWork';
+import { WorkdayPlanRequest, WorkdayPlanResult } from './components/WorkdayPlan';
 import { isActivitiesBuilt } from './utilities/ActivitiesMarker';
 import { coreOptions, dailyNotePathForDate, createTodaysDailyNote } from './utilities/DailyNoteCreate';
 
@@ -415,6 +416,10 @@ export default class TwoBrainPlugin extends Plugin {
 
 	reportSourceConflicts(): Promise<SourceConflict[]> {
 		return this.externalWorkComposer.reportSourceConflicts(this.app as any);
+	}
+
+	upsertWorkdayPlan(request: WorkdayPlanRequest): Promise<WorkdayPlanResult> {
+		return this.externalWorkComposer.upsertWorkdayPlan(this.app as any, request);
 	}
 
 	private rebuildComposers() {

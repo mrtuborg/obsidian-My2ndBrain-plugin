@@ -191,6 +191,16 @@ externally sourced work. Skills pass facts through `ExternalWorkComposer` (plugi
 and offline: **no network and no LLM in the plugin.** Short-title generation belongs in the skill/agent
 prompt; the composer accepts the chosen title.
 
+- **Workday plan overview** (`components/WorkdayPlan.ts`, API `upsertWorkdayPlan`): a plugin-owned region
+  `<!-- 2ndbrain:plan:<kind>:<date>:<role>:start/end -->` placed above `## Activities` in the Context. It is
+  independent of the `managed:*` regions inside Activity blocks, so evening/board runs cannot erase it. Items
+  resolve to Activities by canonical source URL (renames stay authoritative; duplicate ownership is reported,
+  never guessed). Sections: Reviews waiting, Finish, Continue, Pull next, Actionable blockers. Damaged markers
+  → `plan-region-damaged`, nothing written.
+- Generated todos are deduped by marker id across the whole Activity block (`dedupeGeneratedTodos`); checked
+  state wins, unmarked lines are never touched. `resolve-conflicts` precedes `merge`; `todoText` never
+  double-prefixes a verb-led Activity name.
+
 - **Identity is the canonical URL** (`utilities/SourceUrl.ts`; frontmatter `sourceUrls:` block list). Names
   are user-owned and never contain PR/issue/work-item numbers (`titleContainsSourceNumber`). A rename is
   final: every later run finds the Activity by URL and never renames it back; an upstream title change
