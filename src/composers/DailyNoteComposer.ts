@@ -187,7 +187,7 @@ export class DailyNoteComposer {
 					// had content in, so the originals must go or they'd appear
 					// twice.
 					const absorbed = parseActivityBlocks(activities).map(b => b.path);
-					pageContent = stripActivityBlocks(pageContent || '', absorbed);
+					pageContent = stripActivityBlocks(pageContent || '', absorbed, this.activitiesIP.pathNormalizer(app as any));
 					pageContent = activities + '\n' + pageContent;
 				}
 			} catch (e) {

@@ -217,3 +217,149 @@ export function dedupeGeneratedTodos(lines: string[]): string[] {
 export function nonTodoLines(region: string[]): string[] {
 	return region.filter(l => parseTodoId(l) === null);
 }
+
+// ── Reconciling duplicated / damaged blocks ────────────────────────────────
+
+const isKind = (k: string): k is ManagedKind => (MANAGED_KINDS as readonly string[]).includes(k);
+
+/**
+ * Leaves exactly one well-formed region per kind. A body that already has that
+ * shape is returned untouched unless `force`; otherwise duplicate regions of a
+ * kind are folded into one (lines kept, exact repeats and repeated generated
+ * ids collapsed), nested/unclosed/stray markers are repaired, and the regions
+ * are placed in MANAGED_KINDS order above the remaining lines. No line that is
+ * not a marker or a repeat is ever dropped.
+ */
+export function reconcileRegions(body: string[], force = false): string[] {
+	const regions: Array<{ kind: ManagedKind; lines: string[] }> = [];
+	const outside: string[] = [];
+	let open: { kind: ManagedKind; lines: string[] } | null = null;
+	let clean = true;
+
+	for (const line of body) {
+		const s = START_RE.exec(line);
+		if (s && isKind(s[1]!)) {
+			if (open) { clean = false; regions.push(open); }
+			open = { kind: s[1] as ManagedKind, lines: [] };
+			continue;
+		}
+		const e = END_RE.exec(line);
+		if (e && isKind(e[1]!)) {
+			if (open && open.kind === e[1]) { regions.push(open); open = null; }
+			else clean = false;
+			continue;
+		}
+		(open ? open.lines : outside).push(line);
+	}
+	if (open) { clean = false; regions.push(open); }
+
+	const kinds = regions.map(r => r.kind);
+	if (clean && new Set(kinds).size === kinds.length && !force) return body;
+
+	const out: string[] = [];
+	for (const kind of MANAGED_KINDS) {
+		const same = regions.filter(r => r.kind === kind);
+		if (same.length === 0) continue;
+		const seen = new Set<string>();
+		const merged: string[] = [];
+		for (const line of same.flatMap(r => r.lines)) {
+			const t = line.trim();
+			if (t !== '' && parseTodoId(line) === null) {
+				if (seen.has(t)) continue;
+				seen.add(t);
+			}
+			merged.push(line);
+		}
+		out.push(regionStart(kind), ...dedupeGeneratedTodos(merged), regionEnd(kind));
+	}
+	return [...out, ...outside];
+}
+
+/**
+ * Joins the bodies of several blocks that name the same Activity into one.
+ * Every unmarked line outside a managed region is kept in original order, even
+ * an exact repeat — it is the user's. Only plugin-owned structure is
+ * reconciled: generated todos by marker (checked wins) and duplicate regions.
+ */
+export function mergeBlockBodies(bodies: string[][]): string[] {
+	const out: string[] = [];
+	for (const raw of bodies) {
+		const body = [...raw];
+		while (body.length > 0 && body[body.length - 1]!.trim() === '') body.pop();
+		out.push(...body);
+	}
+	return dedupeGeneratedTodos(reconcileRegions(out, true));
+}
+
+const ACTION_ID_RE = /^(review|fix-ci|address-feedback|resolve-conflicts|merge|unblock|continue|follow-up)@(.+)$/;
+const GENERIC_ACTIONS = new Set(['continue', 'follow-up']);
+const BLOCKER_ACTIONS = new Set(['fix-ci', 'address-feedback', 'resolve-conflicts']);
+
+/**
+ * One coherent action set per canonical source URL. Only unticked generated
+ * todos are ever removed — ticked ones are history, unmarked ones are the
+ * user's, custom ones carry no URL.
+ *
+ *  - any specific action suppresses the generic `continue` / `follow-up`;
+ *  - while a blocker (fix-ci, address-feedback, resolve-conflicts) is open,
+ *    `merge` is suppressed;
+ *  - several independent specific actions all stay.
+ */
+export function normalizeActionSets(lines: string[]): string[] {
+	const open = new Map<string, Set<string>>();
+	for (const line of lines) {
+		const id = parseTodoId(line);
+		const m = id === null || isChecked(line) ? null : ACTION_ID_RE.exec(id);
+		if (!m) continue;
+		if (!open.has(m[2]!)) open.set(m[2]!, new Set());
+		open.get(m[2]!)!.add(m[1]!);
+	}
+	const suppressed = (action: string, url: string): boolean => {
+		const set = open.get(url);
+		if (!set) return false;
+		const specific = [...set].some(a => !GENERIC_ACTIONS.has(a));
+		if (GENERIC_ACTIONS.has(action)) return specific;
+		return action === 'merge' && [...set].some(a => BLOCKER_ACTIONS.has(a));
+	};
+	return lines.filter(line => {
+		const id = parseTodoId(line);
+		const m = id === null || isChecked(line) ? null : ACTION_ID_RE.exec(id);
+		return !(m && suppressed(m[1]!, m[2]!));
+	});
+}
+
+/** Rewrites the wording of every generated todo whose id is in `fresh`; checkbox state is kept. */
+export function refreshGeneratedText(lines: string[], fresh: ManagedTodo[]): string[] {
+	const text = new Map(fresh.map(t => [encodeTodoId(t.id), t.text]));
+	return lines.map(line => {
+		const id = parseTodoId(line);
+		const want = id === null ? undefined : text.get(id);
+		if (want === undefined || want === '') return line;
+		const m = /^(\s*- \[[ xX]\] )/.exec(line);
+		return m ? `${m[1]}${sanitizeLine(want)} <!-- 2ndbrain:todo:${id} -->` : line;
+	});
+}
+
+/**
+ * Drops unticked generated todos that sit outside every region, name a source
+ * URL the current upsert covers, and are not among its todos: the upsert
+ * supersedes them. Ticked lines and todos for other URLs stay.
+ */
+export function dropSupersededLegacyTodos(lines: string[], fresh: ManagedTodo[]): string[] {
+	const keep = new Set(fresh.map(t => encodeTodoId(t.id)));
+	const urls = new Set<string>();
+	for (const id of keep) {
+		const m = ACTION_ID_RE.exec(id);
+		if (m) urls.add(m[2]!);
+	}
+	if (urls.size === 0) return lines;
+	let inside = false;
+	return lines.filter(line => {
+		if (START_RE.test(line)) { inside = true; return true; }
+		if (END_RE.test(line)) { inside = false; return true; }
+		if (inside || isChecked(line)) return true;
+		const id = parseTodoId(line);
+		const m = id === null ? null : ACTION_ID_RE.exec(id);
+		return !(m && urls.has(m[2]!) && !keep.has(id!));
+	});
+}

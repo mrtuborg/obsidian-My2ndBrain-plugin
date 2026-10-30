@@ -1,5 +1,6 @@
 import { FileIO, AppLike } from '../utilities/FileIO';
 import { ROLES } from '../roles';
+import { buildPathNormalizer } from '../utilities/ActivityLinks';
 import {
 	contextPagePath,
 	contextsFolderForNote,
@@ -344,6 +345,7 @@ export class ExternalWorkComposer {
 			todos: finishTodos(v.todos, basename),
 			sourceUrls: v.sources.map(s => s.url),
 			targetExists: p => !!app.vault.getAbstractFileByPath(p),
+			normalizePath: buildPathNormalizer(app.vault.getFiles(), this.settings.activitiesFolder),
 		});
 		if (updated !== page) await this.fileIO.saveFile(app, ctx.path, updated);
 

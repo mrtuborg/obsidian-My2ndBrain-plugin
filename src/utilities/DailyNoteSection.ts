@@ -1,3 +1,5 @@
+import type { PathNormalizer } from './ActivityLinks';
+
 const HEADING_RE = /^#####\s+\[\[([^\]|]+)(?:\|([^\]]*))?\]\]\s*$/;
 const SEPARATOR = '----';
 
@@ -87,24 +89,31 @@ export function removeEmptyActivityBlock(
  * Used when a freshly rendered section has already absorbed those blocks
  * verbatim: leaving the originals behind would duplicate them.
  */
-export function stripActivityBlocks(content: string, activityPaths: string[]): string {
+export function stripActivityBlocks(
+	content: string,
+	activityPaths: string[],
+	normalize: PathNormalizer = identity
+): string {
 	if (activityPaths.length === 0) return content;
-	return removeBlocks(content, activityPaths, false).content;
+	return removeBlocks(content, activityPaths, false, normalize).content;
 }
+
+const identity: PathNormalizer = p => p;
 
 function removeBlocks(
 	content: string,
 	activityPaths: string[],
-	onlyWhenEmpty: boolean
+	onlyWhenEmpty: boolean,
+	normalize: PathNormalizer = identity
 ): { content: string; removed: boolean } {
-	const targets = new Set(activityPaths.map(p => p.trim().toLowerCase()));
+	const targets = new Set(activityPaths.map(p => normalize(p.trim()).toLowerCase()));
 	const lines = content.split('\n');
 	const out: string[] = [];
 	let removed = false;
 
 	for (let i = 0; i < lines.length; i++) {
 		const match = HEADING_RE.exec(lines[i]!);
-		if (!match || !targets.has(match[1]!.trim().toLowerCase())) {
+		if (!match || !targets.has(normalize(match[1]!.trim()).toLowerCase())) {
 			out.push(lines[i]!);
 			continue;
 		}

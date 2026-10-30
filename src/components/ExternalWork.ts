@@ -4,13 +4,19 @@ import {
 	ManagedTodo,
 	MANAGED_KINDS,
 	dedupeGeneratedTodos,
+	dropSupersededLegacyTodos,
 	extractRegion,
+	mergeBlockBodies,
 	mergeManagedTodos,
+	normalizeActionSets,
 	parseTodoId,
+	reconcileRegions,
+	refreshGeneratedText,
 	replaceRegion,
 	sanitizeLine,
 	sanitizeSummaryLine,
 } from './ManagedRegions';
+import { PathNormalizer, spellingNormalizer } from '../utilities/ActivityLinks';
 
 /**
  * Pure rules for upserting externally sourced work (GitHub / Azure DevOps)
@@ -486,6 +492,8 @@ export interface BlockUpdate {
 	 * adopted only when its managed todo ids name one of `sourceUrls`.
 	 */
 	targetExists?: (path: string) => boolean;
+	/** Maps a heading's wikilink target to the Activity's canonical path (see ActivityLinks). */
+	normalizePath?: PathNormalizer;
 	sourceUrls?: string[];
 }
 
@@ -510,21 +518,23 @@ export function upsertActivityBlock(content: string, update: BlockUpdate): strin
 	}
 
 	const heading = `##### [[${update.activityPath}|${update.displayName}]]`;
-	const target = update.activityPath.trim().toLowerCase();
+	const norm = update.normalizePath ?? spellingNormalizer;
+	const target = norm(update.activityPath).toLowerCase();
 
-	let headIdx = -1;
+	// Every block naming this Activity, however Obsidian spelled the link.
+	const heads: number[] = [];
 	for (let i = actStart + 1; i < sectionEnd; i++) {
 		const m = BLOCK_HEADING_RE.exec(lines[i]!);
-		if (m && m[1]!.trim().toLowerCase() === target) { headIdx = i; break; }
+		if (m && norm(m[1]!).toLowerCase() === target) heads.push(i);
 	}
 
-	if (headIdx === -1 && update.targetExists && update.sourceUrls?.length) {
-		for (let i = actStart + 1; i < sectionEnd && headIdx === -1; i++) {
+	if (heads.length === 0 && update.targetExists && update.sourceUrls?.length) {
+		for (let i = actStart + 1; i < sectionEnd && heads.length === 0; i++) {
 			const m = BLOCK_HEADING_RE.exec(lines[i]!);
 			if (!m || update.targetExists(m[1]!.trim())) continue;
 			for (let j = i + 1; j < sectionEnd && lines[j]!.trim() !== '----'; j++) {
 				const id = parseTodoId(lines[j]!);
-				if (id && update.sourceUrls.some(u => id.includes(u))) { headIdx = i; break; }
+				if (id && update.sourceUrls.some(u => id.includes(u))) { heads.push(i); break; }
 			}
 		}
 	}
@@ -534,7 +544,7 @@ export function upsertActivityBlock(content: string, update: BlockUpdate): strin
 		...mergeManagedTodos(existing, update.todos),
 	];
 
-	if (headIdx === -1) {
+	if (heads.length === 0) {
 		const region = replaceRegion([], update.kind, regionBody([]));
 		let last = sectionEnd - 1;
 		while (last > actStart && lines[last]!.trim() === '') last--;
@@ -550,15 +560,31 @@ export function upsertActivityBlock(content: string, update: BlockUpdate): strin
 		return lines.join('\n');
 	}
 
-	let bodyEnd = headIdx + 1;
-	while (bodyEnd < sectionEnd && lines[bodyEnd]!.trim() !== '----') bodyEnd++;
-	const body = lines.slice(headIdx + 1, bodyEnd);
-	// Generated todos are plugin-owned: the marker is identity, so legacy copies
-	// outside the region fold into it instead of duplicating.
-	const newBody = dedupeGeneratedTodos(
-		replaceRegion(body, update.kind, regionBody(extractRegion(body, update.kind) ?? []))
+	const extents = heads.map(h => {
+		let end = h + 1;
+		while (end < sectionEnd && lines[end]!.trim() !== '----') end++;
+		return { head: h, end };
+	});
+	const bodies = extents.map(x => lines.slice(x.head + 1, x.end));
+	const first = extents[0]!;
+	const merged = bodies.length > 1 ? mergeBlockBodies(bodies) : reconcileRegions(bodies[0]!);
+
+	// Generated todos are plugin-owned: the marker is identity, so copies outside
+	// the region fold into it, superseded legacy lines go, and wording follows
+	// the Activity's current name.
+	const withRegion = replaceRegion(
+		dropSupersededLegacyTodos(merged, update.todos),
+		update.kind,
+		regionBody(extractRegion(merged, update.kind) ?? [])
 	);
-	const closing = bodyEnd < sectionEnd ? [] : ['----'];
-	lines.splice(headIdx, bodyEnd - headIdx, heading, ...newBody, ...closing);
+	const newBody = normalizeActionSets(
+		dedupeGeneratedTodos(refreshGeneratedText(withRegion, update.todos))
+	);
+	const closing = first.end < sectionEnd ? [] : ['----'];
+	for (let k = extents.length - 1; k > 0; k--) {
+		const x = extents[k]!;
+		lines.splice(x.head, x.end - x.head + (x.end < sectionEnd ? 1 : 0));
+	}
+	lines.splice(first.head, first.end - first.head, heading, ...newBody, ...closing);
 	return lines.join('\n');
 }

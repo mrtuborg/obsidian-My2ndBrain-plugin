@@ -4,7 +4,8 @@ import { TAKE_TO_WORK_FIELD, resolveTakeToWork } from '../utilities/TakeToWork';
 import { ACTIVITIES_BUILT_MARKER } from '../utilities/ActivitiesMarker';
 import { ROLES } from '../roles';
 import { parseActivityBlocks, blockHasContent } from '../utilities/DailyNoteSection';
-import { dedupeGeneratedTodos, parseTodoId } from './ManagedRegions';
+import { dedupeGeneratedTodos, mergeBlockBodies, normalizeActionSets, parseTodoId, reconcileRegions } from './ManagedRegions';
+import { PathNormalizer, buildPathNormalizer } from '../utilities/ActivityLinks';
 
 /** One activity as it will be written into the note. */
 interface RenderedActivity {
@@ -65,7 +66,7 @@ export class ActivitiesInProgress {
 	async run(app: AppLike, existingPageContent: string): Promise<string> {
 		const today = this.fileIO.todayDate();
 		const activities = await this.loadEligibleActivities(app, today);
-		const written = this.collectWrittenBlocks(existingPageContent);
+		const written = this.collectWrittenBlocks(existingPageContent, this.pathNormalizer(app));
 
 		const roleByActivity = activities.length > 0
 			? await this.computeRoles(app, activities)
@@ -91,7 +92,7 @@ export class ActivitiesInProgress {
 	async runForRole(app: AppLike, role: string, existingPageContent = ''): Promise<string> {
 		const today = this.fileIO.todayDate();
 		const activities = await this.loadEligibleActivities(app, today);
-		const written = this.collectWrittenBlocks(existingPageContent);
+		const written = this.collectWrittenBlocks(existingPageContent, this.pathNormalizer(app));
 
 		const roleByActivity = activities.length > 0
 			? await this.computeRoles(app, activities)
@@ -345,18 +346,40 @@ export class ActivitiesInProgress {
 	 * written under them. Empty blocks are ignored: they hold nothing worth
 	 * protecting, so the planning flags alone decide their fate.
 	 */
-	private collectWrittenBlocks(existingPageContent: string): Map<string, RenderedActivity> {
-		const written = new Map<string, RenderedActivity>();
+	private collectWrittenBlocks(
+		existingPageContent: string,
+		normalize: PathNormalizer
+	): Map<string, RenderedActivity> {
+		const groups = new Map<string, Array<{ path: string; name: string; body: string[] }>>();
 		for (const block of parseActivityBlocks(existingPageContent ?? '')) {
 			if (!blockHasContent(block)) continue;
-			written.set(block.path.toLowerCase(), {
-				path: block.path,
-				displayName: block.name,
+			const path = normalize(block.path);
+			const key = path.toLowerCase();
+			if (!groups.has(key)) groups.set(key, []);
+			groups.get(key)!.push({
+				path,
+				name: block.name,
 				// Trailing blank lines are rendering noise, not content.
 				body: trimTrailingBlanks(block.body),
 			});
 		}
+
+		const written = new Map<string, RenderedActivity>();
+		for (const [key, blocks] of groups) {
+			// Several blocks can name one Activity (a rename rewrote some links);
+			// they collapse into one so nothing is rendered twice.
+			written.set(key, {
+				path: blocks[0]!.path,
+				displayName: blocks[0]!.name,
+				body: blocks.length > 1 ? mergeBlockBodies(blocks.map(b => b.body)) : blocks[0]!.body,
+			});
+		}
 		return written;
+	}
+
+	/** Maps any spelling of an Activity link to its canonical vault path. */
+	pathNormalizer(app: AppLike): PathNormalizer {
+		return buildPathNormalizer(app.vault.getFiles(), this.activitiesFolder);
 	}
 
 	/**
@@ -403,7 +426,7 @@ export class ActivitiesInProgress {
 			rendered.push({
 				path: file.path,
 				displayName: file.basename,
-				body: dedupeGeneratedTodos([...existing.body, ...additions]),
+				body: normalizeActionSets(reconcileRegions(dedupeGeneratedTodos([...existing.body, ...additions]))),
 			});
 		}
 

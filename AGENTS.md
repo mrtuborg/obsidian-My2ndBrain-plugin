@@ -229,8 +229,22 @@ prompt; the composer accepts the chosen title.
   note path and links the daily note only if it exists); future dates are refused. Evening requests do not
   create Activities unless `createIfMissing: true`; `takeToWork` of an existing Activity is never touched.
 - Calls are serialised (promise chain) so overlapping automation never interleaves read-modify-write cycles.
-- Block matching is by activity path; with link auto-update off after a rename, an orphaned block is adopted
-  only when its managed todo ids name the same source URL.
+- Block matching is by **canonical** activity path: `utilities/ActivityLinks.ts` resolves `Activities/Foo.md`,
+  `Activities/Foo`, `Foo.md` and `Foo` (Obsidian rewrites headings to short links on rename) against the vault's
+  files under the *configured* activities folder (never hardcoded). `ActivitiesInProgress.collectWrittenBlocks`,
+  `upsertActivityBlock` and `stripActivityBlocks` all go through it. With link auto-update off after a rename, an
+  orphaned block is adopted only when its managed todo ids name the same source URL.
+- Several blocks naming one Activity collapse into **one canonical block** (`mergeBlockBodies`): every unmarked user
+  line outside a managed region is kept in order, exact repeats and checkbox states included; generated todos dedupe globally by marker id with checked state winning, and duplicate/nested/
+  stray managed markers are reconciled to one well-formed region per kind (`reconcileRegions`) without deleting
+  non-marker content.
+- An upsert rebuilds the wording of every copy of a marker it carries from the current Activity name
+  (`refreshGeneratedText`) and drops **unticked** generated todos outside any region that name a URL the upsert
+  covers but are not among its todos (`dropSupersededLegacyTodos`). Ticked history, custom todos and unmarked
+  todos are never removed.
+- Action sets are normalised per canonical URL across the whole block (`normalizeActionSets`, unticked lines only):
+  any specific action suppresses generic `continue`/`follow-up`; an open `fix-ci`/`address-feedback`/
+  `resolve-conflicts` suppresses `merge`; independent blockers all stay. Rebuild and upsert are idempotent.
 
 **Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
 
