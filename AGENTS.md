@@ -245,6 +245,10 @@ prompt; the composer accepts the chosen title.
 - Action sets are normalised per canonical URL across the whole block (`normalizeActionSets`, unticked lines only):
   any specific action suppresses generic `continue`/`follow-up`; an open `fix-ci`/`address-feedback`/
   `resolve-conflicts` suppresses `merge`; independent blockers all stay. Rebuild and upsert are idempotent.
+- **Self-heal:** `ensureContext` (and so every upsert/plan) runs `repairActivitiesSection`
+  (`components/ActivitySectionRepair.ts`) on an existing Context before writing: one canonical heading per Activity,
+  bodies merged by the rules above, `## Notes` and the plan region untouched, second run byte-identical. It only
+  regroups blocks already on the page — it never adds today's activities to a historical date.
 
 **Rule: Pure logic classes (Block, BlockCollection, NoteBlocksParser, AttributesProcessor) must have zero Obsidian API dependency.** They take strings, return objects. This is what makes them unit-testable with Jest.
 

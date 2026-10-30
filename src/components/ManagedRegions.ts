@@ -281,11 +281,11 @@ export function reconcileRegions(body: string[], force = false): string[] {
  * an exact repeat — it is the user's. Only plugin-owned structure is
  * reconciled: generated todos by marker (checked wins) and duplicate regions.
  */
-export function mergeBlockBodies(bodies: string[][]): string[] {
+export function mergeBlockBodies(bodies: string[][], keepBlanks = false): string[] {
 	const out: string[] = [];
 	for (const raw of bodies) {
 		const body = [...raw];
-		while (body.length > 0 && body[body.length - 1]!.trim() === '') body.pop();
+		if (!keepBlanks) while (body.length > 0 && body[body.length - 1]!.trim() === '') body.pop();
 		out.push(...body);
 	}
 	return dedupeGeneratedTodos(reconcileRegions(out, true));

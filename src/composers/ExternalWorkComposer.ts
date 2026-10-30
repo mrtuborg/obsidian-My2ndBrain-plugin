@@ -1,5 +1,6 @@
 import { FileIO, AppLike } from '../utilities/FileIO';
 import { ROLES } from '../roles';
+import { repairActivitiesSection } from '../components/ActivitySectionRepair';
 import { buildPathNormalizer } from '../utilities/ActivityLinks';
 import {
 	contextPagePath,
@@ -219,9 +220,19 @@ export class ExternalWorkComposer {
 					return { status: 'error', code: 'create-failed', message: (e as Error).message, path };
 				}
 			}
-		} else if ((await app.vault.read(existing)).trim().length === 0) {
-			await app.vault.modify(existing, template);
-			status = 'created';
+		} else {
+			const current = await app.vault.read(existing);
+			if (current.trim().length === 0) {
+				await app.vault.modify(existing, template);
+				status = 'created';
+			} else {
+				// Self-heal duplicate blocks/todos left by an earlier rename or run.
+				const repaired = repairActivitiesSection(
+					current,
+					buildPathNormalizer(app.vault.getFiles(), this.settings.activitiesFolder)
+				);
+				if (repaired !== current) await app.vault.modify(existing, repaired);
+			}
 		}
 
 		if (dailyNote && this.deps.linkContext) {
